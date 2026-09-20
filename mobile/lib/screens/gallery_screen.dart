@@ -64,10 +64,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
           ),
 
           _section(theme, 'Кнопки'),
-          FilledButton(
-            onPressed: () {},
-            child: const Text('Главное действие'),
-          ),
+          FilledButton(onPressed: () {}, child: const Text('Главное действие')),
           const SizedBox(height: AppGap.small),
           OutlinedButton(
             onPressed: () {},
