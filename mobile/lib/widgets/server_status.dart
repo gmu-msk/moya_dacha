@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
+import '../theme.dart';
 
 class ServerStatus extends StatefulWidget {
   const ServerStatus({super.key});
@@ -53,20 +54,23 @@ class _ServerStatusState extends State<ServerStatus> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (alive == null)
-          Text('Проверяю сервер…', style: theme.textTheme.bodySmall)
+          Text('Проверяю сервер…', style: theme.textTheme.bodyMedium)
         else
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 alive ? Icons.check_circle_outline : Icons.cloud_off,
-                size: 16,
-                color: alive ? theme.colorScheme.primary : theme.colorScheme.error,
+                color: alive
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.error,
               ),
-              const SizedBox(width: 6),
-              Text(
-                alive ? 'Сервер отвечает, база жива' : 'Сервер не отвечает',
-                style: theme.textTheme.bodySmall,
+              const SizedBox(width: AppGap.small),
+              Flexible(
+                child: Text(
+                  alive ? 'Сервер отвечает, база жива' : 'Сервер не отвечает',
+                  style: theme.textTheme.bodyMedium,
+                ),
               ),
             ],
           ),

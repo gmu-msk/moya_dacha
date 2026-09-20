@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
-import '../widgets/server_status.dart';
+import '../theme.dart';
+import '../widgets/app_screen.dart';
+import '../widgets/error_view.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.onSignedIn});
@@ -111,52 +113,36 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final error = _error;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('МояДача')),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 24),
-                      Text(
-                        _codeSent ? 'Введите код' : 'Вход по номеру телефона',
-                        style: theme.textTheme.titleLarge,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _codeSent
-                            ? 'Мы отправили код на ${_phone.text}'
-                            : 'Пароля нет: придёт код из четырёх цифр',
-                        style: theme.textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      if (_codeSent) ..._codeFields() else ..._phoneFields(),
-                      if (_error != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          _error!,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.error,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const ServerStatus(),
+    return AppScreen(
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppGap.large),
+            Text(
+              _codeSent ? 'Введите код' : 'Вход по номеру телефона',
+              style: theme.textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppGap.small),
+            Text(
+              _codeSent
+                  ? 'Мы отправили код на ${_phone.text}'
+                  : 'Пароля нет: придёт код из четырёх цифр',
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppGap.large),
+            if (_codeSent) ..._codeFields(theme) else ..._phoneFields(),
+            if (error != null) ...[
+              const SizedBox(height: AppGap.medium),
+              // Повторять нечего: следующий шаг человек делает сам —
+              // исправляет номер или код и нажимает кнопку выше.
+              ErrorView(message: error),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -171,7 +157,6 @@ class _LoginScreenState extends State<LoginScreen> {
         decoration: const InputDecoration(
           labelText: 'Номер телефона',
           hintText: '+7 900 123-45-67',
-          border: OutlineInputBorder(),
         ),
         onSubmitted: (_) {
           if (!_busy) {
@@ -179,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         },
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppGap.medium),
       FilledButton(
         onPressed: _busy ? null : _requestCode,
         child: Text(_busy ? 'Отправляю…' : 'Получить код'),
@@ -187,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
     ];
   }
 
-  List<Widget> _codeFields() {
+  List<Widget> _codeFields(ThemeData theme) {
     return [
       TextField(
         controller: _code,
@@ -198,23 +183,20 @@ class _LoginScreenState extends State<LoginScreen> {
           LengthLimitingTextInputFormatter(4),
         ],
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 28, letterSpacing: 8),
-        decoration: const InputDecoration(
-          labelText: 'Код из четырёх цифр',
-          border: OutlineInputBorder(),
-        ),
+        style: theme.textTheme.headlineSmall?.copyWith(letterSpacing: 8),
+        decoration: const InputDecoration(labelText: 'Код из четырёх цифр'),
         onSubmitted: (_) {
           if (!_busy) {
             _signIn();
           }
         },
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppGap.medium),
       FilledButton(
         onPressed: _busy ? null : _signIn,
         child: Text(_busy ? 'Проверяю…' : 'Войти'),
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: AppGap.small),
       TextButton(
         onPressed: _busy ? null : _requestCode,
         child: const Text('Отправить код ещё раз'),

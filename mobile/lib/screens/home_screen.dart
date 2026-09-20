@@ -7,7 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
-import '../widgets/server_status.dart';
+import '../theme.dart';
+import '../widgets/app_screen.dart';
+import '../widgets/empty_view.dart';
+import '../widgets/error_view.dart';
+import '../widgets/loading_view.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -41,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _error = null);
     try {
       final info = await AuthApi(apiClient(token: widget.token)).getSession();
       debugPrint('$logMarker screen=home user=${info?.user.id}');
@@ -78,65 +83,38 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final user = _user;
+    final error = _error;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('МояДача')),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.eco_outlined,
-                        size: 72,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        widget.isNewUser ? 'Добро пожаловать!' : 'Вы вошли',
-                        style: theme.textTheme.titleLarge,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      if (user != null)
-                        Text(
-                          user.phone,
-                          style: theme.textTheme.bodyLarge,
-                          textAlign: TextAlign.center,
-                        )
-                      else if (_error != null)
-                        Text(
-                          _error!,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.error,
-                          ),
-                          textAlign: TextAlign.center,
-                        )
-                      else
-                        const CircularProgressIndicator(),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Лента, посты и профиль появятся следующими фичами.',
-                        style: theme.textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      OutlinedButton(
-                        onPressed: _busy ? null : _signOut,
-                        child: const Text('Выйти'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const ServerStatus(),
-            ],
-          ),
+    // Внутри пока пусто: лента, посты и профиль — следующие фичи
+    // (specs/000-overview.md). Это и есть пустое состояние экрана.
+    final Widget who;
+    if (user != null) {
+      who = Text(
+        user.phone,
+        style: theme.textTheme.bodyLarge,
+        textAlign: TextAlign.center,
+      );
+    } else if (error != null) {
+      who = ErrorView(message: error, onRetry: _load);
+    } else {
+      who = const LoadingView(label: 'Проверяю вход…');
+    }
+
+    return AppScreen(
+      child: EmptyView(
+        icon: Icons.eco_outlined,
+        title: widget.isNewUser ? 'Добро пожаловать!' : 'Вы вошли',
+        hint: 'Лента, посты и профиль появятся следующими фичами.',
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            who,
+            const SizedBox(height: AppGap.large),
+            OutlinedButton(
+              onPressed: _busy ? null : _signOut,
+              child: const Text('Выйти'),
+            ),
+          ],
         ),
       ),
     );

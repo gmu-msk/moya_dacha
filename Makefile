@@ -6,6 +6,9 @@ MOBILE         := mobile
 GENERATED      := $(BACKEND)/api/gen $(MOBILE)/packages/moya_dacha_api
 OPENAPI_GENERATOR_VERSION := 7.25.0
 OPENAPI_GENERATOR_JAR     := .cache/openapi-generator-cli-$(OPENAPI_GENERATOR_VERSION).jar
+# Дополнительные --dart-define для сборки приложения. Ими сценарий показа
+# открывает приложение не на обычном экране (demo/stories/README.md).
+APP_DART_DEFINE ?=
 TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha_test?sslmode=disable
 DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
 
@@ -72,7 +75,7 @@ app-analyze: ## Статический анализ приложения
 	cd $(MOBILE) && flutter analyze
 
 app-apk: ## Собрать debug-APK приложения (адрес стенда — как у эмулятора)
-	cd $(MOBILE) && flutter build apk --debug
+	cd $(MOBILE) && flutter build apk --debug $(APP_DART_DEFINE)
 
 apk-phone: ## Собрать APK для телефона: адрес стенда в локальной сети
 	./demo/apk-phone.sh
