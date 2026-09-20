@@ -205,6 +205,126 @@ class PostsApi {
     return null;
   }
 
+  /// Поставить лайк
+  ///
+  /// Один пользователь — не больше одного лайка на пост (CONTEXT.md). Запрос идемпотентен: повторный лайк ничего не меняет и не ошибка.  В ответе — пост целиком, с новым числом лайков: клиенту не нужно досчитывать его самому (specs/005-likes.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Response> likePostWithHttpInfo(String postId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/like'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Поставить лайк
+  ///
+  /// Один пользователь — не больше одного лайка на пост (CONTEXT.md). Запрос идемпотентен: повторный лайк ничего не меняет и не ошибка.  В ответе — пост целиком, с новым числом лайков: клиенту не нужно досчитывать его самому (specs/005-likes.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Post?> likePost(String postId, { Future<void>? abortTrigger, }) async {
+    final response = await likePostWithHttpInfo(postId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
+  /// Снять лайк
+  ///
+  /// Идемпотентно: снять лайк, которого не было, — не ошибка (specs/005-likes.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Response> unlikePostWithHttpInfo(String postId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/like'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Снять лайк
+  ///
+  /// Идемпотентно: снять лайк, которого не было, — не ошибка (specs/005-likes.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Post?> unlikePost(String postId, { Future<void>? abortTrigger, }) async {
+    final response = await unlikePostWithHttpInfo(postId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
   /// Загрузить фотографию
   ///
   /// Фотография JPEG или PNG не больше 10 МБ. Сервис уменьшает её до 1600 по большей стороне и пересохраняет в JPEG.  Загруженная фотография ещё не опубликована: она ждёт, пока автор соберёт из неё пост (specs/003-posts.md). Каждая фотография идёт своим запросом — на плохой связи переотправить нужно только ту, что не долетела. 

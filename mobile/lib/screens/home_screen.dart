@@ -95,18 +95,26 @@ class _HomeScreenState extends State<HomeScreen> {
     if (post == null || !mounted) {
       return;
     }
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => PostScreen(post: post)));
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PostScreen(post: post, token: widget.token),
+      ),
+    );
     // Свой пост человек должен увидеть первым в ленте, вернувшись
     // с экрана поста (specs/004-feed.md, требование 8).
     _feed.currentState?.refresh();
   }
 
   void _openPost(Post post) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => PostScreen(post: post)));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PostScreen(
+          post: post,
+          token: widget.token,
+          onChanged: (updated) => _feed.currentState?.replace(updated),
+        ),
+      ),
+    );
   }
 
   @override
