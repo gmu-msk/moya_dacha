@@ -1,143 +1,98 @@
-// Экран состояния сервиса — пока единственный экран приложения.
+// Приложение МояДача.
 //
-// Продуктовых эндпоинтов в контракте ещё нет, поэтому приложение показывает
-// то единственное, что контракт умеет: отвечает ли сервис и жива ли база.
-// Он же замыкает демо целиком — эмулятор -> приложение -> API -> Postgres,
-// см. demo/README.md.
+// Точка входа решает единственный вопрос: человек уже входил или нет.
+// Токен не истекает (specs/001-auth.md), поэтому тот, кто входил,
+// попадает сразу внутрь.
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
-/// Адрес API. По умолчанию — демо-стенд с точки зрения Android-эмулятора:
-/// 10.0.2.2 это 127.0.0.1 машины-хоста. Переопределяется при сборке:
-/// `flutter build apk --dart-define=API_BASE_URL=http://192.168.1.10:8080/api`.
-const apiBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://10.0.2.2:8080/api',
-);
-
-/// Строка, по которой e2e-проверка в CI узнаёт исход в логах приложения.
-const _logMarker = 'MOYA_DACHA_DEMO';
+import 'api.dart';
+import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
+import 'session.dart';
 
 void main() {
   runApp(const MoyaDachaApp());
 }
 
-class MoyaDachaApp extends StatelessWidget {
+class MoyaDachaApp extends StatefulWidget {
   const MoyaDachaApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'МояДача',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3F7D3F)),
-      ),
-      home: const StatusScreen(),
-    );
-  }
+  State<MoyaDachaApp> createState() => _MoyaDachaAppState();
 }
 
-class StatusScreen extends StatefulWidget {
-  const StatusScreen({super.key});
+class _MoyaDachaAppState extends State<MoyaDachaApp> {
+  final SessionStore _session = SessionStore();
 
-  @override
-  State<StatusScreen> createState() => _StatusScreenState();
-}
-
-class _StatusScreenState extends State<StatusScreen> {
-  late Future<Health?> _health;
+  String? _token;
+  bool _isNewUser = false;
+  bool _restored = false;
 
   @override
   void initState() {
     super.initState();
-    _health = _check();
+    _restore();
   }
 
-  Future<Health?> _check() async {
-    final api = OperationsApi(ApiClient(basePath: apiBaseUrl));
-    try {
-      final health = await api.getHealth();
-      debugPrint('$_logMarker health=${health?.status}');
-      return health;
-    } catch (error) {
-      debugPrint('$_logMarker health=error error=$error');
-      rethrow;
+  Future<void> _restore() async {
+    final token = await _session.read();
+    debugPrint('$logMarker session=${token == null ? 'none' : 'restored'}');
+    if (!mounted) {
+      return;
     }
+    setState(() {
+      _token = token;
+      _restored = true;
+    });
   }
 
-  void _retry() {
+  Future<void> _signedIn(SessionCreated session) async {
+    await _session.write(session.token);
+    if (!mounted) {
+      return;
+    }
     setState(() {
-      _health = _check();
+      _token = session.token;
+      _isNewUser = session.isNewUser;
+    });
+  }
+
+  Future<void> _signedOut() async {
+    await _session.clear();
+    debugPrint('$logMarker session=cleared');
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _token = null;
+      _isNewUser = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('МояДача')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: FutureBuilder<Health?>(
-            future: _health,
-            builder: (context, snapshot) {
-              switch (snapshot.connectionState) {
-                case ConnectionState.waiting:
-                  return const CircularProgressIndicator();
-                default:
-                  return _Result(
-                    ok: snapshot.hasData,
-                    detail: snapshot.hasData
-                        ? apiBaseUrl
-                        : '$apiBaseUrl\n\n${snapshot.error}',
-                    onRetry: _retry,
-                  );
-              }
-            },
-          ),
-        ),
+    final token = _token;
+
+    final Widget home;
+    if (!_restored) {
+      home = const Scaffold(body: Center(child: CircularProgressIndicator()));
+    } else if (token == null) {
+      home = LoginScreen(onSignedIn: _signedIn);
+    } else {
+      home = HomeScreen(
+        token: token,
+        isNewUser: _isNewUser,
+        onSignedOut: _signedOut,
+      );
+    }
+
+    return MaterialApp(
+      title: 'МояДача',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3F7D3F)),
       ),
-    );
-  }
-}
-
-class _Result extends StatelessWidget {
-  const _Result({
-    required this.ok,
-    required this.detail,
-    required this.onRetry,
-  });
-
-  final bool ok;
-  final String detail;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          ok ? Icons.check_circle_outline : Icons.cloud_off,
-          size: 72,
-          color: ok ? theme.colorScheme.primary : theme.colorScheme.error,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          ok ? 'Сервер отвечает, база жива' : 'Сервер не отвечает',
-          style: theme.textTheme.titleLarge,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          detail,
-          style: theme.textTheme.bodySmall,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
-        FilledButton(onPressed: onRetry, child: const Text('Проверить ещё раз')),
-      ],
+      home: home,
     );
   }
 }

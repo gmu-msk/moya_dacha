@@ -44,9 +44,17 @@ func run() error {
 	}
 	defer pool.Close()
 
+	// AUTH_FIXED_CODE задан только на демо-стенде и в тестах: он делает код
+	// подтверждения предсказуемым, чтобы фичу можно было показать без SMS
+	// (specs/001-auth.md). В проде переменная пуста, и код случайный.
+	cfg := api.Config{FixedCode: os.Getenv("AUTH_FIXED_CODE")}
+	if cfg.FixedCode != "" {
+		slog.Warn("включён фиксированный код подтверждения: войти может кто угодно, в проде так быть не должно")
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           api.New(pool).Handler(),
+		Handler:           api.New(pool, cfg).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
