@@ -138,7 +138,7 @@ func (s *Server) CreateSession(ctx context.Context, request gen.CreateSessionReq
 		return nil, err
 	}
 
-	user, isNew, err := upsertUser(ctx, tx, phone)
+	user, isNew, err := s.upsertUser(ctx, tx, phone)
 	if err != nil {
 		return nil, err
 	}
@@ -190,14 +190,11 @@ func (s *Server) DeleteSession(ctx context.Context, _ gen.DeleteSessionRequestOb
 
 // upsertUser возвращает пользователя с этим номером, заводя его, если
 // номер появился впервые.
-func upsertUser(ctx context.Context, tx pgx.Tx, phone string) (gen.CurrentUser, bool, error) {
-	var user gen.CurrentUser
-
-	err := tx.QueryRow(ctx, `
+func (s *Server) upsertUser(ctx context.Context, tx pgx.Tx, phone string) (gen.CurrentUser, bool, error) {
+	user, err := s.scanUser(tx.QueryRow(ctx, `
 		INSERT INTO users (phone) VALUES ($1)
 		ON CONFLICT (phone) DO NOTHING
-		RETURNING id, phone, created_at`, phone,
-	).Scan(&user.Id, &user.Phone, &user.CreatedAt)
+		RETURNING `+userColumns, phone))
 	if err == nil {
 		return user, true, nil
 	}
@@ -205,9 +202,8 @@ func upsertUser(ctx context.Context, tx pgx.Tx, phone string) (gen.CurrentUser, 
 		return gen.CurrentUser{}, false, err
 	}
 
-	err = tx.QueryRow(ctx, `
-		SELECT id, phone, created_at FROM users WHERE phone = $1`, phone,
-	).Scan(&user.Id, &user.Phone, &user.CreatedAt)
+	user, err = s.scanUser(tx.QueryRow(ctx, `
+		SELECT `+userColumns+` FROM users WHERE phone = $1`, phone))
 	if err != nil {
 		return gen.CurrentUser{}, false, err
 	}
@@ -236,11 +232,11 @@ func (s *Server) withSession(next gen.StrictHandlerFunc, _ string) gen.StrictHan
 
 		var current session
 		current.tokenHash = auth.Hash(token)
-		err := s.db.QueryRow(ctx, `
-			SELECT u.id, u.phone, u.created_at
+
+		user, err := s.scanUser(s.db.QueryRow(ctx, `
+			SELECT `+userColumnsPrefixed+`
 			FROM sessions s JOIN users u ON u.id = s.user_id
-			WHERE s.token_hash = $1`, current.tokenHash,
-		).Scan(&current.user.Id, &current.user.Phone, &current.user.CreatedAt)
+			WHERE s.token_hash = $1`, current.tokenHash))
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			// Токен недействителен — пришедший остаётся неопознанным.
@@ -248,6 +244,7 @@ func (s *Server) withSession(next gen.StrictHandlerFunc, _ string) gen.StrictHan
 		case err != nil:
 			return nil, err
 		}
+		current.user = user
 
 		return next(context.WithValue(ctx, contextKey{}, current), w, r, request)
 	}

@@ -1,11 +1,12 @@
 // Витрина общих виджетов: все состояния на одном экране.
 //
-// Макетов в проекте нет (ADR-0011), и проверять дизайн глазами всё равно
+// Макетов в проекте нет (ADR-0012), и проверять дизайн глазами всё равно
 // надо. Этот экран заменяет макеты: на нём видно, как выглядят загрузка,
 // пустой экран и ошибка, и что будет с ними в тёмной теме и при
 // увеличенном системном шрифте. Показывается сценарием
 // demo/stories/000-ui, в обычную сборку не попадает.
 import 'package:flutter/material.dart';
+import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 import '../theme.dart';
@@ -13,10 +14,20 @@ import '../widgets/app_screen.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading_view.dart';
+import '../widgets/user_avatar.dart';
 
 /// Высота коробки, в которой показан пустой экран: сам он занимает всё
 /// свободное место, а в витрине место надо чем-то ограничить.
 const _emptyViewBoxHeight = 360.0;
+
+/// Выдуманный человек: витрине нужен кто-то, чтобы нарисовать аватар.
+final _someone = CurrentUser(
+  id: '00000000-0000-0000-0000-000000000000',
+  phone: '+79000000000',
+  createdAt: DateTime(2026),
+  name: 'Пётр',
+  about: '',
+);
 
 class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
@@ -78,6 +89,17 @@ class _GalleryScreenState extends State<GalleryScreen> {
             controller: _field,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(labelText: 'Номер телефона'),
+          ),
+
+          _section(theme, 'Аватар'),
+          Row(
+            children: [
+              UserAvatar(user: _someone, radius: AvatarRadius.inBar),
+              const SizedBox(width: AppGap.medium),
+              UserAvatar(user: _someone, radius: AvatarRadius.onScreen),
+              const SizedBox(width: AppGap.medium),
+              UserAvatar(user: _someone, radius: AvatarRadius.inProfile),
+            ],
           ),
 
           _section(theme, 'Ожидание'),

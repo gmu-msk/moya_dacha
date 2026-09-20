@@ -16,7 +16,7 @@ import 'widgets/loading_view.dart';
 
 /// Каким экраном открыть приложение. Пусто — обычный путь. `gallery` —
 /// витрина общих виджетов, её показывает сценарий demo/stories/000-ui;
-/// задаётся при сборке: `--dart-define=START=gallery` (ADR-0011).
+/// задаётся при сборке: `--dart-define=START=gallery` (ADR-0012).
 /// В релизной сборке без этого флага ветка с витриной выбрасывается
 /// компилятором: условие константное.
 const startScreen = String.fromEnvironment('START');
@@ -104,7 +104,7 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
     return MaterialApp(
       title: 'МояДача',
       // Светлая и тёмная тема лежат рядом, показанную выбирает система
-      // (ADR-0011). Своего переключателя в приложении нет.
+      // (ADR-0012). Своего переключателя в приложении нет.
       theme: appTheme(Brightness.light),
       darkTheme: appTheme(Brightness.dark),
       themeMode: ThemeMode.system,

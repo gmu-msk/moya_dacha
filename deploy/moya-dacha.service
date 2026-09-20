@@ -14,6 +14,13 @@ ExecStart=/usr/local/bin/moya-dacha-server
 Restart=always
 RestartSec=3
 
+# Файлы пользователей (аватары, дальше фотографии постов) лежат в
+# /var/lib/moya-dacha — systemd заводит эту папку сам и отдаёт её сервису.
+# Без неё ProtectSystem=strict не дал бы сервису писать никуда
+# (specs/002-profile.md, ADR-0011). В /etc/moya-dacha.env к ней ведёт
+# MEDIA_DIR=/var/lib/moya-dacha/media.
+StateDirectory=moya-dacha
+
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

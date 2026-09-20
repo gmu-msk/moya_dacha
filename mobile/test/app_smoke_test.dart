@@ -9,14 +9,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moya_dacha/main.dart';
 import 'package:moya_dacha/screens/gallery_screen.dart';
+import 'package:moya_dacha/screens/intro_screen.dart';
 import 'package:moya_dacha/screens/login_screen.dart';
+import 'package:moya_dacha/screens/profile_screen.dart';
 import 'package:moya_dacha/theme.dart';
+import 'package:moya_dacha_api/api.dart';
 
 void main() {
   testWidgets('приложение открывается', (tester) async {
     await tester.pumpWidget(const MoyaDachaApp());
     await tester.pump();
   });
+
+  final user = CurrentUser(
+    id: '00000000-0000-0000-0000-000000000001',
+    phone: '+79000000001',
+    createdAt: DateTime(2026, 4, 1),
+    name: 'Пётр',
+    about: 'Три сотки под картошку',
+  );
 
   for (final brightness in Brightness.values) {
     final theme = brightness == Brightness.light ? 'светлой' : 'тёмной';
@@ -27,6 +38,14 @@ void main() {
 
     testWidgets('витрина рисуется в $theme теме', (tester) async {
       await _pump(tester, brightness, const GalleryScreen());
+    });
+
+    testWidgets('знакомство рисуется в $theme теме', (tester) async {
+      await _pump(tester, brightness, IntroScreen(token: 'т', onDone: (_) {}));
+    });
+
+    testWidgets('профиль рисуется в $theme теме', (tester) async {
+      await _pump(tester, brightness, ProfileScreen(token: 'т', user: user));
     });
 
     testWidgets('экран входа выживает при крупном шрифте в $theme теме', (
@@ -44,6 +63,17 @@ void main() {
       tester,
     ) async {
       await _pump(tester, brightness, const GalleryScreen(), textScale: 2);
+    });
+
+    testWidgets('профиль выживает при крупном шрифте в $theme теме', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        brightness,
+        ProfileScreen(token: 'т', user: user),
+        textScale: 2,
+      );
     });
   }
 }

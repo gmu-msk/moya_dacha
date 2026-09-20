@@ -43,9 +43,8 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await AuthApi(apiClient()).requestAuthCode(
-        AuthCodeRequest(phone: _phone.text),
-      );
+      await AuthApi(apiClient())
+          .requestAuthCode(AuthCodeRequest(phone: _phone.text));
       debugPrint('$logMarker auth=code_sent');
       if (!mounted) {
         return;
@@ -74,9 +73,8 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final session = await AuthApi(apiClient()).createSession(
-        SessionRequest(phone: _phone.text, code: _code.text),
-      );
+      final session = await AuthApi(apiClient())
+          .createSession(SessionRequest(phone: _phone.text, code: _code.text));
       if (session == null) {
         throw const FormatException('сервис ответил пустым телом');
       }

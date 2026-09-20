@@ -86,7 +86,7 @@ Android, раздача через **внутреннее тестировани
 
 ## Связанные спецификации
 - [specs/001-auth.md](001-auth.md) — готово
-- specs/002-profile.md
+- [specs/002-profile.md](002-profile.md) — готово
 - specs/003-posts.md
 - specs/004-feed.md
 - specs/005-likes.md

@@ -41,7 +41,7 @@ Response 400: { "error": string }
 
 Отдельно — что человек видит, когда показывать нечего или что-то пошло не
 так: текст пустого состояния и тексты ошибок. Их пишет спецификация, а не
-код ([ADR-0011](../docs/adr/0011-theme-and-shared-widgets.md)).
+код ([ADR-0012](../docs/adr/0012-theme-and-shared-widgets.md)).
 
 ## Критерии готовности (Definition of Done)
 Список проверок, по которым фича считается выполненной согласно спеке.
@@ -52,4 +52,4 @@ Response 400: { "error": string }
       `make story STORY=<NNN>-<slug>` показывает фичу в эмуляторе
       ([ADR-0009](../docs/adr/0009-demo-story-per-feature.md))
 - [ ] Экраны фичи проверены в тёмной теме и при максимальном системном
-      размере шрифта ([ADR-0011](../docs/adr/0011-theme-and-shared-widgets.md))
+      размере шрифта ([ADR-0012](../docs/adr/0012-theme-and-shared-widgets.md))

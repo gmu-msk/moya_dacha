@@ -36,6 +36,11 @@ COPY --from=build /out/moya-dacha-server /usr/local/bin/moya-dacha-server
 COPY --from=build /out/goose /usr/local/bin/goose
 COPY demo/migrate.sh /usr/local/bin/migrate.sh
 
+# Папка для файлов пользователей (specs/002-profile.md, ADR-0011). Создаём
+# её в образе и отдаём тому же пользователю, под которым работает сервис:
+# том стенда подхватит владельца отсюда, иначе писать в него будет некому.
+RUN mkdir -p /var/lib/moya-dacha/media && chown -R 10001:10001 /var/lib/moya-dacha
+
 USER 10001:10001
 
 ENTRYPOINT ["moya-dacha-server"]

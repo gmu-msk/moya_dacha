@@ -7,16 +7,24 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
+/// Размер значка над текстом.
+const _artSize = 72.0;
+
 class EmptyView extends StatelessWidget {
   const EmptyView({
     super.key,
     required this.icon,
     required this.title,
+    this.art,
     this.hint,
     this.action,
   });
 
   final IconData icon;
+
+  /// Картинка вместо значка, когда экрану есть что показать: аватар,
+  /// обложка, фотография.
+  final Widget? art;
 
   /// Что человек видит одной строкой: «Постов пока нет».
   final String title;
@@ -31,6 +39,7 @@ class EmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final art = this.art;
     final hint = this.hint;
     final action = this.action;
 
@@ -41,7 +50,7 @@ class EmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 72, color: theme.colorScheme.primary),
+            art ?? Icon(icon, size: _artSize, color: theme.colorScheme.primary),
             const SizedBox(height: AppGap.medium),
             Text(
               title,

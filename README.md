@@ -26,7 +26,7 @@ iOS — следующая платформа после MVP (обязатель
 4. Добавить сценарий показа в `demo/stories/00X-<feature>/`: чем фичу
    показать человеку и на каких данных ([ADR-0009](docs/adr/0009-demo-story-per-feature.md)).
    Посмотреть фичу в тёмной теме и при максимальном системном шрифте
-   ([ADR-0011](docs/adr/0011-theme-and-shared-widgets.md)).
+   ([ADR-0012](docs/adr/0012-theme-and-shared-widgets.md)).
 5. Ветка → PR → зелёный CI → мердж в `main`.
 
 Тесты — единственный гейт. Человек читает тесты, а не реализацию. Отсюда
@@ -95,7 +95,7 @@ user-story свой сценарий показа ([ADR-0009](docs/adr/0009-demo
 | Среды | Локальная и прод; staging нет ([ADR-0005](docs/adr/0005-no-staging-forward-only-migrations.md)) |
 | Демонстрация | Локальный стенд `make demo`, сценарий показа на фичу ([ADR-0009](docs/adr/0009-demo-story-per-feature.md)) |
 | Сессии | Непрозрачный токен в базе, без срока жизни ([ADR-0010](docs/adr/0010-opaque-session-tokens.md)) |
-| Дизайн | Material 3 + своя тема, общие виджеты, макетов нет ([ADR-0011](docs/adr/0011-theme-and-shared-widgets.md)) |
+| Дизайн | Material 3 + своя тема, общие виджеты, макетов нет ([ADR-0012](docs/adr/0012-theme-and-shared-widgets.md)) |
 | Хранение фото | S3-совместимое хранилище + CDN (провайдер — TBD) |
 | SMS-провайдер | TBD |
 
@@ -103,4 +103,5 @@ user-story свой сценарий показа ([ADR-0009](docs/adr/0009-demo
 
 Этап: процесс и стек зафиксированы, фичи MVP пишутся по порядку из
 [обзора](specs/000-overview.md). Готово: вход по номеру телефона
-([specs/001-auth.md](specs/001-auth.md)).
+([specs/001-auth.md](specs/001-auth.md)) и профиль — имя, «о себе»
+и аватар ([specs/002-profile.md](specs/002-profile.md)).
