@@ -50,12 +50,21 @@ echo "Приложение сообщило: $line"
 echo "Снимок экрана: $SCREENSHOT"
 
 # Текст с экрана — чтобы по логу было видно, что именно показано человеку,
-# а не только что приложение так считает. Если не получилось, не страшно.
-if adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
+# а не только что приложение так считает. Вывод справочный: если дамп
+# не получился или оказался пустым, прогон это не роняет.
+print_screen_text() {
+	adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 0
+
+	local texts
+	texts="$(adb shell cat /sdcard/ui.xml 2>/dev/null \
+		| grep -o 'text="[^"]\+"' | sed 's/^text="/  /; s/"$//' | sort -u)" || return 0
+	[ -n "$texts" ] || return 0
+
 	echo "Текст на экране:"
-	adb shell cat /sdcard/ui.xml 2>/dev/null \
-		| grep -o 'text="[^"]\+"' | sed 's/^text="/  /; s/"$//' | sort -u
-fi
+	printf '%s\n' "$texts"
+}
+
+print_screen_text || true
 
 case "$line" in
 *health=ok*)
