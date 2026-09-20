@@ -11,8 +11,10 @@ OPENAPI_GENERATOR_JAR     := .cache/openapi-generator-cli-$(OPENAPI_GENERATOR_VE
 APP_DART_DEFINE ?=
 TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha_test?sslmode=disable
 DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
+TEST_LOG       := .cache/test.log
 
 .PHONY: help generate generate-server generate-client check-generated build test test-up test-down \
+	test-local test-ci pg-local-stop api-index \
 	migrate-test fmt vet migrate-up migrate-status app-get app-analyze app-test app-apk apk-phone apk-phone-install \
 	demo demo-lan demo-down demo-reset demo-logs demo-psql demo-e2e \
 	stories story check-stories ci
@@ -61,6 +63,39 @@ migrate-test: ## Накатить миграции на базу для тест
 
 test: test-up migrate-test ## Интеграционные тесты против настоящей Postgres
 	cd $(BACKEND) && DATABASE_URL="$(TEST_DATABASE_URL)" go test ./... -count=1
+
+# Тот же гейт там, где нет Docker (облачная сессия агента): нативная Postgres
+# на том же порту 55432, поэтому TEST_DATABASE_URL не меняется.
+test-local: ## Тот же гейт без Docker (нативная Postgres)
+	@./scripts/pg-local.sh start
+	$(MAKE) migrate-test
+	cd $(BACKEND) && DATABASE_URL="$(TEST_DATABASE_URL)" go test ./... -count=1
+
+pg-local-stop: ## Остановить нативную Postgres для тестов
+	@./scripts/pg-local.sh stop
+
+# То же, что test, но в конце вывода — выжимка по упавшим тестам. Логи прогона
+# читаются с хвоста и по объёму обрезаются, поэтому главное должно быть внизу.
+test-ci: test-up migrate-test ## Гейт для CI: в конце лога — только упавшее
+	@mkdir -p $(dir $(TEST_LOG))
+	@cd $(BACKEND) && DATABASE_URL="$(TEST_DATABASE_URL)" go test ./... -count=1 >../$(TEST_LOG) 2>&1; \
+		status=$$?; \
+		cat ../$(TEST_LOG); \
+		if [ $$status -ne 0 ]; then \
+			echo; echo "=== Упало ==="; \
+			grep -E '^( *--- FAIL|FAIL\t| *[A-Za-z0-9_]+_test\.go:[0-9]+:)' ../$(TEST_LOG) | head -80; \
+		fi; \
+		rm -f ../$(TEST_LOG); exit $$status
+
+# Оглавление контракта: ручки и схемы со строками. Дешевле, чем читать
+# specs/openapi.yaml целиком, чтобы найти нужный кусок.
+api-index: ## Оглавление specs/openapi.yaml: ручки, операции, схемы
+	@awk '/^paths:/{s="p";next} /^components:/{s="c";next} \
+		s=="p" && /^  \//{printf "%6d  %s\n", NR, $$1} \
+		s=="p" && /^      operationId:/{printf "%6d      %s %s\n", NR, prev, $$2} \
+		s=="p" && /^    (get|post|put|patch|delete):/{prev=toupper($$1)} \
+		s=="c" && /^  [a-zA-Z]+:/{sub(":","",$$1); sec=$$1; next} \
+		s=="c" && sec=="schemas" && /^    [A-Za-z]/{printf "%6d  схема %s\n", NR, $$1}' specs/openapi.yaml
 
 migrate-up: ## Накатить миграции (шаг деплоя; DATABASE_URL обязателен)
 	cd $(BACKEND) && go tool goose -dir migrations postgres "$$DATABASE_URL" up

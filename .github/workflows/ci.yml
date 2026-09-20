@@ -48,7 +48,7 @@ jobs:
       # Гейт (ADR-0002): интеграционные тесты против настоящей Postgres,
       # поднятой тем же compose-файлом, что и локально.
       - name: Интеграционные тесты
-        run: make test
+        run: make test-ci
 
       - name: Сборка
         run: make build

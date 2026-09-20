@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./backend/api/gen/**)",
+      "Read(./mobile/packages/moya_dacha_api/**)",
+      "Read(./backend/go.sum)",
+      "Read(./mobile/pubspec.lock)",
+      "Read(./demo/seed/media/**)"
+    ],
+    "allow": [
+      "Bash(make api-index)",
+      "Bash(make help)",
+      "Bash(make vet)",
+      "Bash(make build)",
+      "Bash(make generate)",
+      "Bash(make test-local)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(go vet:*)",
+      "Bash(gofmt:*)"
+    ]
+  }
+}

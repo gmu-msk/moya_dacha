@@ -43,11 +43,12 @@ iOS — следующая платформа после MVP (обязатель
 ## Структура репозитория
 
 ```
+CLAUDE.md       правила для агента: что открывать, чем и в каком порядке
 specs/          спецификации фич (проза) + openapi.yaml (контракт)
 backend/        Go: cmd/, internal/, api/gen/, migrations/, tests/
 mobile/         Flutter-приложение; lib/theme.dart — тема, lib/widgets — общие виджеты
                 packages/moya_dacha_api — сгенерированный клиент
-docs/adr/       архитектурные решения
+docs/adr/       архитектурные решения (оглавление — docs/adr/README.md)
 deploy/         systemd-юнит, Caddyfile
 demo/           локальный стенд для демонстрации приложения
 demo/stories/   сценарии показа user-story: по одному на фичу
