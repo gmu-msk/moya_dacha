@@ -2,6 +2,7 @@ analysis_options.yaml
 lib/api.dart
 lib/api/auth_api.dart
 lib/api/operations_api.dart
+lib/api/profile_api.dart
 lib/api_client.dart
 lib/api_exception.dart
 lib/api_helper.dart
@@ -15,6 +16,7 @@ lib/model/auth_code_request.dart
 lib/model/current_user.dart
 lib/model/error.dart
 lib/model/health.dart
+lib/model/profile_update.dart
 lib/model/session_created.dart
 lib/model/session_info.dart
 lib/model/session_request.dart

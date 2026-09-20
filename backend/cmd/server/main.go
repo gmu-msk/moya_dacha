@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gmu-msk/moya_dacha/backend/internal/api"
+	"github.com/gmu-msk/moya_dacha/backend/internal/media"
 )
 
 func main() {
@@ -50,6 +51,18 @@ func run() error {
 	cfg := api.Config{FixedCode: os.Getenv("AUTH_FIXED_CODE")}
 	if cfg.FixedCode != "" {
 		slog.Warn("включён фиксированный код подтверждения: войти может кто угодно, в проде так быть не должно")
+	}
+
+	// MEDIA_DIR — папка, в которой лежат файлы пользователей, MEDIA_BASE_URL —
+	// префикс ссылок на них (specs/002-profile.md, ADR-0011). Без MEDIA_DIR
+	// сервис возьмёт временную папку и скажет об этом в логе: так он
+	// поднимается и без настройки, но переживёт перезапуск только с ней.
+	if dir := os.Getenv("MEDIA_DIR"); dir != "" {
+		baseURL := os.Getenv("MEDIA_BASE_URL")
+		if baseURL == "" {
+			baseURL = api.DefaultMediaBaseURL
+		}
+		cfg.Media = media.NewDisk(dir, baseURL)
 	}
 
 	srv := &http.Server{

@@ -30,6 +30,13 @@ ApiClient apiClient({String? token}) {
   );
 }
 
+/// Полная ссылка на файл сервиса — аватар и дальше фотографии постов.
+///
+/// Сервис возвращает ссылку относительной (`/media/avatars/…`): он не
+/// знает, по какому адресу до него достучались (ADR-0011). Достраивает
+/// её приложение — от того же адреса, по которому ходит в API.
+String mediaUrl(String link) => Uri.parse(apiBaseUrl).resolve(link).toString();
+
 /// Машиночитаемый код ошибки сервиса (`invalid_code`, `code_expired`, …)
 /// или null, если сервис вообще не ответил.
 String? serviceErrorCode(Object error) => _errorField(error, 'code');

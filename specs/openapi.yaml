@@ -10,7 +10,8 @@ info:
 
     Продуктовые эндпоинты добавляются вместе со спецификациями фич
     в specs/00X-*.md. Сейчас описаны: вход по номеру телефона
-    (specs/001-auth.md) и операционная проверка живости.
+    (specs/001-auth.md), профиль пользователя (specs/002-profile.md)
+    и операционная проверка живости.
 
 servers:
   - url: /api
@@ -151,6 +152,133 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /me:
+    get:
+      operationId: getMe
+      summary: Мой профиль
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Профиль владельца токена
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      operationId: updateMe
+      summary: Изменить имя и «о себе»
+      description: |
+        Замена обоих полей сразу, а не частичное изменение: пустое
+        `about` очищает поле.
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Профиль изменён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "400":
+          description: |
+            Имя пустое или слишком длинное (`invalid_name`),
+            «о себе» слишком длинное (`invalid_about`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/avatar:
+    put:
+      operationId: setAvatar
+      summary: Поставить аватар
+      description: |
+        Картинка JPEG или PNG не больше 5 МБ. Сервис уменьшает её до
+        512×512 и пересохраняет в JPEG; новый аватар заменяет прежний.
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Картинка JPEG или PNG
+      responses:
+        "200":
+          description: Аватар поставлен, профиль с новой ссылкой
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "400":
+          description: Файл не картинка или в запросе нет поля `file`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Картинка больше 5 МБ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      operationId: deleteAvatar
+      summary: Убрать аватар
+      description: Убрать аватар, которого нет, — не ошибка.
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Аватара нет, профиль без ссылки на него
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -245,7 +373,7 @@ components:
         Пользователь, каким его видит он сам. Номер телефона возвращается
         только владельцу сессии и не входит в публичное представление
         автора — см. CONTEXT.md.
-      required: [id, phone, created_at]
+      required: [id, phone, created_at, name, about]
       properties:
         id:
           type: string
@@ -259,3 +387,33 @@ components:
           type: string
           format: date-time
           description: Когда пользователь зарегистрировался
+        name:
+          type: string
+          description: |
+            Отображаемое имя. Пустая строка означает, что пользователь ещё
+            не знакомился: приложение показывает ему экран знакомства.
+          example: "Николай"
+        about:
+          type: string
+          description: Короткое «о себе», может быть пустым
+          example: "Три сотки под картошку"
+        avatar_url:
+          type: string
+          nullable: true
+          description: |
+            Ссылка на аватар или `null`, если аватара нет. Может быть
+            относительной — клиент достраивает её до адреса сервиса.
+          example: "/media/avatars/6f1c8a2b4d5e6f70.jpg"
+
+    ProfileUpdate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Отображаемое имя, от 1 до 50 символов, одна строка
+          example: "Николай"
+        about:
+          type: string
+          description: Короткое «о себе», до 200 символов, одна строка
+          example: "Три сотки под картошку"
