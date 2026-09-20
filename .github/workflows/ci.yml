@@ -53,17 +53,6 @@ jobs:
       - name: Стенд поднимается одной командой
         run: make demo
 
-      # Тот же снимок строкой в логе: его видно прямо в прогоне, без
-      # скачивания архива артефактов.
-      - name: Снимок экрана строкой в логе
-        if: always()
-        run: |
-          test -f demo/out/e2e-screenshot.png || exit 0
-          sha256sum demo/out/e2e-screenshot.png
-          echo "--- e2e-screenshot.png (base64) ---"
-          base64 -w 800 demo/out/e2e-screenshot.png
-          echo "--- конец снимка ---"
-
       - name: Логи стенда при падении
         if: failure()
         run: docker compose -f docker-compose.demo.yml logs
@@ -147,17 +136,6 @@ jobs:
           path: demo/out/e2e-screenshot.png
           if-no-files-found: warn
 
-      # Тот же снимок строкой в логе: его видно прямо в прогоне, без
-      # скачивания архива артефактов.
-      - name: Снимок экрана строкой в логе
-        if: always()
-        run: |
-          test -f demo/out/e2e-screenshot.png || exit 0
-          sha256sum demo/out/e2e-screenshot.png
-          echo "--- e2e-screenshot.png (base64) ---"
-          base64 -w 800 demo/out/e2e-screenshot.png
-          echo "--- конец снимка ---"
-
       - name: Логи стенда при падении
         if: failure()
         run: docker compose -f docker-compose.demo.yml logs
@@ -165,3 +143,17 @@ jobs:
       - name: Погасить стенд
         if: always()
         run: make demo-reset
+
+      # Тот же снимок строкой в логе: его видно прямо в прогоне, без
+      # скачивания архива артефактов. Печатаем последним шагом, чтобы он
+      # всегда лежал в хвосте лога, и рядом кладём размер и sha256 —
+      # по ним видно, что строка перенесена целиком.
+      - name: Снимок экрана строкой в логе
+        if: always()
+        run: |
+          test -f demo/out/e2e-screenshot.png || exit 0
+          wc -c demo/out/e2e-screenshot.png
+          sha256sum demo/out/e2e-screenshot.png
+          echo "--- e2e-screenshot.png (base64) ---"
+          base64 -w 2000 demo/out/e2e-screenshot.png
+          echo "--- конец снимка ---"
