@@ -8,20 +8,14 @@ Thumbs.db
 *.pem
 *.key
 
-# Node
-node_modules/
-dist/
-build/
-
-# Python
-__pycache__/
-*.pyc
-.venv/
+# Сборка
+bin/
 
 # Flutter / Dart
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
+build/
 *.iml
 .idea/
 

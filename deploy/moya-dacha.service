@@ -1,0 +1,23 @@
+# Юнит для VPS (ADR-0004). Кладётся в /etc/systemd/system/.
+# Секреты — в /etc/moya-dacha.env, который в git не попадает.
+[Unit]
+Description=МояДача API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=moya-dacha
+Group=moya-dacha
+EnvironmentFile=/etc/moya-dacha.env
+ExecStart=/usr/local/bin/moya-dacha-server
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+# Конфигурация генерации серверной части из specs/openapi.yaml.
+# Запускается через `make generate`. Результат коммитится в git (ADR-0001).
+package: gen
+output: api/gen/server.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true
+output-options:
+  skip-prune: true

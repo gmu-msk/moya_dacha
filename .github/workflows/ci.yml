@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: Контракт, тесты, сборка
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # Контракт — источник истины (ADR-0001): сгенерированный код обязан
+      # совпадать с тем, что получается из specs/openapi.yaml.
+      - name: Сгенерированный код не разошёлся с контрактом
+        run: make check-generated
+
+      - name: go vet
+        run: make vet
+
+      # Гейт (ADR-0002): интеграционные тесты против настоящей Postgres,
+      # поднятой тем же compose-файлом, что и локально.
+      - name: Интеграционные тесты
+        run: make test
+
+      - name: Сборка
+        run: make build

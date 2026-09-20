@@ -1,0 +1,18 @@
+# Postgres для интеграционных тестов — локально и в CI одинаково.
+# Мажорная версия должна совпадать с той, что стоит на VPS (ADR-0004).
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: moya_dacha
+      POSTGRES_PASSWORD: moya_dacha
+      POSTGRES_DB: moya_dacha_test
+    ports:
+      - "55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moya_dacha -d moya_dacha_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
