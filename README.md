@@ -119,5 +119,5 @@ user-story свой сценарий показа ([ADR-0009](docs/adr/0009-demo
 ([specs/001-auth.md](specs/001-auth.md)), профиль — имя, «о себе»
 и аватар ([specs/002-profile.md](specs/002-profile.md)) — и создание
 поста ([specs/003-posts.md](specs/003-posts.md)) и лента
-([specs/004-feed.md](specs/004-feed.md)). В работе — лайки
+([specs/004-feed.md](specs/004-feed.md)) и лайки
 ([specs/005-likes.md](specs/005-likes.md)).
