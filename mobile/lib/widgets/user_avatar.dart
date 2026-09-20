@@ -7,6 +7,18 @@ import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 
+/// Размеры аватара. Своих чисел экраны не придумывают (ADR-0012).
+abstract final class AvatarRadius {
+  /// Кнопкой в заголовке экрана.
+  static const inBar = 16.0;
+
+  /// Крупно на экране, как главное изображение.
+  static const onScreen = 44.0;
+
+  /// На своей странице профиля.
+  static const inProfile = 56.0;
+}
+
 class UserAvatar extends StatelessWidget {
   const UserAvatar({super.key, required this.user, this.radius = 24});
 

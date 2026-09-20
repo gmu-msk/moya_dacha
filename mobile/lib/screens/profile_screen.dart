@@ -9,6 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
+import '../theme.dart';
+import '../widgets/app_screen.dart';
+import '../widgets/error_view.dart';
 import '../widgets/user_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -110,6 +113,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasAvatar = (_user.avatarUrl ?? '').isNotEmpty;
+    final error = _error;
+    final saved = _saved;
 
     return PopScope(
       // Наверх возвращается свежий профиль: главный экран показывает имя
@@ -120,80 +125,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Navigator.of(context).pop(_user);
         }
       },
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Профиль')),
-        body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Center(child: UserAvatar(user: _user, radius: 56)),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _pickAvatar,
-                    icon: const Icon(Icons.photo_outlined),
-                    label: Text(hasAvatar ? 'Сменить фото' : 'Выбрать фото'),
+      child: AppScreen(
+        title: 'Профиль',
+        // Свой профиль правят, а не проверяют связь: строка состояния
+        // сервиса здесь только мешает.
+        showServerStatus: false,
+        child: ListView(
+          children: [
+            Center(
+              child: UserAvatar(user: _user, radius: AvatarRadius.inProfile),
+            ),
+            const SizedBox(height: AppGap.medium),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _pickAvatar,
+                  icon: const Icon(Icons.photo_outlined),
+                  label: Text(hasAvatar ? 'Сменить фото' : 'Выбрать фото'),
+                ),
+                if (hasAvatar) ...[
+                  const SizedBox(width: AppGap.small),
+                  TextButton(
+                    onPressed: _busy ? null : _removeAvatar,
+                    child: const Text('Убрать'),
                   ),
-                  if (hasAvatar) ...[
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: _busy ? null : _removeAvatar,
-                      child: const Text('Убрать'),
-                    ),
-                  ],
                 ],
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _name,
-                enabled: !_busy,
-                textCapitalization: TextCapitalization.words,
-                inputFormatters: [LengthLimitingTextInputFormatter(50)],
-                decoration: const InputDecoration(
-                  labelText: 'Имя',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _about,
-                enabled: !_busy,
-                inputFormatters: [LengthLimitingTextInputFormatter(200)],
-                decoration: const InputDecoration(
-                  labelText: 'О себе',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _busy ? null : _save,
-                child: const Text('Сохранить'),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.error,
-                  ),
-                ),
               ],
-              if (_saved != null) ...[
-                const SizedBox(height: 16),
-                Text(_saved!, style: theme.textTheme.bodyMedium),
-              ],
-              const SizedBox(height: 32),
-              const Divider(),
-              const SizedBox(height: 16),
-              Text('Номер телефона', style: theme.textTheme.labelMedium),
-              Text(_user.phone, style: theme.textTheme.bodyLarge),
-              const SizedBox(height: 16),
-              Text('В МоейДаче с', style: theme.textTheme.labelMedium),
-              Text(_date(_user.createdAt), style: theme.textTheme.bodyLarge),
+            ),
+            const SizedBox(height: AppGap.large),
+            TextField(
+              controller: _name,
+              enabled: !_busy,
+              textCapitalization: TextCapitalization.words,
+              inputFormatters: [LengthLimitingTextInputFormatter(50)],
+              decoration: const InputDecoration(labelText: 'Имя'),
+            ),
+            const SizedBox(height: AppGap.medium),
+            TextField(
+              controller: _about,
+              enabled: !_busy,
+              inputFormatters: [LengthLimitingTextInputFormatter(200)],
+              decoration: const InputDecoration(labelText: 'О себе'),
+            ),
+            const SizedBox(height: AppGap.medium),
+            FilledButton(
+              onPressed: _busy ? null : _save,
+              child: const Text('Сохранить'),
+            ),
+            if (error != null) ...[
+              const SizedBox(height: AppGap.medium),
+              // Повторить можно той же кнопкой «Сохранить» выше.
+              ErrorView(message: error),
             ],
-          ),
+            if (saved != null) ...[
+              const SizedBox(height: AppGap.medium),
+              Text(saved, style: theme.textTheme.bodyMedium),
+            ],
+            const SizedBox(height: AppGap.large),
+            const Divider(),
+            const SizedBox(height: AppGap.medium),
+            Text('Номер телефона', style: theme.textTheme.labelMedium),
+            Text(_user.phone, style: theme.textTheme.bodyLarge),
+            const SizedBox(height: AppGap.medium),
+            Text('В МоейДаче с', style: theme.textTheme.labelMedium),
+            Text(_date(_user.createdAt), style: theme.textTheme.bodyLarge),
+          ],
         ),
       ),
     );

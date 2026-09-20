@@ -7,9 +7,19 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import 'api.dart';
+import 'screens/gallery_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'session.dart';
+import 'theme.dart';
+import 'widgets/loading_view.dart';
+
+/// Каким экраном открыть приложение. Пусто — обычный путь. `gallery` —
+/// витрина общих виджетов, её показывает сценарий demo/stories/000-ui;
+/// задаётся при сборке: `--dart-define=START=gallery` (ADR-0012).
+/// В релизной сборке без этого флага ветка с витриной выбрасывается
+/// компилятором: условие константное.
+const startScreen = String.fromEnvironment('START');
 
 void main() {
   runApp(const MoyaDachaApp());
@@ -75,8 +85,12 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
     final token = _token;
 
     final Widget home;
-    if (!_restored) {
-      home = const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (startScreen == 'gallery') {
+      home = const GalleryScreen();
+    } else if (!_restored) {
+      home = const Scaffold(
+        body: Center(child: LoadingView(label: 'Открываю приложение…')),
+      );
     } else if (token == null) {
       home = LoginScreen(onSignedIn: _signedIn);
     } else {
@@ -89,9 +103,11 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
 
     return MaterialApp(
       title: 'МояДача',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3F7D3F)),
-      ),
+      // Светлая и тёмная тема лежат рядом, показанную выбирает система
+      // (ADR-0012). Своего переключателя в приложении нет.
+      theme: appTheme(Brightness.light),
+      darkTheme: appTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
       home: home,
     );
   }

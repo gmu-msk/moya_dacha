@@ -25,6 +25,8 @@ iOS — следующая платформа после MVP (обязатель
    до зелёного.
 4. Добавить сценарий показа в `demo/stories/00X-<feature>/`: чем фичу
    показать человеку и на каких данных ([ADR-0009](docs/adr/0009-demo-story-per-feature.md)).
+   Посмотреть фичу в тёмной теме и при максимальном системном шрифте
+   ([ADR-0012](docs/adr/0012-theme-and-shared-widgets.md)).
 5. Ветка → PR → зелёный CI → мердж в `main`.
 
 Тесты — единственный гейт. Человек читает тесты, а не реализацию. Отсюда
@@ -42,7 +44,8 @@ iOS — следующая платформа после MVP (обязатель
 ```
 specs/          спецификации фич (проза) + openapi.yaml (контракт)
 backend/        Go: cmd/, internal/, api/gen/, migrations/, tests/
-mobile/         Flutter-приложение; packages/moya_dacha_api — сгенерированный клиент
+mobile/         Flutter-приложение; lib/theme.dart — тема, lib/widgets — общие виджеты
+                packages/moya_dacha_api — сгенерированный клиент
 docs/adr/       архитектурные решения
 deploy/         systemd-юнит, Caddyfile
 demo/           локальный стенд для демонстрации приложения
@@ -92,6 +95,7 @@ user-story свой сценарий показа ([ADR-0009](docs/adr/0009-demo
 | Среды | Локальная и прод; staging нет ([ADR-0005](docs/adr/0005-no-staging-forward-only-migrations.md)) |
 | Демонстрация | Локальный стенд `make demo`, сценарий показа на фичу ([ADR-0009](docs/adr/0009-demo-story-per-feature.md)) |
 | Сессии | Непрозрачный токен в базе, без срока жизни ([ADR-0010](docs/adr/0010-opaque-session-tokens.md)) |
+| Дизайн | Material 3 + своя тема, общие виджеты, макетов нет ([ADR-0012](docs/adr/0012-theme-and-shared-widgets.md)) |
 | Хранение фото | S3-совместимое хранилище + CDN (провайдер — TBD) |
 | SMS-провайдер | TBD |
 

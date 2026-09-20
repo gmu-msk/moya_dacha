@@ -6,11 +6,14 @@ MOBILE         := mobile
 GENERATED      := $(BACKEND)/api/gen $(MOBILE)/packages/moya_dacha_api
 OPENAPI_GENERATOR_VERSION := 7.25.0
 OPENAPI_GENERATOR_JAR     := .cache/openapi-generator-cli-$(OPENAPI_GENERATOR_VERSION).jar
+# Дополнительные --dart-define для сборки приложения. Ими сценарий показа
+# открывает приложение не на обычном экране (demo/stories/README.md).
+APP_DART_DEFINE ?=
 TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha_test?sslmode=disable
 DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
 
 .PHONY: help generate generate-server generate-client check-generated build test test-up test-down \
-	migrate-test fmt vet migrate-up migrate-status app-get app-analyze app-apk apk-phone apk-phone-install \
+	migrate-test fmt vet migrate-up migrate-status app-get app-analyze app-test app-apk apk-phone apk-phone-install \
 	demo demo-lan demo-down demo-reset demo-logs demo-psql demo-e2e \
 	stories story check-stories ci
 
@@ -71,8 +74,11 @@ app-get: ## Зависимости приложения
 app-analyze: ## Статический анализ приложения
 	cd $(MOBILE) && flutter analyze
 
+app-test: ## Проверить, что экраны собираются (не гейт, ADR-0012)
+	cd $(MOBILE) && flutter test
+
 app-apk: ## Собрать debug-APK приложения (адрес стенда — как у эмулятора)
-	cd $(MOBILE) && flutter build apk --debug
+	cd $(MOBILE) && flutter build apk --debug $(APP_DART_DEFINE)
 
 apk-phone: ## Собрать APK для телефона: адрес стенда в локальной сети
 	./demo/apk-phone.sh

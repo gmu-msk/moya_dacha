@@ -8,6 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
+import '../theme.dart';
+import '../widgets/app_screen.dart';
+import '../widgets/error_view.dart';
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key, required this.token, required this.onDone});
@@ -42,9 +45,8 @@ class _IntroScreenState extends State<IntroScreen> {
     });
 
     try {
-      final user = await ProfileApi(apiClient(token: widget.token)).updateMe(
-        ProfileUpdate(name: _name.text, about: _about.text),
-      );
+      final user = await ProfileApi(apiClient(token: widget.token))
+          .updateMe(ProfileUpdate(name: _name.text, about: _about.text));
       debugPrint('$logMarker profile=introduced name=${user?.name}');
       if (user == null) {
         throw ApiException(200, 'Сервис не вернул профиль');
@@ -66,58 +68,51 @@ class _IntroScreenState extends State<IntroScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Знакомство')),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text('Как вас зовут?', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(
-              'Под этим именем вас увидят соседи по ленте. Имя можно '
-              'поменять в любой момент.',
-              style: theme.textTheme.bodyMedium,
+    final error = _error;
+
+    return AppScreen(
+      title: 'Знакомство',
+      // Знакомство — разговор с человеком, состояние сервиса тут лишнее.
+      showServerStatus: false,
+      child: ListView(
+        children: [
+          Text('Как вас зовут?', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: AppGap.small),
+          Text(
+            'Под этим именем вас увидят соседи по ленте. Имя можно '
+            'поменять в любой момент.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppGap.large),
+          TextField(
+            controller: _name,
+            autofocus: true,
+            enabled: !_busy,
+            textCapitalization: TextCapitalization.words,
+            inputFormatters: [LengthLimitingTextInputFormatter(50)],
+            decoration: const InputDecoration(labelText: 'Имя'),
+          ),
+          const SizedBox(height: AppGap.medium),
+          TextField(
+            controller: _about,
+            enabled: !_busy,
+            inputFormatters: [LengthLimitingTextInputFormatter(200)],
+            decoration: const InputDecoration(
+              labelText: 'О себе (необязательно)',
+              helperText: 'Например: три сотки под картошку',
             ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _name,
-              autofocus: true,
-              enabled: !_busy,
-              textCapitalization: TextCapitalization.words,
-              inputFormatters: [LengthLimitingTextInputFormatter(50)],
-              decoration: const InputDecoration(
-                labelText: 'Имя',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _about,
-              enabled: !_busy,
-              inputFormatters: [LengthLimitingTextInputFormatter(200)],
-              decoration: const InputDecoration(
-                labelText: 'О себе (необязательно)',
-                helperText: 'Например: три сотки под картошку',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                _error!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _busy ? null : _save,
-              child: const Text('Продолжить'),
-            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: AppGap.medium),
+            // Повторять нечего: человек исправляет имя и нажимает кнопку.
+            ErrorView(message: error),
           ],
-        ),
+          const SizedBox(height: AppGap.large),
+          FilledButton(
+            onPressed: _busy ? null : _save,
+            child: const Text('Продолжить'),
+          ),
+        ],
       ),
     );
   }

@@ -60,6 +60,7 @@ TITLE="$(sed -n 's/^# //p' "$STORY_DIR/story.md" | head -1)"
 # Настройки запуска сценария: чем отличается его прогон от прогона соседа.
 MARKER=""
 EXPECT=""
+DART_DEFINE=""
 # shellcheck source=/dev/null
 [ -f "$STORY_DIR/story.env" ] && . "$STORY_DIR/story.env"
 
@@ -79,7 +80,14 @@ echo
 
 if [ -z "$NO_APK" ]; then
 	echo "-> Сборка приложения"
-	make app-apk
+	# Сценарий может открывать приложение не на обычном экране: тогда он
+	# задаёт DART_DEFINE в своём story.env.
+	if [ -n "$DART_DEFINE" ]; then
+		echo "   с флагом сборки: $DART_DEFINE"
+		APP_DART_DEFINE="--dart-define=$DART_DEFINE" make app-apk
+	else
+		make app-apk
+	fi
 	echo
 fi
 

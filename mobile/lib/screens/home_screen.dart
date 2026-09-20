@@ -10,7 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
-import '../widgets/server_status.dart';
+import '../theme.dart';
+import '../widgets/app_screen.dart';
+import '../widgets/empty_view.dart';
+import '../widgets/error_view.dart';
+import '../widgets/loading_view.dart';
 import '../widgets/user_avatar.dart';
 import 'intro_screen.dart';
 import 'profile_screen.dart';
@@ -47,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _error = null);
     try {
       final user = await ProfileApi(apiClient(token: widget.token)).getMe();
       debugPrint('$logMarker screen=home user=${user?.id} name=${user?.name}');
@@ -95,6 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final user = _user;
+    final error = _error;
 
     // Имя пустое — пользователь ещё не знакомился. Это единственное
     // состояние, в котором приложение не пускает дальше.
@@ -105,91 +111,64 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('МояДача'),
-        actions: [
-          if (user != null)
-            IconButton(
-              tooltip: 'Профиль',
-              onPressed: () => _openProfile(user),
-              icon: UserAvatar(user: user, radius: 16),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (user != null)
-                        UserAvatar(user: user, radius: 44)
-                      else
-                        Icon(
-                          Icons.eco_outlined,
-                          size: 72,
-                          color: theme.colorScheme.primary,
-                        ),
-                      const SizedBox(height: 16),
-                      Text(
-                        user != null
-                            ? (widget.isNewUser
-                                  ? 'Добро пожаловать, ${user.name}!'
-                                  : 'С возвращением, ${user.name}!')
-                            : 'Вы вошли',
-                        style: theme.textTheme.titleLarge,
-                        textAlign: TextAlign.center,
-                      ),
-                      if (user != null && user.about.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          user.about,
-                          style: theme.textTheme.bodyLarge,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                      if (user == null) ...[
-                        const SizedBox(height: 8),
-                        if (_error != null)
-                          Text(
-                            _error!,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.error,
-                            ),
-                            textAlign: TextAlign.center,
-                          )
-                        else
-                          const CircularProgressIndicator(),
-                      ],
-                      const SizedBox(height: 24),
-                      Text(
-                        'Лента и посты появятся следующими фичами.',
-                        style: theme.textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      if (user != null)
-                        FilledButton.tonal(
-                          onPressed: () => _openProfile(user),
-                          child: const Text('Мой профиль'),
-                        ),
-                      const SizedBox(height: 8),
-                      OutlinedButton(
-                        onPressed: _busy ? null : _signOut,
-                        child: const Text('Выйти'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const ServerStatus(),
-            ],
+    // Внутри пока пусто: лента и посты — следующие фичи
+    // (specs/000-overview.md). Это и есть пустое состояние экрана.
+    final String title;
+    if (user == null) {
+      title = 'Вы вошли';
+    } else if (widget.isNewUser) {
+      title = 'Добро пожаловать, ${user.name}!';
+    } else {
+      title = 'С возвращением, ${user.name}!';
+    }
+
+    final Widget? about;
+    if (user != null && user.about.isNotEmpty) {
+      about = Text(
+        user.about,
+        style: theme.textTheme.bodyLarge,
+        textAlign: TextAlign.center,
+      );
+    } else if (user == null && error != null) {
+      about = ErrorView(message: error, onRetry: _load);
+    } else if (user == null) {
+      about = const LoadingView(label: 'Открываю профиль…');
+    } else {
+      about = null;
+    }
+
+    return AppScreen(
+      actions: [
+        if (user != null)
+          IconButton(
+            tooltip: 'Профиль',
+            onPressed: () => _openProfile(user),
+            icon: UserAvatar(user: user, radius: AvatarRadius.inBar),
           ),
+      ],
+      child: EmptyView(
+        icon: Icons.eco_outlined,
+        art: user == null
+            ? null
+            : UserAvatar(user: user, radius: AvatarRadius.onScreen),
+        title: title,
+        hint: 'Лента и посты появятся следующими фичами.',
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (about != null) ...[about, const SizedBox(height: AppGap.large)],
+            if (user != null) ...[
+              FilledButton.tonal(
+                onPressed: () => _openProfile(user),
+                child: const Text('Мой профиль'),
+              ),
+              const SizedBox(height: AppGap.small),
+            ],
+            OutlinedButton(
+              onPressed: _busy ? null : _signOut,
+              child: const Text('Выйти'),
+            ),
+          ],
         ),
       ),
     );
