@@ -44,3 +44,6 @@ Response 400: { "error": string }
 
 - [ ] ...
 - [ ] ...
+- [ ] Есть сценарий показа `demo/stories/<NNN>-<slug>/`, и
+      `make story STORY=<NNN>-<slug>` показывает фичу в эмуляторе
+      ([ADR-0009](../docs/adr/0009-demo-story-per-feature.md))

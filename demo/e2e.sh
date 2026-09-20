@@ -9,7 +9,10 @@ set -euo pipefail
 APK="${APK:-mobile/build/app/outputs/flutter-apk/app-debug.apk}"
 PACKAGE="${PACKAGE:-ru.moyadacha.app}"
 SCREENSHOT="${SCREENSHOT:-demo/out/e2e-screenshot.png}"
-MARKER='MOYA_DACHA_DEMO health='
+# Чего ждём в логах приложения. Сценарий показа переопределяет это парой
+# MARKER/EXPECT в своём story.env — см. demo/stories/README.md.
+MARKER="${MARKER:-MOYA_DACHA_DEMO health=}"
+EXPECT="${EXPECT:-*health=ok*}"
 
 if [ ! -f "$APK" ]; then
 	echo "APK не найден: $APK — соберите его командой make app-apk" >&2
@@ -66,12 +69,13 @@ print_screen_text() {
 
 print_screen_text || true
 
+# shellcheck disable=SC2254  # EXPECT — это шаблон, кавычки его сломают.
 case "$line" in
-*health=ok*)
+$EXPECT)
 	echo "E2E пройден: эмулятор -> приложение -> API -> Postgres."
 	;;
 *)
-	echo "E2E не пройден: приложение не получило ok от сервиса." >&2
+	echo "E2E не пройден: в логе '$line', ожидалось '$EXPECT'." >&2
 	exit 1
 	;;
 esac

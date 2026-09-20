@@ -4,6 +4,14 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Ручной запуск, чтобы получить APK с нужным адресом сервера артефактом
+  # прогона — см. demo/README.md, «Приложение на телефоне».
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Адрес API внутри APK, например http://192.168.1.10:8080/api (пусто — APK для телефона не собирается)'
+        required: false
+        default: ''
 
 # Новый пуш в ветку отменяет её прошлый прогон: ждать результат, который
 # уже устарел, незачем. Прогоны main не отменяются — там каждый коммит
@@ -38,6 +46,11 @@ jobs:
 
       - name: go vet
         run: make vet
+
+      # У каждой user-story есть сценарий показа (ADR-0009). Проверяем форму
+      # сценариев; заодно шаг перечислит спеки фич, у которых сценария нет.
+      - name: Сценарии показа
+        run: make check-stories
 
       # Гейт (ADR-0002): интеграционные тесты против настоящей Postgres,
       # поднятой тем же compose-файлом, что и локально.
@@ -103,7 +116,12 @@ jobs:
       # Стенд и APK друг от друга не зависят, а по отдельности занимали
       # больше половины джоба. Поднимаем стенд рядом со сборкой, а не после
       # неё; результат забирает шаг «Дождаться демо-стенда».
+      #
+      # Стенд поднимается сразу с данными сценария показа, который прогоняем
+      # ниже: так проверяется и сам механизм сценариев, а не только e2e-путь.
       - name: Поднять демо-стенд рядом со сборкой
+        env:
+          DEMO_STORY: 000-status
         run: |
           nohup bash -c 'make demo; echo $? > "$RUNNER_TEMP/demo.status"' \
             > "$RUNNER_TEMP/demo.log" 2>&1 &
@@ -141,6 +159,16 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
 
+      # Адрес сервера зашивается в APK при сборке, поэтому этот APK годится
+      # только для эмулятора: 10.0.2.2 — это localhost машины-хоста изнутри
+      # эмулятора, с телефона такого адреса нет. APK для телефона собирается
+      # локально (`make apk-phone`) или джобом ниже, по ручному запуску.
+      - name: APK артефактом прогона
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-emulator
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+
       - name: Дождаться демо-стенда
         run: |
           deadline=$((SECONDS + 900))
@@ -170,20 +198,22 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Приложение в эмуляторе против стенда
+      # Стенд уже поднят (с данными сценария), APK уже собран — поэтому
+      # --keep-stand и --no-apk. Локально это одна команда: make story.
+      - name: Сценарий показа в эмуляторе
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
           disable-animations: true
-          script: make demo-e2e
+          script: ./demo/story.sh 000-status --keep-stand --no-apk
 
-      - name: Снимок экрана из эмулятора
+      - name: Снимки экрана из эмулятора
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-screenshot
-          path: demo/out/e2e-screenshot.png
+          name: story-screenshots
+          path: demo/out/*.png
           if-no-files-found: warn
 
       - name: Логи стенда при падении
@@ -193,3 +223,45 @@ jobs:
       - name: Погасить стенд
         if: always()
         run: make demo-reset
+
+  # APK для телефона: адрес сервера задаётся при ручном запуске (вкладка
+  # Actions -> CI -> Run workflow). Нужен, когда собрать локально нечем;
+  # обычный путь — `make apk-phone` на своей машине, он быстрее и сам
+  # подставляет адрес этой машины в локальной сети.
+  apk:
+    name: APK с заданным адресом сервера
+    if: github.event_name == 'workflow_dispatch' && inputs.api_base_url != ''
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+
+      - name: Зависимости приложения
+        run: make app-get
+
+      # Адрес приходит из формы запуска, поэтому идёт через переменную
+      # окружения, а не подстановкой в текст команды.
+      - name: Сборка APK
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+        run: |
+          echo "Адрес сервера внутри APK: $API_BASE_URL"
+          cd mobile
+          flutter build apk --debug --dart-define=API_BASE_URL="$API_BASE_URL"
+
+      - name: APK артефактом прогона
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-phone
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
