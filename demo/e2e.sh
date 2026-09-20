@@ -39,6 +39,10 @@ until [ -n "$line" ]; do
 done
 echo
 
+# Приложение пишет в лог сразу после ответа сервиса, экран перерисовывается
+# чуть позже — иначе на снимке будет крутилка, а не результат.
+sleep 2
+
 mkdir -p "$(dirname "$SCREENSHOT")"
 adb exec-out screencap -p > "$SCREENSHOT"
 
