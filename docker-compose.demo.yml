@@ -52,6 +52,9 @@ services:
       - ./demo/seed.sh:/usr/local/bin/seed.sh:ro
       - ./demo/seed:/seed:ro
       - ./demo/stories:/stories:ro
+      # Фотографии сценариев кладутся в то же хранилище, откуда сервис
+      # раздаёт файлы: строки в базе ссылаются на них по ключу.
+      - demo-media-data:/media
     depends_on:
       migrate:
         condition: service_completed_successfully

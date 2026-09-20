@@ -38,6 +38,7 @@ part 'model/auth_code_request.dart';
 part 'model/author.dart';
 part 'model/current_user.dart';
 part 'model/error.dart';
+part 'model/feed.dart';
 part 'model/health.dart';
 part 'model/media.dart';
 part 'model/post.dart';

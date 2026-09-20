@@ -26,9 +26,39 @@ class UserAvatar extends StatelessWidget {
   final double radius;
 
   @override
+  Widget build(BuildContext context) =>
+      Avatar(name: user.name, link: user.avatarUrl, radius: radius);
+}
+
+/// Аватар автора — то же самое для публичного представления пользователя:
+/// рядом с постом и комментарием (CONTEXT.md).
+class AuthorAvatar extends StatelessWidget {
+  const AuthorAvatar({super.key, required this.author, this.radius = 24});
+
+  final Author author;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) =>
+      Avatar(name: author.name, link: author.avatarUrl, radius: radius);
+}
+
+class Avatar extends StatelessWidget {
+  const Avatar({
+    super.key,
+    required this.name,
+    required this.link,
+    this.radius = 24,
+  });
+
+  final String name;
+  final String? link;
+  final double radius;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final link = user.avatarUrl;
+    final link = this.link;
 
     return CircleAvatar(
       radius: radius,
@@ -37,7 +67,7 @@ class UserAvatar extends StatelessWidget {
           ? null
           : NetworkImage(mediaUrl(link)),
       child: Text(
-        _initial(user.name),
+        _initial(name),
         style: TextStyle(
           fontSize: radius * 0.8,
           color: theme.colorScheme.onPrimaryContainer,
