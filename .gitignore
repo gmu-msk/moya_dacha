@@ -30,3 +30,7 @@ local.properties
 # Генератор Dart-клиента и снимки e2e-прогона
 .cache/
 demo/out/
+
+# Python
+__pycache__/
+*.pyc
