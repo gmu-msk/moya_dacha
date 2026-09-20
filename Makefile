@@ -10,7 +10,7 @@ TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha
 DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
 
 .PHONY: help generate generate-server generate-client check-generated build test test-up test-down \
-	fmt vet migrate-up migrate-status app-get app-analyze app-apk apk-phone apk-phone-install \
+	migrate-test fmt vet migrate-up migrate-status app-get app-analyze app-apk apk-phone apk-phone-install \
 	demo demo-lan demo-down demo-reset demo-logs demo-psql demo-e2e \
 	stories story check-stories ci
 
@@ -51,7 +51,12 @@ test-up: ## Поднять Postgres для тестов
 test-down: ## Остановить Postgres для тестов
 	docker compose -f docker-compose.test.yml down -v
 
-test: test-up ## Интеграционные тесты против настоящей Postgres
+# Схему тестовой базе накатывает отдельный шаг — тот же, что в деплое
+# (ADR-0005): тесты работают с базой, а не создают её.
+migrate-test: ## Накатить миграции на базу для тестов
+	cd $(BACKEND) && go tool goose -dir migrations postgres "$(TEST_DATABASE_URL)" up
+
+test: test-up migrate-test ## Интеграционные тесты против настоящей Postgres
 	cd $(BACKEND) && DATABASE_URL="$(TEST_DATABASE_URL)" go test ./... -count=1
 
 migrate-up: ## Накатить миграции (шаг деплоя; DATABASE_URL обязателен)

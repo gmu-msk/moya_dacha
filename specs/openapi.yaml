@@ -8,8 +8,9 @@ info:
     Из этого файла генерируются серверные типы и роутинг (Go) и клиент (Dart).
     Руками сгенерированные файлы не правятся — см. docs/adr/0001-spec-first-openapi.md.
 
-    Пока описан только операционный эндпоинт проверки живости: продуктовые
-    эндпоинты добавляются вместе со спецификациями фич в specs/00X-*.md.
+    Продуктовые эндпоинты добавляются вместе со спецификациями фич
+    в specs/00X-*.md. Сейчас описаны: вход по номеру телефона
+    (specs/001-auth.md) и операционная проверка живости.
 
 servers:
   - url: /api
@@ -38,7 +39,125 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /auth/code:
+    post:
+      operationId: requestAuthCode
+      summary: Запросить код подтверждения на номер телефона
+      description: |
+        Ответ одинаков для нового и для уже зарегистрированного номера:
+        по нему нельзя узнать, есть ли такой пользователь.
+
+        Доставка кода спрятана за интерфейсом: пока SMS-провайдер не выбран,
+        код пишется в лог сервиса (specs/001-auth.md).
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthCodeRequest"
+      responses:
+        "202":
+          description: Код выдан и отправлен на номер
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthCodeAccepted"
+        "400":
+          description: Номер не разбирается или не российский мобильный
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Код на этот номер запрашивали меньше минуты назад
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/session:
+    post:
+      operationId: createSession
+      summary: Войти по коду подтверждения
+      description: |
+        Регистрация и вход — одно действие: если номера ещё нет,
+        пользователь создаётся, и вход помечается как первый.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionRequest"
+      responses:
+        "200":
+          description: Код подошёл, сессия создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionCreated"
+        "400":
+          description: Номер или код не разбираются
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: |
+            Код не тот (`invalid_code`), истёк (`code_expired`)
+            или исчерпаны попытки (`too_many_attempts`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    get:
+      operationId: getSession
+      summary: Чья это сессия
+      tags: [auth]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Сессия действительна
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionInfo"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      operationId: deleteSession
+      summary: Выйти
+      description: |
+        Прекращает действие только этого токена. Сессии на других
+        устройствах продолжают работать.
+      tags: [auth]
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Сессия прекращена
+        "401":
+          description: Токена нет или он уже недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Токен сессии, выданный `POST /auth/session`
+
   schemas:
     Health:
       type: object
@@ -58,3 +177,85 @@ components:
         message:
           type: string
           description: Человекочитаемое описание, пригодное для показа пользователю
+
+    AuthCodeRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          description: |
+            Номер телефона в любом привычном виде: `+7 900 123-45-67`,
+            `8 900 123 45 67`, `79001234567` — это один и тот же номер.
+          example: "+7 900 123-45-67"
+
+    AuthCodeAccepted:
+      type: object
+      required: [resend_after, code_ttl]
+      properties:
+        resend_after:
+          type: integer
+          format: int32
+          description: Через сколько секунд можно запросить код снова
+          example: 60
+        code_ttl:
+          type: integer
+          format: int32
+          description: Сколько секунд живёт выданный код
+          example: 300
+
+    SessionRequest:
+      type: object
+      required: [phone, code]
+      properties:
+        phone:
+          type: string
+          description: Тот же номер, на который запрашивали код
+          example: "+7 900 123-45-67"
+        code:
+          type: string
+          description: Код подтверждения, четыре цифры
+          example: "1234"
+
+    SessionCreated:
+      type: object
+      required: [token, is_new_user, user]
+      properties:
+        token:
+          type: string
+          description: |
+            Токен сессии. Передаётся в заголовке `Authorization: Bearer <токен>`,
+            не истекает по времени и действует, пока пользователь не вышел.
+        is_new_user:
+          type: boolean
+          description: Этим входом пользователь зарегистрировался впервые
+        user:
+          $ref: "#/components/schemas/CurrentUser"
+
+    SessionInfo:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/CurrentUser"
+
+    CurrentUser:
+      type: object
+      description: |
+        Пользователь, каким его видит он сам. Номер телефона возвращается
+        только владельцу сессии и не входит в публичное представление
+        автора — см. CONTEXT.md.
+      required: [id, phone, created_at]
+      properties:
+        id:
+          type: string
+          description: Идентификатор пользователя (UUID)
+          example: "0b3f4d3a-1d2e-4a5b-8c7d-9e0f1a2b3c4d"
+        phone:
+          type: string
+          description: Нормализованный номер телефона
+          example: "+79001234567"
+        created_at:
+          type: string
+          format: date-time
+          description: Когда пользователь зарегистрировался

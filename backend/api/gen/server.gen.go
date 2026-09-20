@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 )
@@ -35,6 +36,47 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// AuthCodeAccepted defines model for AuthCodeAccepted.
+type AuthCodeAccepted struct {
+	// CodeTtl Сколько секунд живёт выданный код
+	//
+	// Example: 300
+	CodeTtl int32 `json:"code_ttl"`
+
+	// ResendAfter Через сколько секунд можно запросить код снова
+	//
+	// Example: 60
+	ResendAfter int32 `json:"resend_after"`
+}
+
+// AuthCodeRequest defines model for AuthCodeRequest.
+type AuthCodeRequest struct {
+	// Phone Номер телефона в любом привычном виде: `+7 900 123-45-67`,
+	// `8 900 123 45 67`, `79001234567` — это один и тот же номер.
+	//
+	//
+	// Example: +7 900 123-45-67
+	Phone string `json:"phone"`
+}
+
+// CurrentUser Пользователь, каким его видит он сам. Номер телефона возвращается
+// только владельцу сессии и не входит в публичное представление
+// автора — см. CONTEXT.md.
+type CurrentUser struct {
+	// CreatedAt Когда пользователь зарегистрировался
+	CreatedAt time.Time `json:"created_at"`
+
+	// Id Идентификатор пользователя (UUID)
+	//
+	// Example: 0b3f4d3a-1d2e-4a5b-8c7d-9e0f1a2b3c4d
+	Id string `json:"id"`
+
+	// Phone Нормализованный номер телефона
+	//
+	// Example: +79001234567
+	Phone string `json:"phone"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Code Машиночитаемый код ошибки
@@ -52,8 +94,62 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// SessionCreated defines model for SessionCreated.
+type SessionCreated struct {
+	// IsNewUser Этим входом пользователь зарегистрировался впервые
+	IsNewUser bool `json:"is_new_user"`
+
+	// Token Токен сессии. Передаётся в заголовке `Authorization: Bearer <токен>`,
+	// не истекает по времени и действует, пока пользователь не вышел.
+	Token string `json:"token"`
+
+	// User Пользователь, каким его видит он сам. Номер телефона возвращается
+	// только владельцу сессии и не входит в публичное представление
+	// автора — см. CONTEXT.md.
+	User CurrentUser `json:"user"`
+}
+
+// SessionInfo defines model for SessionInfo.
+type SessionInfo struct {
+	// User Пользователь, каким его видит он сам. Номер телефона возвращается
+	// только владельцу сессии и не входит в публичное представление
+	// автора — см. CONTEXT.md.
+	User CurrentUser `json:"user"`
+}
+
+// SessionRequest defines model for SessionRequest.
+type SessionRequest struct {
+	// Code Код подтверждения, четыре цифры
+	//
+	// Example: 1234
+	Code string `json:"code"`
+
+	// Phone Тот же номер, на который запрашивали код
+	//
+	// Example: +7 900 123-45-67
+	Phone string `json:"phone"`
+}
+
+// RequestAuthCodeJSONRequestBody defines body for RequestAuthCode for application/json ContentType.
+type RequestAuthCodeJSONRequestBody = AuthCodeRequest
+
+// CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
+type CreateSessionJSONRequestBody = SessionRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// RequestAuthCode Запросить код подтверждения на номер телефона
+	// (POST /auth/code)
+	RequestAuthCode(w http.ResponseWriter, r *http.Request)
+	// DeleteSession Выйти
+	// (DELETE /auth/session)
+	DeleteSession(w http.ResponseWriter, r *http.Request)
+	// GetSession Чья это сессия
+	// (GET /auth/session)
+	GetSession(w http.ResponseWriter, r *http.Request)
+	// CreateSession Войти по коду подтверждения
+	// (POST /auth/session)
+	CreateSession(w http.ResponseWriter, r *http.Request)
 	// GetHealth Проверка живости сервиса и доступности базы
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -67,6 +163,62 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// RequestAuthCode operation middleware
+func (siw *ServerInterfaceWrapper) RequestAuthCode(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestAuthCode(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSession operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSession operation middleware
+func (siw *ServerInterfaceWrapper) GetSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -203,8 +355,176 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/health", wrapper.GetHealth)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/code", wrapper.RequestAuthCode)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/auth/session", wrapper.DeleteSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/session", wrapper.GetSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/session", wrapper.CreateSession)
 
 	return m
+}
+
+type RequestAuthCodeRequestObject struct {
+	Body *RequestAuthCodeJSONRequestBody
+}
+
+type RequestAuthCodeResponseObject interface {
+	VisitRequestAuthCodeResponse(w http.ResponseWriter) error
+}
+
+type RequestAuthCode202JSONResponse AuthCodeAccepted
+
+func (response RequestAuthCode202JSONResponse) VisitRequestAuthCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestAuthCode400JSONResponse Error
+
+func (response RequestAuthCode400JSONResponse) VisitRequestAuthCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestAuthCode429JSONResponse Error
+
+func (response RequestAuthCode429JSONResponse) VisitRequestAuthCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSessionRequestObject struct {
+}
+
+type DeleteSessionResponseObject interface {
+	VisitDeleteSessionResponse(w http.ResponseWriter) error
+}
+
+type DeleteSession204Response struct {
+}
+
+func (response DeleteSession204Response) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSession401JSONResponse Error
+
+func (response DeleteSession401JSONResponse) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSessionRequestObject struct {
+}
+
+type GetSessionResponseObject interface {
+	VisitGetSessionResponse(w http.ResponseWriter) error
+}
+
+type GetSession200JSONResponse SessionInfo
+
+func (response GetSession200JSONResponse) VisitGetSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSession401JSONResponse Error
+
+func (response GetSession401JSONResponse) VisitGetSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSessionRequestObject struct {
+	Body *CreateSessionJSONRequestBody
+}
+
+type CreateSessionResponseObject interface {
+	VisitCreateSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateSession200JSONResponse SessionCreated
+
+func (response CreateSession200JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession400JSONResponse Error
+
+func (response CreateSession400JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession401JSONResponse Error
+
+func (response CreateSession401JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type GetHealthRequestObject struct {
@@ -244,6 +564,18 @@ func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseW
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// RequestAuthCode Запросить код подтверждения на номер телефона
+	// (POST /auth/code)
+	RequestAuthCode(ctx context.Context, request RequestAuthCodeRequestObject) (RequestAuthCodeResponseObject, error)
+	// DeleteSession Выйти
+	// (DELETE /auth/session)
+	DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error)
+	// GetSession Чья это сессия
+	// (GET /auth/session)
+	GetSession(ctx context.Context, request GetSessionRequestObject) (GetSessionResponseObject, error)
+	// CreateSession Войти по коду подтверждения
+	// (POST /auth/session)
+	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
 	// GetHealth Проверка живости сервиса и доступности базы
 	// (GET /health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -288,6 +620,116 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
+// RequestAuthCode operation middleware
+func (sh *strictHandler) RequestAuthCode(w http.ResponseWriter, r *http.Request) {
+	var request RequestAuthCodeRequestObject
+
+	var body RequestAuthCodeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RequestAuthCode(ctx, request.(RequestAuthCodeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RequestAuthCode")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RequestAuthCodeResponseObject); ok {
+		if err := validResponse.VisitRequestAuthCodeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSession operation middleware
+func (sh *strictHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	var request DeleteSessionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSession(ctx, request.(DeleteSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSessionResponseObject); ok {
+		if err := validResponse.VisitDeleteSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSession operation middleware
+func (sh *strictHandler) GetSession(w http.ResponseWriter, r *http.Request) {
+	var request GetSessionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSession(ctx, request.(GetSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSessionResponseObject); ok {
+		if err := validResponse.VisitGetSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSession operation middleware
+func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	var request CreateSessionRequestObject
+
+	var body CreateSessionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSession(ctx, request.(CreateSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSessionResponseObject); ok {
+		if err := validResponse.VisitCreateSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetHealth operation middleware
 func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	var request GetHealthRequestObject
@@ -317,22 +759,49 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"rFVNb9tGEP0ri20PSSGTTI1eeAvQIvUtxwKRD6y0tplaJMulCgSBAX0YcQEnEQrkkEPRtKdeGVmMaUmk",
-	"/sKbv9BfUswuJUe2C/jQi722due9efPe6KXsxL0kjlSUaem/lLpzpHqBOX6XpnHKhySNE5VmoTL/7sRd",
-	"xb+7SnfSMMnCOJK+xO/I6VeUqFDTGUoaIUeBJZ3jSmCOGjOB2tz4iDlK2ZLZi0RJX+osDaNDedKSPaV1",
-	"cHhX8b9RYIEaUxRc63MA1CgEaqxQ0hA5KpQoWgIrGqDEBQMzJ740w4ImAivUmCPHJXL7x4Je49JUz2nE",
-	"SPT2Nr2TlkzVz/0wVV3pP7MqXFPe39yPf3yuOhm3870KjrOj2wLqLMj65qSifo+LxT99VuA/AJtXt4H4",
-	"YhgdxHfI9p6GNDJysSpzwRLRiIdE5xs5eDYVjWiAHHNWVWCJAp8wo7GgIQoasO40QI2lQMkvFiwyv0KO",
-	"JUqnHeE9LgW9YTgWXdApclxhweUu+K6pUNKAxvSWRjSkyXbxis5RCMNuxexKwYg0tnxxIR48iR/ehBcP",
-	"vg3S7CHj/0ljM9UlvxxuY9rZolqDNNwYpmJjrEzzU5o0xP4ZvOMaS0d04452g27qep73aEcnqrNzEKY6",
-	"24kTFQVJ6PS6TjtqR/hgTbXlRGHUYHfNUdtPmFBOr1Cy6IbOlaA3qDAzTixNU4ZP3egy55Y/ocQUtZ2e",
-	"v74w45YNxpT7akc3K9kp1/jI3fG0N9JjykM29QputeYfTO8VSjpls1iaNLGCnqKkM4GpYAm063k/7Hxl",
-	"e+ekhNmxsjugpgneIacz5OLx0z3Zkr+oVFs7es4jx+NgNNpJX+46nrMrWzIJsiOTCPdoE5pDld1h6T/u",
-	"KWLLjpaJcJf0+g7RGqs+frrnCM7K9TKgMQqrVDvCDAVWZv0UTQCWBrg02RpYe3I4rBoc9YDp7nWlL5+o",
-	"rNkDHGedxJG2W+Brz7PbNMpUZDoNkuQ47Jin7nPN7a7XMZ++TNWB9OUX7vW+dptl7TYIZhXc0OuvJmIl",
-	"DRsbtYTxg9l+NY2Mzc54l9KIh/ONt/u/8bLfIPemVXFKNtwqFGxeM70xVqiQm6Wo+71ekL7gKh+2cpLf",
-	"yMn1fjF5NJPbLri+aEHpnL0cHGqzktdT1HLfNKBVylaW/rNbnvzNULYpvGKfjdlwsiX76bH0pcteP9k/",
-	"+TcAAP//",
+	"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",
+	"//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

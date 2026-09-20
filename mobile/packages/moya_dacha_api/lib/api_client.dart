@@ -183,10 +183,22 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AuthCodeAccepted':
+          return AuthCodeAccepted.fromJson(value);
+        case 'AuthCodeRequest':
+          return AuthCodeRequest.fromJson(value);
+        case 'CurrentUser':
+          return CurrentUser.fromJson(value);
         case 'Error':
           return Error.fromJson(value);
         case 'Health':
           return Health.fromJson(value);
+        case 'SessionCreated':
+          return SessionCreated.fromJson(value);
+        case 'SessionInfo':
+          return SessionInfo.fromJson(value);
+        case 'SessionRequest':
+          return SessionRequest.fromJson(value);
         default:
           dynamic match;
           if (value is List && (match = _regList.firstMatch(targetType)?.group(1)) != null) {
