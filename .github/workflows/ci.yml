@@ -158,16 +158,16 @@ jobs:
           # уменьшать — зависит от образа раннера, поэтому пробуем по очереди
           # и в крайнем случае печатаем оригинал.
           if command -v magick >/dev/null 2>&1; then
-            magick demo/out/e2e-screenshot.png -resize 400x "$small" || true
+            magick demo/out/e2e-screenshot.png -resize 300x "$small" || true
           elif command -v convert >/dev/null 2>&1; then
-            convert demo/out/e2e-screenshot.png -resize 400x "$small" || true
+            convert demo/out/e2e-screenshot.png -resize 300x "$small" || true
           elif command -v ffmpeg >/dev/null 2>&1; then
             ffmpeg -loglevel error -y -i demo/out/e2e-screenshot.png \
-              -vf scale=400:-1 "$small" || true
+              -vf scale=300:-1 "$small" || true
           fi
           test -s "$small" || small=demo/out/e2e-screenshot.png
-          wc -c "$small"
-          sha256sum "$small"
           echo "--- снимок (base64) ---"
           base64 -w 2000 "$small"
           echo "--- конец снимка ---"
+          wc -c "$small"
+          sha256sum "$small"
