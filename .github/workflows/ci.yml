@@ -143,22 +143,3 @@ jobs:
       - name: Погасить стенд
         if: always()
         run: make demo-reset
-
-      # Тот же снимок строкой в логе: его видно прямо в прогоне, без
-      # скачивания архива артефактов. Печатаем последним шагом, чтобы он
-      # всегда лежал в хвосте лога, и рядом кладём размер и sha256 —
-      # по ним видно, что строка перенесена целиком.
-      - name: Снимок экрана строкой в логе
-        if: always()
-        run: |
-          test -f demo/out/e2e-screenshot.png || exit 0
-          small=demo/out/e2e-screenshot-small.png
-          # Полноразмерный снимок лежит в артефактах. В лог кладём уменьшенную
-          # копию: строка короче, а экран на ней всё ещё читается.
-          python3 demo/shrink_png.py demo/out/e2e-screenshot.png "$small" 300 || true
-          test -s "$small" || small=demo/out/e2e-screenshot.png
-          echo "--- снимок (base64) ---"
-          base64 -w 2000 "$small"
-          echo "--- конец снимка ---"
-          wc -c "$small"
-          sha256sum "$small"
