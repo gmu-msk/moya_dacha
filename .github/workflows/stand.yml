@@ -67,6 +67,7 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       REPO: ${{ github.repository }}
       PR: ${{ github.event.issue.number || inputs.pr }}
       # Текст команды идёт через переменную окружения, а не подстановкой
@@ -240,6 +241,8 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
+      # Джоб без checkout: репозиторий gh берёт отсюда.
+      GH_REPO: ${{ github.repository }}
       PR: ${{ github.event.issue.number }}
 
     steps:

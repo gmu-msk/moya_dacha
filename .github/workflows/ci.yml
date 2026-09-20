@@ -238,6 +238,9 @@ jobs:
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
+      # Джоб работает без checkout, git-репозитория рядом нет — значит gh
+      # должен узнать репозиторий из окружения, а не из remote.
+      GH_REPO: ${{ github.repository }}
       REPO: ${{ github.repository }}
       PR: ${{ github.event.pull_request.number }}
       SHA: ${{ github.event.pull_request.head.sha }}
