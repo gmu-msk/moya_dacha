@@ -124,7 +124,7 @@ func (s *Server) attachMedia(ctx context.Context, posts []gen.Post) error {
 
 	rows, err := s.db.Query(ctx, `
 		SELECT post_id, id, kind, storage_key, width, height
-		FROM media WHERE post_id = ANY($1) ORDER BY post_id, position`, ids)
+		FROM media WHERE post_id = ANY($1::uuid[]) ORDER BY post_id, position`, ids)
 	if err != nil {
 		return err
 	}
