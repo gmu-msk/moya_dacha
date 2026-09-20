@@ -195,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
         keyboardType: TextInputType.number,
         inputFormatters: [
           FilteringTextInputFormatter.digitsOnly,
-          const LengthLimitingTextInputFormatter(4),
+          LengthLimitingTextInputFormatter(4),
         ],
         textAlign: TextAlign.center,
         style: const TextStyle(fontSize: 28, letterSpacing: 8),
