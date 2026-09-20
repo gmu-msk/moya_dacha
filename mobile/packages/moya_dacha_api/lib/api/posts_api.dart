@@ -73,6 +73,78 @@ class PostsApi {
     return null;
   }
 
+  /// Страница ленты
+  ///
+  /// Все посты всех пользователей, новые сверху: лента одна на всех (CONTEXT.md). Отдаётся страницами — посты и курсор на продолжение.  Курсор непрозрачен: клиент возвращает его как получил и сам не строит. Он указывает на место в порядке ленты, поэтому посты, выложенные между запросами страниц, не сдвигают и не задваивают уже пролистанное (specs/004-feed.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] limit:
+  ///   Сколько постов вернуть, от 1 до 50
+  ///
+  /// * [String] cursor:
+  ///   Курсор из предыдущего ответа; без него — первая страница
+  Future<Response> getFeedWithHttpInfo({ int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/feed';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (cursor != null) {
+      queryParams.addAll(_queryParams('', 'cursor', cursor));
+    }
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Страница ленты
+  ///
+  /// Все посты всех пользователей, новые сверху: лента одна на всех (CONTEXT.md). Отдаётся страницами — посты и курсор на продолжение.  Курсор непрозрачен: клиент возвращает его как получил и сам не строит. Он указывает на место в порядке ленты, поэтому посты, выложенные между запросами страниц, не сдвигают и не задваивают уже пролистанное (specs/004-feed.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [int] limit:
+  ///   Сколько постов вернуть, от 1 до 50
+  ///
+  /// * [String] cursor:
+  ///   Курсор из предыдущего ответа; без него — первая страница
+  Future<Feed?> getFeed({ int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+    final response = await getFeedWithHttpInfo(limit: limit, cursor: cursor, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Feed',) as Feed;
+    
+    }
+    return null;
+  }
+
   /// Показать пост
   ///
   /// Лента одна на всех, поэтому пост открывается любому вошедшему пользователю, а не только автору (CONTEXT.md). 

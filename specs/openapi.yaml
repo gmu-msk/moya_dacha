@@ -414,6 +414,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /feed:
+    get:
+      operationId: getFeed
+      summary: Страница ленты
+      description: |
+        Все посты всех пользователей, новые сверху: лента одна на всех
+        (CONTEXT.md). Отдаётся страницами — посты и курсор на продолжение.
+
+        Курсор непрозрачен: клиент возвращает его как получил и сам
+        не строит. Он указывает на место в порядке ленты, поэтому посты,
+        выложенные между запросами страниц, не сдвигают и не задваивают
+        уже пролистанное (specs/004-feed.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Сколько постов вернуть, от 1 до 50
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          description: Курсор из предыдущего ответа; без него — первая страница
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Страница ленты
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feed"
+        "400":
+          description: |
+            `limit` вне диапазона или не число (`invalid_request`), курсор
+            не разбирается (`invalid_cursor`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -579,6 +633,25 @@ components:
           description: Медиа поста в порядке, в котором их прислал автор
           items:
             $ref: "#/components/schemas/Media"
+
+    Feed:
+      type: object
+      description: |
+        Страница ленты. Конец ленты — это отсутствие `next_cursor`,
+        а не пустой `items` (specs/004-feed.md).
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Посты страницы, новые сверху
+          items:
+            $ref: "#/components/schemas/Post"
+        next_cursor:
+          type: string
+          description: |
+            Курсор на следующую страницу. Отсутствует, когда за этой
+            страницей ничего нет.
+          example: "MjAyNi0wOS0yMFQxMDowMDowMFp8N2Y0ZTFhOTA"
 
     Author:
       type: object

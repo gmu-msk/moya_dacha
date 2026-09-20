@@ -15,10 +15,19 @@ import '../widgets/error_view.dart';
 import '../widgets/user_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key, required this.token, required this.user});
+  const ProfileScreen({
+    super.key,
+    required this.token,
+    required this.user,
+    required this.onSignedOut,
+  });
 
   final String token;
   final CurrentUser user;
+
+  /// Выход: токен забывает и приложение, и сервис. Выход живёт здесь,
+  /// а не в ленте: там место постам (specs/004-feed.md).
+  final Future<void> Function() onSignedOut;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -109,6 +118,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _removeAvatar() =>
       _change(() => _api.deleteAvatar(), 'Фотография убрана');
 
+  Future<void> _signOut() async {
+    setState(() => _busy = true);
+    try {
+      await AuthApi(apiClient(token: widget.token)).deleteSession();
+    } on Exception catch (error) {
+      // Сервис мог не ответить, но на этом устройстве человек уже вышел.
+      debugPrint('$logMarker auth=sign_out_failed error=$error');
+    }
+    await widget.onSignedOut();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -190,6 +210,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: AppGap.medium),
             Text('В МоейДаче с', style: theme.textTheme.labelMedium),
             Text(_date(_user.createdAt), style: theme.textTheme.bodyLarge),
+            const SizedBox(height: AppGap.large),
+            OutlinedButton(
+              onPressed: _busy ? null : _signOut,
+              child: const Text('Выйти'),
+            ),
           ],
         ),
       ),

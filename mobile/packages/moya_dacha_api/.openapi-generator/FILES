@@ -17,6 +17,7 @@ lib/model/auth_code_request.dart
 lib/model/author.dart
 lib/model/current_user.dart
 lib/model/error.dart
+lib/model/feed.dart
 lib/model/health.dart
 lib/model/media.dart
 lib/model/post.dart

@@ -16,6 +16,7 @@ import 'package:moya_dacha/screens/post_screen.dart';
 import 'package:moya_dacha/screens/profile_screen.dart';
 import 'package:moya_dacha/screens/server_screen.dart';
 import 'package:moya_dacha/theme.dart';
+import 'package:moya_dacha/widgets/feed_view.dart';
 import 'package:moya_dacha_api/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -66,7 +67,11 @@ void main() {
     });
 
     testWidgets('профиль рисуется в $theme теме', (tester) async {
-      await _pump(tester, brightness, ProfileScreen(token: 'т', user: user));
+      await _pump(
+        tester,
+        brightness,
+        ProfileScreen(token: 'т', user: user, onSignedOut: () async {}),
+      );
     });
 
     testWidgets('новый пост рисуется в $theme теме', (tester) async {
@@ -75,6 +80,25 @@ void main() {
 
     testWidgets('пост рисуется в $theme теме', (tester) async {
       await _pump(tester, brightness, PostScreen(post: post));
+    });
+
+    testWidgets('пост в ленте рисуется в $theme теме', (tester) async {
+      await _pump(
+        tester,
+        brightness,
+        Scaffold(body: FeedPostCard(post: post, onTap: () {})),
+      );
+    });
+
+    testWidgets('пост в ленте выживает при крупном шрифте в $theme теме', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        brightness,
+        Scaffold(body: FeedPostCard(post: post, onTap: () {})),
+        textScale: 2,
+      );
     });
 
     testWidgets('новый пост выживает при крупном шрифте в $theme теме', (
@@ -121,7 +145,7 @@ void main() {
       await _pump(
         tester,
         brightness,
-        ProfileScreen(token: 'т', user: user),
+        ProfileScreen(token: 'т', user: user, onSignedOut: () async {}),
         textScale: 2,
       );
     });

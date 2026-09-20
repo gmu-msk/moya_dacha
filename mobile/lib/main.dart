@@ -38,7 +38,6 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
   final SessionStore _session = SessionStore();
 
   String? _token;
-  bool _isNewUser = false;
   bool _restored = false;
 
   @override
@@ -66,10 +65,7 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _token = session.token;
-      _isNewUser = session.isNewUser;
-    });
+    setState(() => _token = session.token);
   }
 
   /// Начать заново — после смены адреса сервера на экране «Сервер».
@@ -77,7 +73,6 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
   Future<void> _restart() async {
     setState(() {
       _token = null;
-      _isNewUser = false;
       _restored = false;
     });
     await _restore();
@@ -89,10 +84,7 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _token = null;
-      _isNewUser = false;
-    });
+    setState(() => _token = null);
   }
 
   @override
@@ -109,11 +101,7 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
     } else if (token == null) {
       home = LoginScreen(onSignedIn: _signedIn);
     } else {
-      home = HomeScreen(
-        token: token,
-        isNewUser: _isNewUser,
-        onSignedOut: _signedOut,
-      );
+      home = HomeScreen(token: token, onSignedOut: _signedOut);
     }
 
     return AppScope(

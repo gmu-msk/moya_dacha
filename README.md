@@ -117,4 +117,5 @@ user-story свой сценарий показа ([ADR-0009](docs/adr/0009-demo
 [обзора](specs/000-overview.md). Готово: вход по номеру телефона
 ([specs/001-auth.md](specs/001-auth.md)), профиль — имя, «о себе»
 и аватар ([specs/002-profile.md](specs/002-profile.md)) — и создание
-поста ([specs/003-posts.md](specs/003-posts.md)).
+поста ([specs/003-posts.md](specs/003-posts.md)). В работе — лента
+([specs/004-feed.md](specs/004-feed.md)).

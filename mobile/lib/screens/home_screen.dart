@@ -1,19 +1,16 @@
-// Экран вошедшего пользователя.
+// Главный экран — лента (specs/004-feed.md).
 //
-// Ленты пока нет (specs/000-overview.md), поэтому экран отвечает на три
-// вопроса — кто вошёл, как ему опубликовать пост и как открыть свой
-// профиль, — и даёт выйти.
-//
-// Пользователя без имени экран не показывает вовсе: сначала знакомство
-// (specs/002-profile.md).
+// Всё, что до ленты, экран делает ради неё: узнаёт, кто вошёл, и, если
+// человек ещё не знакомился, показывает знакомство (specs/002-profile.md).
+// Дальше он отдаёт место постам: аватар в заголовке ведёт в профиль,
+// кнопка внизу — к новому посту.
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
-import '../theme.dart';
 import '../widgets/app_screen.dart';
-import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
+import '../widgets/feed_view.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/user_avatar.dart';
 import 'intro_screen.dart';
@@ -25,14 +22,10 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     required this.token,
-    required this.isNewUser,
     required this.onSignedOut,
   });
 
   final String token;
-
-  /// Этим входом пользователь зарегистрировался впервые.
-  final bool isNewUser;
 
   /// Выход: токен забывает и приложение, и сервис.
   final Future<void> Function() onSignedOut;
@@ -42,9 +35,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final GlobalKey<FeedViewState> _feed = GlobalKey<FeedViewState>();
+
   CurrentUser? _user;
   String? _error;
-  bool _busy = false;
 
   @override
   void initState() {
@@ -79,11 +73,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openProfile(CurrentUser user) async {
     final updated = await Navigator.of(context).push<CurrentUser>(
       MaterialPageRoute(
-        builder: (_) => ProfileScreen(token: widget.token, user: user),
+        builder: (_) => ProfileScreen(
+          token: widget.token,
+          user: user,
+          onSignedOut: widget.onSignedOut,
+        ),
       ),
     );
     if (updated != null && mounted) {
       setState(() => _user = updated);
+      // Имя и аватар автора лежат в каждом посте, поэтому после правки
+      // профиля лента показывает старые, пока её не перечитать.
+      _feed.currentState?.refresh();
     }
   }
 
@@ -97,22 +98,19 @@ class _HomeScreenState extends State<HomeScreen> {
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => PostScreen(post: post)));
+    // Свой пост человек должен увидеть первым в ленте, вернувшись
+    // с экрана поста (specs/004-feed.md, требование 8).
+    _feed.currentState?.refresh();
   }
 
-  Future<void> _signOut() async {
-    setState(() => _busy = true);
-    try {
-      await AuthApi(apiClient(token: widget.token)).deleteSession();
-    } on Exception catch (error) {
-      // Сервис мог не ответить, но на этом устройстве человек уже вышел.
-      debugPrint('$logMarker auth=sign_out_failed error=$error');
-    }
-    await widget.onSignedOut();
+  void _openPost(Post post) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PostScreen(post: post)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final user = _user;
     final error = _error;
 
@@ -125,33 +123,23 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // Ленты пока нет (specs/000-overview.md), и показывать на главном
-    // экране нечего. Это и есть его пустое состояние.
-    final String title;
-    if (user == null) {
-      title = 'Вы вошли';
-    } else if (widget.isNewUser) {
-      title = 'Добро пожаловать, ${user.name}!';
-    } else {
-      title = 'С возвращением, ${user.name}!';
-    }
-
-    final Widget? about;
-    if (user != null && user.about.isNotEmpty) {
-      about = Text(
-        user.about,
-        style: theme.textTheme.bodyLarge,
-        textAlign: TextAlign.center,
+    final Widget body;
+    if (user != null) {
+      body = FeedView(
+        key: _feed,
+        token: widget.token,
+        onOpenPost: _openPost,
+        onNewPost: _newPost,
       );
-    } else if (user == null && error != null) {
-      about = ErrorView(message: error, onRetry: _load);
-    } else if (user == null) {
-      about = const LoadingView(label: 'Открываю профиль…');
+    } else if (error != null) {
+      body = ErrorView(message: error, onRetry: _load);
     } else {
-      about = null;
+      body = const LoadingView(label: 'Открываю ленту…');
     }
 
     return AppScreen(
+      title: 'Лента',
+      padded: false,
       actions: [
         if (user != null)
           IconButton(
@@ -160,37 +148,14 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: UserAvatar(user: user, radius: AvatarRadius.inBar),
           ),
       ],
-      child: EmptyView(
-        icon: Icons.eco_outlined,
-        art: user == null
-            ? null
-            : UserAvatar(user: user, radius: AvatarRadius.onScreen),
-        title: title,
-        hint: 'Лента появится следующей фичей.',
-        action: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (about != null) ...[about, const SizedBox(height: AppGap.large)],
-            if (user != null) ...[
-              FilledButton.icon(
-                onPressed: _newPost,
-                icon: const Icon(Icons.add_a_photo_outlined),
-                label: const Text('Новый пост'),
-              ),
-              const SizedBox(height: AppGap.small),
-              FilledButton.tonal(
-                onPressed: () => _openProfile(user),
-                child: const Text('Мой профиль'),
-              ),
-              const SizedBox(height: AppGap.small),
-            ],
-            OutlinedButton(
-              onPressed: _busy ? null : _signOut,
-              child: const Text('Выйти'),
+      floatingActionButton: user == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _newPost,
+              icon: const Icon(Icons.add_a_photo_outlined),
+              label: const Text('Новый пост'),
             ),
-          ],
-        ),
-      ),
+      child: body,
     );
   }
 }

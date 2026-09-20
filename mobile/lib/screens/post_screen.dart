@@ -1,14 +1,14 @@
 // Экран поста (specs/003-posts.md).
 //
-// Ленты ещё нет, и это единственное место, где пост видно: автор
-// публикует и сразу попадает сюда.
+// Пост целиком: все фотографии и подпись без сокращений. Сюда попадают
+// с ленты (specs/004-feed.md) и сразу после публикации.
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 import '../theme.dart';
 import '../widgets/app_screen.dart';
-import '../widgets/user_avatar.dart';
+import '../widgets/author_line.dart';
 
 class PostScreen extends StatelessWidget {
   const PostScreen({super.key, required this.post});
@@ -18,7 +18,6 @@ class PostScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final avatar = post.author.avatarUrl;
 
     return AppScreen(
       title: 'Пост',
@@ -27,19 +26,7 @@ class PostScreen extends StatelessWidget {
       showServerStatus: false,
       child: ListView(
         children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: CircleAvatar(
-              radius: AvatarRadius.inBar,
-              backgroundColor: theme.colorScheme.primaryContainer,
-              foregroundImage: avatar == null || avatar.isEmpty
-                  ? null
-                  : NetworkImage(mediaUrl(avatar)),
-              child: Text(_initial(post.author.name)),
-            ),
-            title: Text(post.author.name),
-            subtitle: Text(_when(post.createdAt)),
-          ),
+          AuthorLine(author: post.author, when: post.createdAt),
           for (final media in post.media)
             Padding(
               padding: const EdgeInsets.only(bottom: AppGap.small),
@@ -63,18 +50,5 @@ class PostScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _initial(String name) {
-    final trimmed = name.trim();
-    return trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
-  }
-
-  static String _when(DateTime moment) {
-    final local = moment.toLocal();
-    return '${local.day.toString().padLeft(2, '0')}.'
-        '${local.month.toString().padLeft(2, '0')}.${local.year} '
-        '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
   }
 }

@@ -193,6 +193,8 @@ class ApiClient {
           return CurrentUser.fromJson(value);
         case 'Error':
           return Error.fromJson(value);
+        case 'Feed':
+          return Feed.fromJson(value);
         case 'Health':
           return Health.fromJson(value);
         case 'Media':
