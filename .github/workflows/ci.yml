@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+# Новый пуш в ветку отменяет её прошлый прогон: ждать результат, который
+# уже устарел, незачем. Прогоны main не отменяются — там каждый коммит
+# должен быть проверен.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   check:
     name: Контракт, тесты, сборка
@@ -93,24 +100,67 @@ jobs:
           channel: stable
           cache: true
 
+      # Стенд и APK друг от друга не зависят, а по отдельности занимали
+      # больше половины джоба. Поднимаем стенд рядом со сборкой, а не после
+      # неё; результат забирает шаг «Дождаться демо-стенда».
+      - name: Поднять демо-стенд рядом со сборкой
+        run: |
+          nohup bash -c 'make demo; echo $? > "$RUNNER_TEMP/demo.status"' \
+            > "$RUNNER_TEMP/demo.log" 2>&1 &
+
       - name: Зависимости приложения
         run: make app-get
 
       - name: Статический анализ приложения
         run: make app-analyze
 
+      # Без кэша Gradle качает зависимости и дистрибутив заново на каждом
+      # прогоне — это была самая дорогая часть джоба. Кладём кэш вручную,
+      # потому что перед эмулятором его всё равно приходится стирать ради
+      # места на диске, а actions/cache сохранял бы уже стёртое.
+      - name: Кэш Gradle
+        id: gradle-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/gradle/wrapper/gradle-wrapper.properties', 'mobile/pubspec.lock') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
       - name: Сборка debug-APK
         run: make app-apk
 
-      - name: Демо-стенд
-        run: make demo
+      - name: Сохранить кэш Gradle
+        if: steps.gradle-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
 
-      # Образы стенда уже собраны и запущены, кэш сборки больше не нужен —
-      # а места он занимает больше, чем сами образы.
-      - name: Выбросить кэш сборки образов
+      - name: Дождаться демо-стенда
+        run: |
+          deadline=$((SECONDS + 900))
+          until [ -f "$RUNNER_TEMP/demo.status" ]; do
+            if ((SECONDS > deadline)); then
+              echo "Стенд не поднялся за 15 минут." >&2
+              cat "$RUNNER_TEMP/demo.log" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/demo.log"
+          exit "$(cat "$RUNNER_TEMP/demo.status")"
+
+      # Образы стенда уже собраны и запущены, APK собран — кэши сборки
+      # больше не нужны, а места они занимают больше, чем сами образы.
+      - name: Выбросить кэши сборки
         run: |
           docker builder prune --all --force
-          rm -rf ~/.gradle/caches
+          rm -rf ~/.gradle
           df -h /
 
       # Эмулятор без аппаратной виртуализации бесполезно медленный.
