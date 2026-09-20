@@ -154,14 +154,20 @@ jobs:
           test -f demo/out/e2e-screenshot.png || exit 0
           small=demo/out/e2e-screenshot-small.png
           # Полноразмерный снимок лежит в артефактах. В лог кладём уменьшенную
-          # копию: строка короче, а экран на ней всё ещё читается.
-          if command -v magick >/dev/null; then
-            magick demo/out/e2e-screenshot.png -resize 400x "$small"
-          else
-            convert demo/out/e2e-screenshot.png -resize 400x "$small"
+          # копию: строка короче, а экран на ней всё ещё читается. Чем именно
+          # уменьшать — зависит от образа раннера, поэтому пробуем по очереди
+          # и в крайнем случае печатаем оригинал.
+          if command -v magick >/dev/null 2>&1; then
+            magick demo/out/e2e-screenshot.png -resize 400x "$small" || true
+          elif command -v convert >/dev/null 2>&1; then
+            convert demo/out/e2e-screenshot.png -resize 400x "$small" || true
+          elif command -v ffmpeg >/dev/null 2>&1; then
+            ffmpeg -loglevel error -y -i demo/out/e2e-screenshot.png \
+              -vf scale=400:-1 "$small" || true
           fi
+          test -s "$small" || small=demo/out/e2e-screenshot.png
           wc -c "$small"
           sha256sum "$small"
-          echo "--- e2e-screenshot-small.png (base64) ---"
+          echo "--- снимок (base64) ---"
           base64 -w 2000 "$small"
           echo "--- конец снимка ---"
