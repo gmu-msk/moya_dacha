@@ -59,9 +59,9 @@ jobs:
         if: always()
         run: |
           test -f demo/out/e2e-screenshot.png || exit 0
+          sha256sum demo/out/e2e-screenshot.png
           echo "--- e2e-screenshot.png (base64) ---"
-          base64 -w0 demo/out/e2e-screenshot.png
-          echo
+          base64 -w 800 demo/out/e2e-screenshot.png
           echo "--- конец снимка ---"
 
       - name: Логи стенда при падении
@@ -153,9 +153,9 @@ jobs:
         if: always()
         run: |
           test -f demo/out/e2e-screenshot.png || exit 0
+          sha256sum demo/out/e2e-screenshot.png
           echo "--- e2e-screenshot.png (base64) ---"
-          base64 -w0 demo/out/e2e-screenshot.png
-          echo
+          base64 -w 800 demo/out/e2e-screenshot.png
           echo "--- конец снимка ---"
 
       - name: Логи стенда при падении

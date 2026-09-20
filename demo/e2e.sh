@@ -49,6 +49,14 @@ adb exec-out screencap -p > "$SCREENSHOT"
 echo "Приложение сообщило: $line"
 echo "Снимок экрана: $SCREENSHOT"
 
+# Текст с экрана — чтобы по логу было видно, что именно показано человеку,
+# а не только что приложение так считает. Если не получилось, не страшно.
+if adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
+	echo "Текст на экране:"
+	adb shell cat /sdcard/ui.xml 2>/dev/null \
+		| grep -o 'text="[^"]\+"' | sed 's/^text="/  /; s/"$//' | sort -u
+fi
+
 case "$line" in
 *health=ok*)
 	echo "E2E пройден: эмулятор -> приложение -> API -> Postgres."
