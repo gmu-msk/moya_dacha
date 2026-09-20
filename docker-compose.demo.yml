@@ -45,9 +45,13 @@ services:
     entrypoint: ["/usr/local/bin/seed.sh"]
     environment:
       DATABASE_URL: postgres://moya_dacha:moya_dacha@postgres:5432/moya_dacha?sslmode=disable
+      # Стенд под конкретный сценарий показа: поверх общих данных льются
+      # данные этого сценария (demo/stories/README.md). Пусто — только общие.
+      DEMO_STORY: "${DEMO_STORY:-}"
     volumes:
       - ./demo/seed.sh:/usr/local/bin/seed.sh:ro
       - ./demo/seed:/seed:ro
+      - ./demo/stories:/stories:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -62,7 +66,10 @@ services:
       # адреса снаружи не видно, поэтому здесь 0.0.0.0.
       ADDR: 0.0.0.0:8080
     ports:
-      - "127.0.0.1:8080:8080"
+      # По умолчанию стенд виден только с этой машины. `make demo-lan`
+      # ставит сюда 0.0.0.0, чтобы до стенда дошёл телефон из той же
+      # сети Wi-Fi (demo/README.md).
+      - "${DEMO_BIND_ADDR:-127.0.0.1}:8080:8080"
     depends_on:
       seed:
         condition: service_completed_successfully

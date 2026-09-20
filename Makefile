@@ -10,11 +10,12 @@ TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha
 DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
 
 .PHONY: help generate generate-server generate-client check-generated build test test-up test-down \
-	fmt vet migrate-up migrate-status app-get app-analyze app-apk \
-	demo demo-down demo-reset demo-logs demo-psql demo-e2e ci
+	fmt vet migrate-up migrate-status app-get app-analyze app-apk apk-phone apk-phone-install \
+	demo demo-lan demo-down demo-reset demo-logs demo-psql demo-e2e \
+	stories story check-stories ci
 
 help:
-	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
+	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
 
 generate: generate-server generate-client ## Сгенерировать код из specs/openapi.yaml (результат коммитится)
 
@@ -65,12 +66,22 @@ app-get: ## Зависимости приложения
 app-analyze: ## Статический анализ приложения
 	cd $(MOBILE) && flutter analyze
 
-app-apk: ## Собрать debug-APK приложения
+app-apk: ## Собрать debug-APK приложения (адрес стенда — как у эмулятора)
 	cd $(MOBILE) && flutter build apk --debug
+
+apk-phone: ## Собрать APK для телефона: адрес стенда в локальной сети
+	./demo/apk-phone.sh
+
+apk-phone-install: ## То же и сразу поставить на телефон по USB
+	./demo/apk-phone.sh --install
 
 demo: ## Поднять демо-стенд одной командой (Postgres + миграции + сервис)
 	$(DEMO_COMPOSE) up -d --build
 	./demo/smoke.sh
+
+demo-lan: ## Поднять стенд видимым в локальной сети (чтобы дошёл телефон)
+	DEMO_BIND_ADDR=0.0.0.0 $(DEMO_COMPOSE) up -d --build
+	DEMO_BIND_ADDR=0.0.0.0 ./demo/smoke.sh
 
 demo-down: ## Остановить демо-стенд (данные в базе остаются)
 	$(DEMO_COMPOSE) down
@@ -87,4 +98,14 @@ demo-psql: ## Консоль psql в базе демо-стенда
 demo-e2e: ## Прогнать приложение на подключённом эмуляторе против стенда
 	./demo/e2e.sh
 
-ci: check-generated vet test build ## То же, что гоняет CI
+stories: ## Список сценариев показа user-story
+	@./demo/story.sh
+
+story: ## Показать один сценарий в эмуляторе: make story STORY=000-status
+	@test -n "$(STORY)" || (./demo/story.sh; echo; echo "Укажите сценарий: make story STORY=<сценарий>"; exit 2)
+	./demo/story.sh "$(STORY)"
+
+check-stories: ## Проверить форму сценариев показа
+	./demo/check-stories.sh
+
+ci: check-generated vet test build check-stories ## То же, что гоняет CI
