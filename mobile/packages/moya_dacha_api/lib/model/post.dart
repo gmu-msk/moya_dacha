@@ -18,6 +18,8 @@ class Post {
     required this.caption,
     required this.author,
     this.media = const [],
+    required this.likes,
+    required this.liked,
   });
 
   /// Идентификатор поста (UUID)
@@ -34,13 +36,21 @@ class Post {
   /// Медиа поста в порядке, в котором их прислал автор
   List<Media> media;
 
+  /// Сколько людей отметили пост. Кто именно — не показывается.
+  int likes;
+
+  /// Отметил ли пост тот, кто спрашивает
+  bool liked;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Post &&
     other.id == id &&
     other.createdAt == createdAt &&
     other.caption == caption &&
     other.author == author &&
-    _deepEquality.equals(other.media, media);
+    _deepEquality.equals(other.media, media) &&
+    other.likes == likes &&
+    other.liked == liked;
 
   @override
   int get hashCode =>
@@ -49,10 +59,12 @@ class Post {
     (createdAt.hashCode) +
     (caption.hashCode) +
     (author.hashCode) +
-    (media.hashCode);
+    (media.hashCode) +
+    (likes.hashCode) +
+    (liked.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -61,6 +73,8 @@ class Post {
       json[r'caption'] = this.caption;
       json[r'author'] = this.author;
       json[r'media'] = this.media;
+      json[r'likes'] = this.likes;
+      json[r'liked'] = this.liked;
     return json;
   }
 
@@ -85,6 +99,10 @@ class Post {
         assert(json[r'author'] != null, 'Required key "Post[author]" has a null value in JSON.');
         assert(json.containsKey(r'media'), 'Required key "Post[media]" is missing from JSON.');
         assert(json[r'media'] != null, 'Required key "Post[media]" has a null value in JSON.');
+        assert(json.containsKey(r'likes'), 'Required key "Post[likes]" is missing from JSON.');
+        assert(json[r'likes'] != null, 'Required key "Post[likes]" has a null value in JSON.');
+        assert(json.containsKey(r'liked'), 'Required key "Post[liked]" is missing from JSON.');
+        assert(json[r'liked'] != null, 'Required key "Post[liked]" has a null value in JSON.');
         return true;
       }());
 
@@ -94,6 +112,8 @@ class Post {
         caption: mapValueOfType<String>(json, r'caption')!,
         author: Author.fromJson(json[r'author'])!,
         media: Media.listFromJson(json[r'media']),
+        likes: mapValueOfType<int>(json, r'likes')!,
+        liked: mapValueOfType<bool>(json, r'liked')!,
       );
     }
     return null;
@@ -146,6 +166,8 @@ class Post {
     'caption',
     'author',
     'media',
+    'likes',
+    'liked',
   };
 }
 

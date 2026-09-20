@@ -113,7 +113,7 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 
 	s.forgetUnpublishedMedia(ctx, current.user.Id)
 
-	post, err := s.post(ctx, id)
+	post, err := s.post(ctx, id, current.user.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -122,14 +122,15 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 
 // GetPost отдаёт пост любому вошедшему: лента одна на всех.
 func (s *Server) GetPost(ctx context.Context, request gen.GetPostRequestObject) (gen.GetPostResponseObject, error) {
-	if _, ok := sessionFrom(ctx); !ok {
+	current, ok := sessionFrom(ctx)
+	if !ok {
 		return gen.GetPost401JSONResponse(errUnauthorized), nil
 	}
 	if !isUUID(request.PostId) {
 		return gen.GetPost404JSONResponse(errPostNotFound), nil
 	}
 
-	post, err := s.post(ctx, request.PostId)
+	post, err := s.post(ctx, request.PostId, current.user.Id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.GetPost404JSONResponse(errPostNotFound), nil
 	}
@@ -218,19 +219,23 @@ func (s *Server) forgetUnpublishedMedia(ctx context.Context, authorID string) {
 	}
 }
 
-// post собирает пост целиком: сам пост, его автора и его медиа.
-func (s *Server) post(ctx context.Context, id string) (gen.Post, error) {
+// post собирает пост целиком: сам пост, его автора, его медиа и лайки.
+// Признак «я отметил» считается для того, кто спрашивает, поэтому
+// viewerID — часть запроса, а не поста (specs/005-likes.md).
+func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error) {
 	var (
 		post      gen.Post
 		avatarKey *string
 	)
 	if err := s.db.QueryRow(ctx, `
-		SELECT p.id, p.created_at, p.caption, u.id, u.name, u.avatar_key
+		SELECT p.id, p.created_at, p.caption, u.id, u.name, u.avatar_key,
+			`+likeColumns+`
 		FROM posts p JOIN users u ON u.id = p.author_id
-		WHERE p.id = $1`, id,
+		WHERE p.id = $1`, id, viewerID,
 	).Scan(
 		&post.Id, &post.CreatedAt, &post.Caption,
 		&post.Author.Id, &post.Author.Name, &avatarKey,
+		&post.Likes, &post.Liked,
 	); err != nil {
 		return gen.Post{}, err
 	}

@@ -22,7 +22,8 @@ const (
 // GetFeed отдаёт страницу ленты: все посты всех пользователей, новые
 // сверху. Лента одна на всех (CONTEXT.md).
 func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) (gen.GetFeedResponseObject, error) {
-	if _, ok := sessionFrom(ctx); !ok {
+	current, ok := sessionFrom(ctx)
+	if !ok {
 		return gen.GetFeed401JSONResponse(errUnauthorized), nil
 	}
 
@@ -43,7 +44,7 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 		after = &parsed
 	}
 
-	page, err := s.feedPage(ctx, after, limit)
+	page, err := s.feedPage(ctx, current.user.Id, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +52,9 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 }
 
 // feedPage читает страницу ленты и решает, есть ли продолжение.
-func (s *Server) feedPage(ctx context.Context, after *feedCursor, limit int) (gen.Feed, error) {
+// viewerID нужен, чтобы у каждого поста был признак «я отметил»
+// (specs/005-likes.md, требование 4).
+func (s *Server) feedPage(ctx context.Context, viewerID string, after *feedCursor, limit int) (gen.Feed, error) {
 	var (
 		afterTime *time.Time
 		afterID   *string
@@ -63,12 +66,17 @@ func (s *Server) feedPage(ctx context.Context, after *feedCursor, limit int) (ge
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
 	// только отвечает на вопрос «есть ли что-то дальше».
 	rows, err := s.db.Query(ctx, `
-		SELECT p.id, p.created_at, p.caption, u.id, u.name, u.avatar_key
+		SELECT p.id, p.created_at, p.caption, u.id, u.name, u.avatar_key,
+			(SELECT count(*) FROM post_likes l WHERE l.post_id = p.id),
+			EXISTS (
+				SELECT 1 FROM post_likes l
+				WHERE l.post_id = p.id AND l.user_id = $4::uuid
+			)
 		FROM posts p JOIN users u ON u.id = p.author_id
 		WHERE $1::timestamptz IS NULL
 		   OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid)
 		ORDER BY p.created_at DESC, p.id DESC
-		LIMIT $3`, afterTime, afterID, limit+1)
+		LIMIT $3`, afterTime, afterID, limit+1, viewerID)
 	if err != nil {
 		return gen.Feed{}, err
 	}
@@ -83,6 +91,7 @@ func (s *Server) feedPage(ctx context.Context, after *feedCursor, limit int) (ge
 		if err := rows.Scan(
 			&post.Id, &post.CreatedAt, &post.Caption,
 			&post.Author.Id, &post.Author.Name, &avatarKey,
+			&post.Likes, &post.Liked,
 		); err != nil {
 			return gen.Feed{}, err
 		}

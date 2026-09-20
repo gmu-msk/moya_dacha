@@ -49,6 +49,8 @@ void main() {
     caption: 'Первая клубника в этом году',
     author: Author(id: user.id, name: user.name),
     media: [],
+    likes: 2,
+    liked: true,
   );
 
   for (final brightness in Brightness.values) {
@@ -79,14 +81,21 @@ void main() {
     });
 
     testWidgets('пост рисуется в $theme теме', (tester) async {
-      await _pump(tester, brightness, PostScreen(post: post));
+      await _pump(tester, brightness, PostScreen(post: post, token: 'т'));
     });
 
     testWidgets('пост в ленте рисуется в $theme теме', (tester) async {
       await _pump(
         tester,
         brightness,
-        Scaffold(body: FeedPostCard(post: post, onTap: () {})),
+        Scaffold(
+          body: FeedPostCard(
+            post: post,
+            token: 'т',
+            onTap: () {},
+            onChanged: (_) {},
+          ),
+        ),
       );
     });
 
@@ -96,7 +105,14 @@ void main() {
       await _pump(
         tester,
         brightness,
-        Scaffold(body: FeedPostCard(post: post, onTap: () {})),
+        Scaffold(
+          body: FeedPostCard(
+            post: post,
+            token: 'т',
+            onTap: () {},
+            onChanged: (_) {},
+          ),
+        ),
         textScale: 2,
       );
     });

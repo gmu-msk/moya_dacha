@@ -3,7 +3,7 @@
 ## Статус
 Границы MVP зафиксированы. Фичи пишутся по порядку этого списка: готовы
 [вход](001-auth.md), [профиль](002-profile.md), [создание поста](003-posts.md)
-и [лента](004-feed.md).
+и [лента](004-feed.md), в работе [лайки](005-likes.md).
 
 ## Цель MVP
 Проверить, будут ли ~20 дачников из тестовой группы регулярно постить фото
@@ -90,7 +90,7 @@ Android, раздача через **внутреннее тестировани
 - [specs/002-profile.md](002-profile.md) — готово
 - [specs/003-posts.md](003-posts.md) — готово
 - [specs/004-feed.md](004-feed.md) — готово
-- specs/005-likes.md
+- [specs/005-likes.md](005-likes.md) — в работе
 - specs/006-comments.md
 - specs/007-deletion.md
 - specs/008-reports.md

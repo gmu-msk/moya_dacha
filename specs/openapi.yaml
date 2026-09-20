@@ -468,6 +468,81 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /posts/{postId}/like:
+    put:
+      operationId: likePost
+      summary: Поставить лайк
+      description: |
+        Один пользователь — не больше одного лайка на пост (CONTEXT.md).
+        Запрос идемпотентен: повторный лайк ничего не меняет и не ошибка.
+
+        В ответе — пост целиком, с новым числом лайков: клиенту не нужно
+        досчитывать его самому (specs/005-likes.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Пост с поставленным лайком
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: unlikePost
+      summary: Снять лайк
+      description: |
+        Идемпотентно: снять лайк, которого не было, — не ошибка
+        (specs/005-likes.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Пост со снятым лайком
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -610,7 +685,7 @@ components:
     Post:
       type: object
       description: Пост — от одной до четырёх фотографий и необязательная подпись.
-      required: [id, created_at, caption, author, media]
+      required: [id, created_at, caption, author, media, likes, liked]
       properties:
         id:
           type: string
@@ -633,6 +708,15 @@ components:
           description: Медиа поста в порядке, в котором их прислал автор
           items:
             $ref: "#/components/schemas/Media"
+        likes:
+          type: integer
+          format: int32
+          description: Сколько людей отметили пост. Кто именно — не показывается.
+          example: 3
+        liked:
+          type: boolean
+          description: Отметил ли пост тот, кто спрашивает
+          example: true
 
     Feed:
       type: object

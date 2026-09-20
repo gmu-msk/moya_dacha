@@ -12,6 +12,7 @@ import '../theme.dart';
 import 'author_line.dart';
 import 'empty_view.dart';
 import 'error_view.dart';
+import 'like_button.dart';
 import 'loading_view.dart';
 
 /// Сколько постов запрашивается за раз. Столько же сервис отдаёт
@@ -80,6 +81,16 @@ class FeedViewState extends State<FeedView> {
   /// Обновление ленты: первая страница запрашивается заново и показывается
   /// вместо накопленного (specs/004-feed.md, требование 12).
   Future<void> refresh() => _refresh();
+
+  /// Показать пост заново: его лайкнули здесь или на экране поста,
+  /// и в ленте должно быть то же число (specs/005-likes.md).
+  void replace(Post post) {
+    final at = _posts.indexWhere((item) => item.id == post.id);
+    if (at < 0) {
+      return;
+    }
+    setState(() => _posts[at] = post);
+  }
 
   Future<void> _refresh() async {
     setState(() {
@@ -195,7 +206,9 @@ class FeedViewState extends State<FeedView> {
           final post = _posts[index];
           return FeedPostCard(
             post: post,
+            token: widget.token,
             onTap: () => widget.onOpenPost(post),
+            onChanged: replace,
           );
         },
       ),
@@ -224,10 +237,20 @@ class FeedViewState extends State<FeedView> {
 /// Пост в ленте: автор, первая фотография и начало подписи. Остальное —
 /// на экране поста (specs/004-feed.md, требования 9 и 11).
 class FeedPostCard extends StatelessWidget {
-  const FeedPostCard({super.key, required this.post, required this.onTap});
+  const FeedPostCard({
+    super.key,
+    required this.post,
+    required this.token,
+    required this.onTap,
+    required this.onChanged,
+  });
 
   final Post post;
+  final String token;
   final VoidCallback onTap;
+
+  /// Пост изменился: его лайкнули прямо здесь.
+  final void Function(Post post) onChanged;
 
   /// Сколько строк подписи видно в ленте.
   static const captionLines = 3;
@@ -276,6 +299,7 @@ class FeedPostCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+          LikeButton(post: post, token: token, onChanged: onChanged),
         ],
       ),
     );
