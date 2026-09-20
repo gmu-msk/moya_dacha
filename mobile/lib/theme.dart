@@ -41,25 +41,27 @@ ThemeData appTheme(Brightness brightness) {
     brightness: brightness,
   );
   final base = ThemeData(colorScheme: colorScheme);
-  final textTheme = base.textTheme.apply(fontSizeFactor: _fontScale);
-
-  final buttonSize = ButtonStyle(
-    minimumSize: const WidgetStatePropertyAll(Size(64, _tapTargetHeight)),
-    textStyle: WidgetStatePropertyAll(textTheme.titleMedium),
-  );
 
   return base.copyWith(
-    textTheme: textTheme,
+    // Размеры текста живут в «геометрии» темы, а не в textTheme: в самой
+    // теме размер у стиля не проставлен, он появляется только когда
+    // MaterialApp домешивает геометрию под язык. Поэтому увеличиваем
+    // геометрию — тогда крупнее становится весь текст сразу, включая
+    // заголовки, кнопки и подписи полей.
+    typography: Typography.material2021(
+      platform: base.platform,
+      colorScheme: colorScheme,
+      englishLike: Typography.englishLike2021.apply(fontSizeFactor: _fontScale),
+      dense: Typography.dense2021.apply(fontSizeFactor: _fontScale),
+      tall: Typography.tall2021.apply(fontSizeFactor: _fontScale),
+    ),
     // Стандартная плотность, а не компактная: цели касания не ужимаются.
     visualDensity: VisualDensity.standard,
     materialTapTargetSize: MaterialTapTargetSize.padded,
-    appBarTheme: base.appBarTheme.copyWith(
-      centerTitle: true,
-      titleTextStyle: textTheme.titleLarge,
-    ),
-    filledButtonTheme: FilledButtonThemeData(style: buttonSize),
-    outlinedButtonTheme: OutlinedButtonThemeData(style: buttonSize),
-    textButtonTheme: TextButtonThemeData(style: buttonSize),
+    appBarTheme: base.appBarTheme.copyWith(centerTitle: true),
+    filledButtonTheme: const FilledButtonThemeData(style: _buttonSize),
+    outlinedButtonTheme: const OutlinedButtonThemeData(style: _buttonSize),
+    textButtonTheme: const TextButtonThemeData(style: _buttonSize),
     // Рамка у полей ввода — общая: экран её не повторяет.
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
       border: const OutlineInputBorder(),
@@ -67,3 +69,8 @@ ThemeData appTheme(Brightness brightness) {
     ),
   );
 }
+
+/// Кнопка не ниже [_tapTargetHeight], какой бы короткой ни была надпись.
+const _buttonSize = ButtonStyle(
+  minimumSize: WidgetStatePropertyAll(Size(64, _tapTargetHeight)),
+);

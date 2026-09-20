@@ -13,7 +13,7 @@ TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha
 DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
 
 .PHONY: help generate generate-server generate-client check-generated build test test-up test-down \
-	migrate-test fmt vet migrate-up migrate-status app-get app-analyze app-apk apk-phone apk-phone-install \
+	migrate-test fmt vet migrate-up migrate-status app-get app-analyze app-test app-apk apk-phone apk-phone-install \
 	demo demo-lan demo-down demo-reset demo-logs demo-psql demo-e2e \
 	stories story check-stories ci
 
@@ -73,6 +73,9 @@ app-get: ## Зависимости приложения
 
 app-analyze: ## Статический анализ приложения
 	cd $(MOBILE) && flutter analyze
+
+app-test: ## Проверить, что экраны собираются (не гейт, ADR-0011)
+	cd $(MOBILE) && flutter test
 
 app-apk: ## Собрать debug-APK приложения (адрес стенда — как у эмулятора)
 	cd $(MOBILE) && flutter build apk --debug $(APP_DART_DEFINE)
