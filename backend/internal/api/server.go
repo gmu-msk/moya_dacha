@@ -7,16 +7,24 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gmu-msk/moya_dacha/backend/api/gen"
 	"github.com/gmu-msk/moya_dacha/backend/internal/auth"
+	"github.com/gmu-msk/moya_dacha/backend/internal/media"
 )
 
 // basePath повторяет servers[].url из контракта.
 const basePath = "/api"
+
+// DefaultMediaBaseURL — префикс, по которому сервис раздаёт файлы
+// пользователей. Ссылки на них относительные, клиент достраивает их
+// до адреса сервиса (specs/002-profile.md, требование 10).
+const DefaultMediaBaseURL = "/media"
 
 // Config — то, что сервису задают снаружи: всё, что отличает стенд
 // и тесты от прода.
@@ -37,6 +45,12 @@ type Config struct {
 	// ResendAfter — как часто можно просить код на один номер.
 	// Ноль означает значение из спеки (60 секунд).
 	ResendAfter time.Duration
+
+	// Media — хранилище файлов пользователей (пока только аватары).
+	// Ноль означает диск во временной папке: так сервис не падает
+	// при запуске без настройки, но в проде и на стенде папка задаётся
+	// переменной окружения MEDIA_DIR (specs/002-profile.md).
+	Media media.Storage
 }
 
 // Server реализует gen.StrictServerInterface.
@@ -55,6 +69,11 @@ func New(db *pgxpool.Pool, cfg Config) *Server {
 	if cfg.ResendAfter == 0 {
 		cfg.ResendAfter = auth.DefaultResendAfter
 	}
+	if cfg.Media == nil {
+		dir := filepath.Join(os.TempDir(), "moya-dacha-media")
+		slog.Warn("хранилище файлов не задано, беру временную папку", "dir", dir)
+		cfg.Media = media.NewDisk(dir, DefaultMediaBaseURL)
+	}
 	return &Server{db: db, cfg: cfg}
 }
 
@@ -70,10 +89,23 @@ func (s *Server) Handler() http.Handler {
 		},
 	)
 
-	return gen.HandlerWithOptions(strict, gen.StdHTTPServerOptions{
+	api := gen.HandlerWithOptions(strict, gen.StdHTTPServerOptions{
 		BaseURL:          basePath,
 		ErrorHandlerFunc: badRequest,
 	})
+
+	// Файлы пользователей раздаёт сам сервис, пока они лежат у него
+	// на диске. Объектное хранилище вернёт пустой префикс — тогда
+	// раздавать нечего, ссылки ведут мимо сервиса.
+	prefix, files := s.cfg.Media.FileHandler()
+	if prefix == "" || files == nil {
+		return api
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/", api)
+	mux.Handle(prefix, files)
+	return mux
 }
 
 // badRequest отвечает на запрос, который не разобрался, — телом из

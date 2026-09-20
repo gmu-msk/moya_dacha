@@ -16,6 +16,9 @@ class CurrentUser {
     required this.id,
     required this.phone,
     required this.createdAt,
+    required this.name,
+    required this.about,
+    this.avatarUrl,
   });
 
   /// Идентификатор пользователя (UUID)
@@ -27,27 +30,49 @@ class CurrentUser {
   /// Когда пользователь зарегистрировался
   DateTime createdAt;
 
+  /// Отображаемое имя. Пустая строка означает, что пользователь ещё не знакомился: приложение показывает ему экран знакомства. 
+  String name;
+
+  /// Короткое «о себе», может быть пустым
+  String about;
+
+  /// Ссылка на аватар или `null`, если аватара нет. Может быть относительной — клиент достраивает её до адреса сервиса. 
+  String? avatarUrl;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is CurrentUser &&
     other.id == id &&
     other.phone == phone &&
-    other.createdAt == createdAt;
+    other.createdAt == createdAt &&
+    other.name == name &&
+    other.about == about &&
+    other.avatarUrl == avatarUrl;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (id.hashCode) +
     (phone.hashCode) +
-    (createdAt.hashCode);
+    (createdAt.hashCode) +
+    (name.hashCode) +
+    (about.hashCode) +
+    (avatarUrl == null ? 0 : avatarUrl!.hashCode);
 
   @override
-  String toString() => 'CurrentUser[id=$id, phone=$phone, createdAt=$createdAt]';
+  String toString() => 'CurrentUser[id=$id, phone=$phone, createdAt=$createdAt, name=$name, about=$about, avatarUrl=$avatarUrl]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
       json[r'id'] = this.id;
       json[r'phone'] = this.phone;
       json[r'created_at'] = this.createdAt.toUtc().toIso8601String();
+      json[r'name'] = this.name;
+      json[r'about'] = this.about;
+    if (this.avatarUrl != null) {
+      json[r'avatar_url'] = this.avatarUrl;
+    } else {
+      json[r'avatar_url'] = null;
+    }
     return json;
   }
 
@@ -68,6 +93,10 @@ class CurrentUser {
         assert(json[r'phone'] != null, 'Required key "CurrentUser[phone]" has a null value in JSON.');
         assert(json.containsKey(r'created_at'), 'Required key "CurrentUser[created_at]" is missing from JSON.');
         assert(json[r'created_at'] != null, 'Required key "CurrentUser[created_at]" has a null value in JSON.');
+        assert(json.containsKey(r'name'), 'Required key "CurrentUser[name]" is missing from JSON.');
+        assert(json[r'name'] != null, 'Required key "CurrentUser[name]" has a null value in JSON.');
+        assert(json.containsKey(r'about'), 'Required key "CurrentUser[about]" is missing from JSON.');
+        assert(json[r'about'] != null, 'Required key "CurrentUser[about]" has a null value in JSON.');
         return true;
       }());
 
@@ -75,6 +104,9 @@ class CurrentUser {
         id: mapValueOfType<String>(json, r'id')!,
         phone: mapValueOfType<String>(json, r'phone')!,
         createdAt: mapDateTime(json, r'created_at', r'')!,
+        name: mapValueOfType<String>(json, r'name')!,
+        about: mapValueOfType<String>(json, r'about')!,
+        avatarUrl: mapValueOfType<String>(json, r'avatar_url'),
       );
     }
     return null;
@@ -125,6 +157,8 @@ class CurrentUser {
     'id',
     'phone',
     'created_at',
+    'name',
+    'about',
   };
 }
 

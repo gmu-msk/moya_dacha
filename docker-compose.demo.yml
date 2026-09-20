@@ -69,6 +69,11 @@ services:
       # а фичу надо показывать (specs/001-auth.md). В проде переменная
       # не задаётся, и код случайный.
       AUTH_FIXED_CODE: "0000"
+      # Аватары лежат в томе рядом с базой и переживают `make demo-down`
+      # (specs/002-profile.md, ADR-0011). `make demo-reset` стирает и их.
+      MEDIA_DIR: /var/lib/moya-dacha/media
+    volumes:
+      - demo-media-data:/var/lib/moya-dacha/media
     ports:
       # По умолчанию стенд виден только с этой машины. `make demo-lan`
       # ставит сюда 0.0.0.0, чтобы до стенда дошёл телефон из той же
@@ -87,3 +92,4 @@ services:
 
 volumes:
   demo-postgres-data:
+  demo-media-data:

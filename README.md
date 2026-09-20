@@ -99,4 +99,5 @@ user-story свой сценарий показа ([ADR-0009](docs/adr/0009-demo
 
 Этап: процесс и стек зафиксированы, фичи MVP пишутся по порядку из
 [обзора](specs/000-overview.md). Готово: вход по номеру телефона
-([specs/001-auth.md](specs/001-auth.md)).
+([specs/001-auth.md](specs/001-auth.md)) и профиль — имя, «о себе»
+и аватар ([specs/002-profile.md](specs/002-profile.md)).

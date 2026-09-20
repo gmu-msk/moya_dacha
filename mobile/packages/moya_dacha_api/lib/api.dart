@@ -30,12 +30,14 @@ part 'auth/http_bearer_auth.dart';
 
 part 'api/auth_api.dart';
 part 'api/operations_api.dart';
+part 'api/profile_api.dart';
 
 part 'model/auth_code_accepted.dart';
 part 'model/auth_code_request.dart';
 part 'model/current_user.dart';
 part 'model/error.dart';
 part 'model/health.dart';
+part 'model/profile_update.dart';
 part 'model/session_created.dart';
 part 'model/session_info.dart';
 part 'model/session_request.dart';

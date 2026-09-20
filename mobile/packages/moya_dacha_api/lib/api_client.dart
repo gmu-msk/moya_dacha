@@ -193,6 +193,8 @@ class ApiClient {
           return Error.fromJson(value);
         case 'Health':
           return Health.fromJson(value);
+        case 'ProfileUpdate':
+          return ProfileUpdate.fromJson(value);
         case 'SessionCreated':
           return SessionCreated.fromJson(value);
         case 'SessionInfo':

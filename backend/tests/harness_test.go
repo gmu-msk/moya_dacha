@@ -10,8 +10,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -19,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gmu-msk/moya_dacha/backend/internal/api"
+	"github.com/gmu-msk/moya_dacha/backend/internal/media"
 )
 
 // authCode — код подтверждения, который сервис в тестах выдаёт всегда
@@ -39,6 +42,10 @@ func startAPIWith(t *testing.T, cfg api.Config) string {
 
 	if cfg.FixedCode == "" {
 		cfg.FixedCode = authCode
+	}
+	if cfg.Media == nil {
+		// Файлы каждого теста живут в своей папке и уезжают вместе с ней.
+		cfg.Media = media.NewDisk(t.TempDir(), "/media")
 	}
 
 	pool := connect(t)
@@ -144,6 +151,61 @@ func get(t *testing.T, url string) *http.Response {
 func postJSON(t *testing.T, url string, body any) *http.Response {
 	t.Helper()
 	return do(t, http.MethodPost, url, "", body)
+}
+
+// upload отправляет файл как multipart/form-data — так приложение
+// загружает аватар.
+func upload(t *testing.T, method, url, token, field, filename string, content []byte) *http.Response {
+	t.Helper()
+
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	if field != "" {
+		part, err := form.CreateFormFile(field, filename)
+		if err != nil {
+			t.Fatalf("не удалось собрать multipart-запрос: %v", err)
+		}
+		if _, err := part.Write(content); err != nil {
+			t.Fatalf("не удалось записать файл в запрос: %v", err)
+		}
+	}
+	if err := form.Close(); err != nil {
+		t.Fatalf("не удалось закрыть multipart-запрос: %v", err)
+	}
+
+	req, err := http.NewRequest(method, url, &body)
+	if err != nil {
+		t.Fatalf("не удалось собрать запрос %s %s: %v", method, url, err)
+	}
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("запрос %s %s не прошёл: %v", method, url, err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+
+	return resp
+}
+
+// fileURL превращает ссылку из ответа сервиса (она бывает относительной)
+// в адрес, по которому файл можно скачать у поднятого в тесте сервиса.
+func fileURL(t *testing.T, baseURL, link string) string {
+	t.Helper()
+
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		t.Fatalf("адрес сервиса %q не разбирается: %v", baseURL, err)
+	}
+	ref, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("ссылка %q не разбирается: %v", link, err)
+	}
+
+	return base.ResolveReference(ref).String()
 }
 
 // decode разбирает тело ответа в target.
