@@ -12,10 +12,17 @@ import 'package:moya_dacha/screens/gallery_screen.dart';
 import 'package:moya_dacha/screens/intro_screen.dart';
 import 'package:moya_dacha/screens/login_screen.dart';
 import 'package:moya_dacha/screens/profile_screen.dart';
+import 'package:moya_dacha/screens/server_screen.dart';
 import 'package:moya_dacha/theme.dart';
 import 'package:moya_dacha_api/api.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  // Хранилище на устройстве в тестах недоступно; подменяем его пустым,
+  // чтобы адрес сервера и сессия читались, как на чистом телефоне.
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues(const <String, Object>{});
+
   testWidgets('приложение открывается', (tester) async {
     await tester.pumpWidget(const MoyaDachaApp());
     await tester.pump();
@@ -63,6 +70,16 @@ void main() {
       tester,
     ) async {
       await _pump(tester, brightness, const GalleryScreen(), textScale: 2);
+    });
+
+    testWidgets('экран сервера рисуется в $theme теме', (tester) async {
+      await _pump(tester, brightness, const ServerScreen());
+    });
+
+    testWidgets('экран сервера выживает при крупном шрифте в $theme теме', (
+      tester,
+    ) async {
+      await _pump(tester, brightness, const ServerScreen(), textScale: 2);
     });
 
     testWidgets('профиль выживает при крупном шрифте в $theme теме', (

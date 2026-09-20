@@ -10,7 +10,11 @@
 set -euo pipefail
 
 INSTALL=""
-[ "${1:-}" = "--install" ] && INSTALL=1
+# Именно if, а не `[ … ] && …`: при `set -e` ложное условие в конце строки
+# роняет скрипт, и `make apk-phone` без аргумента обрывался бы молча.
+if [ "${1:-}" = "--install" ]; then
+	INSTALL=1
+fi
 
 IP="$(./demo/lan-ip.sh)"
 API_BASE_URL="http://$IP:8080/api"
