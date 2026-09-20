@@ -33,3 +33,24 @@ jobs:
 
       - name: Сборка
         run: make build
+
+  # Стенд для демонстрации (demo/README.md) ломается незаметно, если его
+  # не поднимать: проверяем, что `make demo` доводит сервис до ответа
+  # на /api/health. Основной гейт из ADR-0002 — это job выше.
+  demo:
+    name: Демо-стенд поднимается
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Стенд поднимается одной командой
+        run: make demo
+
+      - name: Логи стенда при падении
+        if: failure()
+        run: docker compose -f docker-compose.demo.yml logs
+
+      - name: Погасить стенд
+        if: always()
+        run: make demo-reset

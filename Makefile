@@ -3,8 +3,10 @@
 
 BACKEND        := backend
 TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha_test?sslmode=disable
+DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
 
-.PHONY: help generate check-generated build test test-up test-down fmt vet migrate-up migrate-status ci
+.PHONY: help generate check-generated build test test-up test-down fmt vet migrate-up migrate-status \
+	demo demo-down demo-reset demo-logs demo-psql ci
 
 help:
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -41,5 +43,21 @@ migrate-up: ## Накатить миграции (шаг деплоя; DATABASE_
 
 migrate-status: ## Показать состояние миграций
 	cd $(BACKEND) && go tool goose -dir migrations postgres "$$DATABASE_URL" status
+
+demo: ## Поднять демо-стенд одной командой (Postgres + миграции + сервис)
+	$(DEMO_COMPOSE) up -d --build
+	./demo/smoke.sh
+
+demo-down: ## Остановить демо-стенд (данные в базе остаются)
+	$(DEMO_COMPOSE) down
+
+demo-reset: ## Остановить демо-стенд и стереть его базу
+	$(DEMO_COMPOSE) down -v
+
+demo-logs: ## Логи сервиса на демо-стенде
+	$(DEMO_COMPOSE) logs -f api
+
+demo-psql: ## Консоль psql в базе демо-стенда
+	$(DEMO_COMPOSE) exec postgres psql -U moya_dacha -d moya_dacha
 
 ci: check-generated vet test build ## То же, что гоняет CI

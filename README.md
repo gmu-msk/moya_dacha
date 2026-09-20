@@ -41,6 +41,7 @@ backend/        Go: cmd/, internal/, api/gen/, migrations/, tests/
 mobile/         Flutter-приложение, lib/api/gen/ — сгенерированный клиент
 docs/adr/       архитектурные решения
 deploy/         systemd-юнит, Caddyfile
+demo/           локальный стенд для демонстрации приложения
 ```
 
 Сгенерированный код коммитится в git; CI проверяет, что он не разошёлся
@@ -48,6 +49,18 @@ deploy/         systemd-юнит, Caddyfile
 
 Интеграционные тесты живут в отдельном пакете `backend/tests/` — чтобы доступ
 к внутренностям был невозможен физически, а не по договорённости.
+
+## Демонстрация
+
+Показать приложение можно на локальном стенде — одна команда поднимает
+Postgres, накатывает миграции и запускает сервис:
+
+    make demo
+
+Нужен только Docker. Подробности, адреса и подключение мобильного
+приложения — в [demo/README.md](demo/README.md). Стенд не является
+staging-средой: сред по-прежнему две, локальная и прод
+([ADR-0005](docs/adr/0005-no-staging-forward-only-migrations.md)).
 
 ## Технические решения
 
@@ -60,6 +73,7 @@ deploy/         systemd-юнит, Caddyfile
 | Прод | Один бинарник + systemd + Caddy на VPS ([ADR-0004](docs/adr/0004-binary-and-systemd-in-production.md)) |
 | Деплой | Только из GitHub Actions, только с `main` |
 | Среды | Локальная и прод; staging нет ([ADR-0005](docs/adr/0005-no-staging-forward-only-migrations.md)) |
+| Демонстрация | Локальный стенд `make demo` ([demo/](demo/README.md)) |
 | Хранение фото | S3-совместимое хранилище + CDN (провайдер — TBD) |
 | SMS-провайдер | TBD |
 

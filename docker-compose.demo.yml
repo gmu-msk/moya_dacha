@@ -1,0 +1,78 @@
+# Демо-стенд: Postgres, шаг миграций, шаг демо-данных и сам сервис.
+# Поднимается одной командой `make demo` и живёт только на машине
+# разработчика — в проде контейнеров нет (ADR-0004).
+#
+# Порядок повторяет шаг деплоя из deploy/README.md: сначала миграции,
+# потом запуск сервиса. Данные лежат в именованном томе и переживают
+# `make demo-down`; стереть их — `make demo-reset`.
+name: moya-dacha-demo
+
+services:
+  postgres:
+    # Мажорная версия совпадает с тестовой и с той, что на VPS (ADR-0004).
+    image: postgres:17
+    environment:
+      POSTGRES_USER: moya_dacha
+      POSTGRES_PASSWORD: moya_dacha
+      POSTGRES_DB: moya_dacha
+    ports:
+      # 55433, чтобы не конфликтовать с Postgres для тестов на 55432.
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - demo-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moya_dacha -d moya_dacha"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build:
+      context: .
+      dockerfile: demo/Dockerfile
+    entrypoint: ["/usr/local/bin/migrate.sh"]
+    environment:
+      DATABASE_URL: postgres://moya_dacha:moya_dacha@postgres:5432/moya_dacha?sslmode=disable
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  seed:
+    # psql берём из того же образа Postgres, что и сама база.
+    image: postgres:17
+    entrypoint: ["/usr/local/bin/seed.sh"]
+    environment:
+      DATABASE_URL: postgres://moya_dacha:moya_dacha@postgres:5432/moya_dacha?sslmode=disable
+    volumes:
+      - ./demo/seed.sh:/usr/local/bin/seed.sh:ro
+      - ./demo/seed:/seed:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: .
+      dockerfile: demo/Dockerfile
+    environment:
+      DATABASE_URL: postgres://moya_dacha:moya_dacha@postgres:5432/moya_dacha?sslmode=disable
+      # По умолчанию сервис слушает 127.0.0.1 — внутри контейнера этого
+      # адреса снаружи не видно, поэтому здесь 0.0.0.0.
+      ADDR: 0.0.0.0:8080
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/health || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+volumes:
+  demo-postgres-data:
