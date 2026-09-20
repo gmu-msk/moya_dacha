@@ -152,8 +152,16 @@ jobs:
         if: always()
         run: |
           test -f demo/out/e2e-screenshot.png || exit 0
-          wc -c demo/out/e2e-screenshot.png
-          sha256sum demo/out/e2e-screenshot.png
-          echo "--- e2e-screenshot.png (base64) ---"
-          base64 -w 2000 demo/out/e2e-screenshot.png
+          small=demo/out/e2e-screenshot-small.png
+          # Полноразмерный снимок лежит в артефактах. В лог кладём уменьшенную
+          # копию: строка короче, а экран на ней всё ещё читается.
+          if command -v magick >/dev/null; then
+            magick demo/out/e2e-screenshot.png -resize 400x "$small"
+          else
+            convert demo/out/e2e-screenshot.png -resize 400x "$small"
+          fi
+          wc -c "$small"
+          sha256sum "$small"
+          echo "--- e2e-screenshot-small.png (base64) ---"
+          base64 -w 2000 "$small"
           echo "--- конец снимка ---"
