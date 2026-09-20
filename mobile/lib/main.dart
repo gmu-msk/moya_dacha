@@ -7,9 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import 'api.dart';
+import 'app_scope.dart';
 import 'screens/gallery_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'server.dart';
 import 'session.dart';
 import 'theme.dart';
 import 'widgets/loading_view.dart';
@@ -46,6 +48,8 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
   }
 
   Future<void> _restore() async {
+    // Сначала адрес сервера: всё остальное в приложении ходит по нему.
+    await restoreApiBaseUrl();
     final token = await _session.read();
     debugPrint('$logMarker session=${token == null ? 'none' : 'restored'}');
     if (!mounted) {
@@ -66,6 +70,17 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
       _token = session.token;
       _isNewUser = session.isNewUser;
     });
+  }
+
+  /// Начать заново — после смены адреса сервера на экране «Сервер».
+  /// Адрес перечитывается, сессия прошлого сервера уже стёрта.
+  Future<void> _restart() async {
+    setState(() {
+      _token = null;
+      _isNewUser = false;
+      _restored = false;
+    });
+    await _restore();
   }
 
   Future<void> _signedOut() async {
@@ -101,14 +116,17 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
       );
     }
 
-    return MaterialApp(
-      title: 'МояДача',
-      // Светлая и тёмная тема лежат рядом, показанную выбирает система
-      // (ADR-0012). Своего переключателя в приложении нет.
-      theme: appTheme(Brightness.light),
-      darkTheme: appTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
-      home: home,
+    return AppScope(
+      restart: _restart,
+      child: MaterialApp(
+        title: 'МояДача',
+        // Светлая и тёмная тема лежат рядом, показанную выбирает система
+        // (ADR-0012). Своего переключателя в приложении нет.
+        theme: appTheme(Brightness.light),
+        darkTheme: appTheme(Brightness.dark),
+        themeMode: ThemeMode.system,
+        home: home,
+      ),
     );
   }
 }

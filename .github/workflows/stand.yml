@@ -1,0 +1,247 @@
+# Временный стенд для проверки с телефона.
+#
+# Пока настоящего сервера нет (вопрос 152-ФЗ не закрыт, ADR-0013), тестовой
+# сборке всё равно нужно куда-то ходить. Стенд поднимается на раннере по
+# команде в PR и получает публичный адрес туннелем Cloudflare: аккаунтов,
+# денег и постоянного хранилища для этого не нужно, живёт он минуты и
+# данные на нём выдуманные.
+#
+#   /стенд                 поднять на 30 минут, данные общие
+#   /стенд 002-profile     поднять с данными сценария показа
+#   /стенд 45              поднять на 45 минут (максимум 60)
+#   /стенд стоп            погасить сейчас
+#
+# Команду понимает только тот, у кого есть права на репозиторий. Workflow
+# с триггером issue_comment GitHub берёт из main: в ветке его можно править,
+# но работать он начнёт после мерджа.
+name: Тестовый стенд
+
+on:
+  issue_comment:
+    types: [created]
+  # Запуск руками: тем же стендом можно ответить на просьбу вне PR.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Номер PR, код которого поднять'
+        required: true
+      story:
+        description: 'Сценарий показа, например 002-profile'
+        required: false
+        default: ''
+      minutes:
+        description: 'Сколько минут держать стенд (до 60)'
+        required: false
+        default: '30'
+
+# У PR один стенд: новая команда гасит прошлый. Комментарии, которые
+# командой не являются, попадают каждый в свою группу — иначе обычная
+# реплика в PR убивала бы поднятый стенд.
+concurrency:
+  group: >-
+    ${{ github.event_name == 'workflow_dispatch'
+        && format('stand-{0}', inputs.pr)
+        || (startsWith(github.event.comment.body, '/стенд')
+            || startsWith(github.event.comment.body, '/stand'))
+           && format('stand-{0}', github.event.issue.number)
+           || format('stand-ignored-{0}', github.event.comment.id) }}
+  cancel-in-progress: true
+
+jobs:
+  stand:
+    name: Стенд с публичным адресом
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request != null &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+       (startsWith(github.event.comment.body, '/стенд') ||
+        startsWith(github.event.comment.body, '/stand')) &&
+       !contains(github.event.comment.body, 'стоп') &&
+       !contains(github.event.comment.body, 'stop')) }}
+    runs-on: ubuntu-latest
+    # Стенд живёт максимум час; запас сверху — на сборку и на туннель.
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.issue.number || inputs.pr }}
+      # Текст команды идёт через переменную окружения, а не подстановкой
+      # в текст скрипта: в комментарии может быть что угодно.
+      COMMAND: ${{ github.event.comment.body }}
+      INPUT_STORY: ${{ inputs.story }}
+      INPUT_MINUTES: ${{ inputs.minutes }}
+
+    steps:
+      - name: Команда принята
+        if: github.event_name == 'issue_comment'
+        run: |
+          gh api -X POST \
+            "repos/$REPO/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content=eyes >/dev/null
+
+      - name: Код из PR
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number || inputs.pr }}/head
+
+      - name: Разобрать команду
+        id: args
+        run: |
+          set -euo pipefail
+          # Без раскрытия шаблонов: в комментарии может оказаться звёздочка.
+          set -f
+
+          story=""
+          minutes=30
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            story="$INPUT_STORY"
+            minutes="${INPUT_MINUTES:-30}"
+          else
+            args="$(printf '%s' "$COMMAND" | head -1 | cut -d' ' -f2-)"
+            for word in $args; do
+              case "$word" in
+              /стенд | /stand) ;;
+              *[!0-9]*) story="$word" ;;
+              "") ;;
+              *) minutes="$word" ;;
+              esac
+            done
+          fi
+
+          case "$minutes" in
+          *[!0-9]* | "") minutes=30 ;;
+          esac
+          # Потолок — час: стенд тратит минуты Actions, пока живёт.
+          if [ "$minutes" -gt 60 ]; then minutes=60; fi
+          if [ "$minutes" -lt 5 ]; then minutes=5; fi
+
+          if [ -n "$story" ] && [ ! -d "demo/stories/$story" ]; then
+            {
+              echo "Сценария показа \`$story\` нет. Что есть:"
+              echo
+              for dir in demo/stories/*/; do
+                name="$(basename "$dir")"
+                echo "- \`$name\`"
+              done
+            } > error.md
+            gh pr comment "$PR" --body-file error.md
+            exit 1
+          fi
+
+          echo "story=$story" >> "$GITHUB_OUTPUT"
+          echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
+
+      # Тот же стенд, что поднимается локально командой `make demo`:
+      # Postgres, миграции, демо-данные, сервис из кода этого PR.
+      - name: Поднять стенд
+        env:
+          DEMO_STORY: ${{ steps.args.outputs.story }}
+        run: make demo
+
+      # Быстрый туннель Cloudflare: публичный адрес с TLS без аккаунта и
+      # без оплаты. Адрес случайный и живёт столько же, сколько процесс.
+      - name: Публичный адрес
+        id: tunnel
+        run: |
+          set -euo pipefail
+          curl -fsSL -o cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared
+
+          ./cloudflared tunnel --url http://127.0.0.1:8080 \
+            --no-autoupdate --logfile tunnel.log &
+
+          url=""
+          for _ in $(seq 60); do
+            url="$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log 2>/dev/null | head -1 || true)"
+            if [ -n "$url" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$url" ]; then
+            echo "Туннель не поднялся за две минуты." >&2
+            cat tunnel.log >&2 || true
+            exit 1
+          fi
+
+          # Туннелю нужно несколько секунд, чтобы адрес начал отвечать.
+          for _ in $(seq 30); do
+            if curl -fsS --max-time 5 "$url/api/health" >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS --max-time 10 "$url/api/health"
+
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Адрес стенда — комментарием в PR
+        env:
+          URL: ${{ steps.tunnel.outputs.url }}
+          STORY: ${{ steps.args.outputs.story }}
+          MINUTES: ${{ steps.args.outputs.minutes }}
+        run: |
+          set -euo pipefail
+          {
+            echo "🌱 **Стенд поднят** на $MINUTES минут — код этого PR, база чистая."
+            echo
+            echo '```'
+            echo "$URL"
+            echo '```'
+            echo
+            echo "В приложении: нажать на адрес сервера внизу экрана → «Вставить» → «Сохранить»."
+            if [ -n "$STORY" ]; then
+              echo "Данные сценария \`$STORY\` налиты."
+            fi
+            echo "Код подтверждения при входе — **0000**."
+            echo
+            echo "Погасить раньше времени: \`/стенд стоп\`."
+          } > stand.md
+          gh pr comment "$PR" --body-file stand.md
+
+      - name: Стенд работает
+        run: |
+          echo "Стенд живёт ${{ steps.args.outputs.minutes }} минут."
+          sleep $(( ${{ steps.args.outputs.minutes }} * 60 ))
+
+      - name: Время стенда вышло
+        run: |
+          set -euo pipefail
+          {
+            echo "🕗 Стенд погашен: время вышло. Поднять заново — \`/стенд\`."
+          } > done.md
+          gh pr comment "$PR" --body-file done.md
+
+      - name: Погасить стенд
+        if: always()
+        run: make demo-reset
+
+  stop:
+    name: Погасить стенд
+    # Сам стенд гасит concurrency: этот запуск попадает в ту же группу и
+    # отменяет прошлый. Джобу остаётся сказать об этом человеку.
+    if: >-
+      ${{ github.event.issue.pull_request != null &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      (startsWith(github.event.comment.body, '/стенд') ||
+       startsWith(github.event.comment.body, '/stand')) &&
+      (contains(github.event.comment.body, 'стоп') ||
+       contains(github.event.comment.body, 'stop')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.issue.number }}
+
+    steps:
+      - name: Сказать, что погашен
+        run: gh pr comment "$PR" --body "🕗 Стенд погашен. Поднять заново — \`/стенд\`."

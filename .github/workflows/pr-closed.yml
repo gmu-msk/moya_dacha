@@ -1,0 +1,26 @@
+# Уборка за тестовыми сборками.
+#
+# У каждого PR есть черновой релиз `pr-<номер>` с APK (ADR-0013). Когда PR
+# закрыт или влит, сборка больше никому не нужна — релиз и тег удаляются,
+# чтобы список релизов оставался списком настоящих версий.
+name: Уборка после PR
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    name: Убрать тестовую сборку
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Удалить релиз с тестовой сборкой
+        run: |
+          gh release delete "pr-${{ github.event.pull_request.number }}" \
+            --cleanup-tag --yes 2>/dev/null || true

@@ -6,13 +6,20 @@ import 'dart:convert';
 
 import 'package:moya_dacha_api/api.dart';
 
-/// Адрес API. По умолчанию — демо-стенд с точки зрения Android-эмулятора:
-/// 10.0.2.2 это 127.0.0.1 машины-хоста. Переопределяется при сборке:
+/// Адрес API, зашитый при сборке. По умолчанию — демо-стенд с точки зрения
+/// Android-эмулятора: 10.0.2.2 это 127.0.0.1 машины-хоста. Меняется при
+/// сборке:
 /// `flutter build apk --dart-define=API_BASE_URL=http://192.168.1.10:8080/api`.
-const apiBaseUrl = String.fromEnvironment(
+const apiBaseUrlDefault = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'http://10.0.2.2:8080/api',
 );
+
+/// Адрес API, по которому приложение работает сейчас. Человек задаёт его на
+/// экране «Сервер», и тогда одна и та же сборка годится для любого стенда
+/// (ADR-0013); пока он этого не сделал, адрес зашитый. Поднимается из
+/// хранилища при старте — `restoreApiBaseUrl()` в lib/server.dart.
+String apiBaseUrl = apiBaseUrlDefault;
 
 /// Строка, по которой прогон в эмуляторе узнаёт в логах, до чего дошло
 /// приложение (demo/stories/README.md).

@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
+import '../app_scope.dart';
+import '../screens/server_screen.dart';
 import '../theme.dart';
 
 class ServerStatus extends StatefulWidget {
@@ -45,6 +47,23 @@ class _ServerStatusState extends State<ServerStatus> {
     setState(() => _alive = health != null);
   }
 
+  /// Открыть экран «Сервер». Если адрес там сменили, приложение начинает
+  /// заново: сессия прошлого сервера уже не годится.
+  Future<void> _openServer() async {
+    final restart = AppScope.of(context)?.restart;
+
+    final changed = await Navigator.of(context)
+        .push<bool>(MaterialPageRoute(builder: (_) => const ServerScreen()));
+
+    if (changed == true && restart != null) {
+      await restart();
+    }
+    if (!mounted) {
+      return;
+    }
+    _check();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -74,10 +93,16 @@ class _ServerStatusState extends State<ServerStatus> {
               ),
             ],
           ),
-        Text(
-          apiBaseUrl,
-          style: theme.textTheme.bodySmall,
-          textAlign: TextAlign.center,
+        // Адрес не просто показан, а открывает экран «Сервер»: одна и та
+        // же сборка ходит на любой стенд, и попасть к выбору адреса надо
+        // с любого экрана, в том числе до входа (ADR-0013).
+        TextButton(
+          onPressed: _openServer,
+          child: Text(
+            apiBaseUrl,
+            style: theme.textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
         ),
         TextButton(onPressed: _check, child: const Text('Проверить ещё раз')),
       ],
