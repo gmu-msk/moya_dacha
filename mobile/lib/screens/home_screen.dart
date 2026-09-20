@@ -1,8 +1,8 @@
 // Экран вошедшего пользователя.
 //
-// Пока показывать внутри нечего: лента и посты появятся следующими
-// фичами (specs/000-overview.md). Поэтому экран отвечает на два вопроса —
-// кто вошёл и как ему открыть свой профиль, — и даёт выйти.
+// Ленты пока нет (specs/000-overview.md), поэтому экран отвечает на три
+// вопроса — кто вошёл, как ему опубликовать пост и как открыть свой
+// профиль, — и даёт выйти.
 //
 // Пользователя без имени экран не показывает вовсе: сначала знакомство
 // (specs/002-profile.md).
@@ -17,6 +17,8 @@ import '../widgets/error_view.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/user_avatar.dart';
 import 'intro_screen.dart';
+import 'new_post_screen.dart';
+import 'post_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -85,6 +87,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _newPost() async {
+    final post = await Navigator.of(context).push<Post>(
+      MaterialPageRoute(builder: (_) => NewPostScreen(token: widget.token)),
+    );
+    if (post == null || !mounted) {
+      return;
+    }
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PostScreen(post: post)));
+  }
+
   Future<void> _signOut() async {
     setState(() => _busy = true);
     try {
@@ -111,8 +125,8 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // Внутри пока пусто: лента и посты — следующие фичи
-    // (specs/000-overview.md). Это и есть пустое состояние экрана.
+    // Ленты пока нет (specs/000-overview.md), и показывать на главном
+    // экране нечего. Это и есть его пустое состояние.
     final String title;
     if (user == null) {
       title = 'Вы вошли';
@@ -152,12 +166,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ? null
             : UserAvatar(user: user, radius: AvatarRadius.onScreen),
         title: title,
-        hint: 'Лента и посты появятся следующими фичами.',
+        hint: 'Лента появится следующей фичей.',
         action: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (about != null) ...[about, const SizedBox(height: AppGap.large)],
             if (user != null) ...[
+              FilledButton.icon(
+                onPressed: _newPost,
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: const Text('Новый пост'),
+              ),
+              const SizedBox(height: AppGap.small),
               FilledButton.tonal(
                 onPressed: () => _openProfile(user),
                 child: const Text('Мой профиль'),

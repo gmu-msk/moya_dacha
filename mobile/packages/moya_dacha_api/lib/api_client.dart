@@ -187,12 +187,20 @@ class ApiClient {
           return AuthCodeAccepted.fromJson(value);
         case 'AuthCodeRequest':
           return AuthCodeRequest.fromJson(value);
+        case 'Author':
+          return Author.fromJson(value);
         case 'CurrentUser':
           return CurrentUser.fromJson(value);
         case 'Error':
           return Error.fromJson(value);
         case 'Health':
           return Health.fromJson(value);
+        case 'Media':
+          return Media.fromJson(value);
+        case 'Post':
+          return Post.fromJson(value);
+        case 'PostDraft':
+          return PostDraft.fromJson(value);
         case 'ProfileUpdate':
           return ProfileUpdate.fromJson(value);
         case 'SessionCreated':

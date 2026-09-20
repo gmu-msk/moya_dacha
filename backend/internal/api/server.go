@@ -46,7 +46,11 @@ type Config struct {
 	// Ноль означает значение из спеки (60 секунд).
 	ResendAfter time.Duration
 
-	// Media — хранилище файлов пользователей (пока только аватары).
+	// UnpublishedMediaTTL — сколько живёт загруженная, но не
+	// опубликованная фотография. Ноль означает значение из спеки (час).
+	UnpublishedMediaTTL time.Duration
+
+	// Media — хранилище файлов пользователей (аватары и фотографии постов).
 	// Ноль означает диск во временной папке: так сервис не падает
 	// при запуске без настройки, но в проде и на стенде папка задаётся
 	// переменной окружения MEDIA_DIR (specs/002-profile.md).
@@ -68,6 +72,9 @@ func New(db *pgxpool.Pool, cfg Config) *Server {
 	}
 	if cfg.ResendAfter == 0 {
 		cfg.ResendAfter = auth.DefaultResendAfter
+	}
+	if cfg.UnpublishedMediaTTL == 0 {
+		cfg.UnpublishedMediaTTL = DefaultUnpublishedMediaTTL
 	}
 	if cfg.Media == nil {
 		dir := filepath.Join(os.TempDir(), "moya-dacha-media")

@@ -11,6 +11,8 @@ import 'package:moya_dacha/main.dart';
 import 'package:moya_dacha/screens/gallery_screen.dart';
 import 'package:moya_dacha/screens/intro_screen.dart';
 import 'package:moya_dacha/screens/login_screen.dart';
+import 'package:moya_dacha/screens/new_post_screen.dart';
+import 'package:moya_dacha/screens/post_screen.dart';
 import 'package:moya_dacha/screens/profile_screen.dart';
 import 'package:moya_dacha/screens/server_screen.dart';
 import 'package:moya_dacha/theme.dart';
@@ -36,6 +38,18 @@ void main() {
     about: 'Три сотки под картошку',
   );
 
+  // Пост без единой фотографии невозможен (docs/adr/0006-post-is-media.md),
+  // но сети в виджет-тесте нет, а Image.network в ней падает. Сами
+  // фотографии проверяются глазами по сценарию показа (ADR-0009); здесь
+  // проверяется, что экран поста собирается.
+  final post = Post(
+    id: '00000000-0000-0000-0000-000000000002',
+    createdAt: DateTime(2026, 6, 1, 9, 30),
+    caption: 'Первая клубника в этом году',
+    author: Author(id: user.id, name: user.name),
+    media: [],
+  );
+
   for (final brightness in Brightness.values) {
     final theme = brightness == Brightness.light ? 'светлой' : 'тёмной';
 
@@ -53,6 +67,25 @@ void main() {
 
     testWidgets('профиль рисуется в $theme теме', (tester) async {
       await _pump(tester, brightness, ProfileScreen(token: 'т', user: user));
+    });
+
+    testWidgets('новый пост рисуется в $theme теме', (tester) async {
+      await _pump(tester, brightness, const NewPostScreen(token: 'т'));
+    });
+
+    testWidgets('пост рисуется в $theme теме', (tester) async {
+      await _pump(tester, brightness, PostScreen(post: post));
+    });
+
+    testWidgets('новый пост выживает при крупном шрифте в $theme теме', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        brightness,
+        const NewPostScreen(token: 'т'),
+        textScale: 2,
+      );
     });
 
     testWidgets('экран входа выживает при крупном шрифте в $theme теме', (
