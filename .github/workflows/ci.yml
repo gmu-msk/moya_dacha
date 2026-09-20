@@ -53,6 +53,17 @@ jobs:
       - name: Стенд поднимается одной командой
         run: make demo
 
+      # Тот же снимок строкой в логе: его видно прямо в прогоне, без
+      # скачивания архива артефактов.
+      - name: Снимок экрана строкой в логе
+        if: always()
+        run: |
+          test -f demo/out/e2e-screenshot.png || exit 0
+          echo "--- e2e-screenshot.png (base64) ---"
+          base64 -w0 demo/out/e2e-screenshot.png
+          echo
+          echo "--- конец снимка ---"
+
       - name: Логи стенда при падении
         if: failure()
         run: docker compose -f docker-compose.demo.yml logs
@@ -135,6 +146,17 @@ jobs:
           name: e2e-screenshot
           path: demo/out/e2e-screenshot.png
           if-no-files-found: warn
+
+      # Тот же снимок строкой в логе: его видно прямо в прогоне, без
+      # скачивания архива артефактов.
+      - name: Снимок экрана строкой в логе
+        if: always()
+        run: |
+          test -f demo/out/e2e-screenshot.png || exit 0
+          echo "--- e2e-screenshot.png (base64) ---"
+          base64 -w0 demo/out/e2e-screenshot.png
+          echo
+          echo "--- конец снимка ---"
 
       - name: Логи стенда при падении
         if: failure()
