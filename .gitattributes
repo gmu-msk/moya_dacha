@@ -1,4 +1,4 @@
 # Сгенерированный из specs/openapi.yaml код коммитится (ADR-0001), но в диффах
 # схлопывается — читать в PR нужно тесты и контракт, а не его.
 backend/api/gen/** linguist-generated=true
-mobile/lib/api/gen/** linguist-generated=true
+mobile/packages/moya_dacha_api/** linguist-generated=true
