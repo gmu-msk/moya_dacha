@@ -10,7 +10,8 @@ info:
 
     Продуктовые эндпоинты добавляются вместе со спецификациями фич
     в specs/00X-*.md. Сейчас описаны: вход по номеру телефона
-    (specs/001-auth.md), профиль пользователя (specs/002-profile.md)
+    (specs/001-auth.md), профиль пользователя (specs/002-profile.md),
+    загрузка фотографий и создание поста (specs/003-posts.md)
     и операционная проверка живости.
 
 servers:
@@ -279,6 +280,140 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /media:
+    post:
+      operationId: uploadMedia
+      summary: Загрузить фотографию
+      description: |
+        Фотография JPEG или PNG не больше 10 МБ. Сервис уменьшает её до
+        1600 по большей стороне и пересохраняет в JPEG.
+
+        Загруженная фотография ещё не опубликована: она ждёт, пока автор
+        соберёт из неё пост (specs/003-posts.md). Каждая фотография идёт
+        своим запросом — на плохой связи переотправить нужно только ту,
+        что не долетела.
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Фотография JPEG или PNG
+      responses:
+        "201":
+          description: Фотография загружена и ждёт публикации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        "400":
+          description: Файл не картинка или в запросе нет поля `file`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Фотография больше 10 МБ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /posts:
+    post:
+      operationId: createPost
+      summary: Опубликовать пост
+      description: |
+        От одной до четырёх уже загруженных фотографий и необязательная
+        подпись. Поста без медиа не существует
+        (docs/adr/0006-post-is-media.md).
+
+        Порядок фотографий в посте — порядок идентификаторов в `media_ids`.
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostDraft"
+      responses:
+        "201":
+          description: Пост опубликован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          description: |
+            Нет ни одной фотографии (`no_media`), фотографий больше четырёх
+            (`too_many_media`), фотография чужая, уже опубликована или не
+            существует (`invalid_media`), подпись слишком длинная
+            (`invalid_caption`), тело запроса не разбирается
+            (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /posts/{postId}:
+    get:
+      operationId: getPost
+      summary: Показать пост
+      description: |
+        Лента одна на всех, поэтому пост открывается любому вошедшему
+        пользователю, а не только автору (CONTEXT.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Пост
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -417,3 +552,107 @@ components:
           type: string
           description: Короткое «о себе», до 200 символов, одна строка
           example: "Три сотки под картошку"
+
+    Post:
+      type: object
+      description: Пост — от одной до четырёх фотографий и необязательная подпись.
+      required: [id, created_at, caption, author, media]
+      properties:
+        id:
+          type: string
+          description: Идентификатор поста (UUID)
+          example: "2b7e1a90-5c3d-4f21-9a8b-6c5d4e3f2a10"
+        created_at:
+          type: string
+          format: date-time
+          description: Когда пост опубликован
+        caption:
+          type: string
+          description: Подпись, может быть пустой
+          example: "Первая клубника в этом году"
+        author:
+          $ref: "#/components/schemas/Author"
+        media:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: Медиа поста в порядке, в котором их прислал автор
+          items:
+            $ref: "#/components/schemas/Media"
+
+    Author:
+      type: object
+      description: |
+        Публичное представление пользователя: то, чем он подписан рядом
+        с постом, комментарием и лайком. Номер телефона в него не входит
+        и входить не может — см. CONTEXT.md.
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Идентификатор пользователя (UUID)
+          example: "0b3f4d3a-1d2e-4a5b-8c7d-9e0f1a2b3c4d"
+        name:
+          type: string
+          description: Отображаемое имя
+          example: "Николай"
+        avatar_url:
+          type: string
+          nullable: true
+          description: |
+            Ссылка на аватар или `null`, если аватара нет. Может быть
+            относительной — клиент достраивает её до адреса сервиса.
+          example: "/media/avatars/6f1c8a2b4d5e6f70.jpg"
+
+    PostDraft:
+      type: object
+      description: Из чего собирается пост.
+      required: [media_ids]
+      properties:
+        media_ids:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: |
+            Идентификаторы уже загруженных фотографий, в том порядке,
+            в котором они должны стоять в посте.
+          items:
+            type: string
+          example: ["2b7e1a90-5c3d-4f21-9a8b-6c5d4e3f2a10"]
+        caption:
+          type: string
+          description: Подпись, до 1000 символов, может быть пустой
+          example: "Первая клубника в этом году"
+
+    Media:
+      type: object
+      description: |
+        Одно медиа: загруженное или уже опубликованное в посте. Видео
+        заложено в модель, но в MVP сервер принимает только фотографии
+        (docs/adr/0006-post-is-media.md).
+      required: [id, kind, url, width, height]
+      properties:
+        id:
+          type: string
+          description: Идентификатор медиа (UUID)
+          example: "2b7e1a90-5c3d-4f21-9a8b-6c5d4e3f2a10"
+        kind:
+          type: string
+          enum: [photo]
+          description: Вид медиа. В MVP всегда `photo`.
+        url:
+          type: string
+          description: |
+            Ссылка на файл. Может быть относительной — клиент достраивает
+            её до адреса сервиса.
+          example: "/media/posts/2b7e1a905c3d4f21.jpg"
+        width:
+          type: integer
+          format: int32
+          description: Ширина в пикселях — чтобы занять место до загрузки
+          example: 1600
+        height:
+          type: integer
+          format: int32
+          description: Высота в пикселях
+          example: 1200

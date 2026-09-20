@@ -32,12 +32,14 @@ Docker — Go и Postgres на машине не требуются.
 
 ## Что показывать сейчас
 
-Вход по номеру телефона ([specs/001-auth.md](../specs/001-auth.md)) и
+Вход по номеру телефона ([specs/001-auth.md](../specs/001-auth.md)),
 профиль — имя, «о себе» и аватар
-([specs/002-profile.md](../specs/002-profile.md)):
+([specs/002-profile.md](../specs/002-profile.md)) — и создание поста
+([specs/003-posts.md](../specs/003-posts.md)):
 
     make story STORY=001-auth
     make story STORY=002-profile
+    make story STORY=003-posts
 
 Код подтверждения на стенде фиксированный — **0000**: SMS-провайдер не
 выбран, и стенд поднимается с `AUTH_FIXED_CODE=0000`. В проде переменная
