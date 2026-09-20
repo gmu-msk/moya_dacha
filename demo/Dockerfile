@@ -12,9 +12,18 @@ WORKDIR /src
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 
+# goose собирается до копирования исходников: ему хватает go.mod и go.sum,
+# поэтому слой переживает любую правку в backend/.
+#
+# Драйверы чужих СУБД выключены тегами — нужен только postgres. Они тянут
+# ClickHouse, MySQL, MSSQL, SQLite, Vertica, YDB и libsql и компилируются
+# дольше, чем всё остальное в этом образе вместе взятое.
+RUN CGO_ENABLED=0 go build \
+	-tags 'no_clickhouse no_libsql no_mssql no_azuresql no_mysql no_sqlite3 no_vertica no_ydb' \
+	-o /out/goose github.com/pressly/goose/v3/cmd/goose
+
 COPY backend ./
 RUN CGO_ENABLED=0 go build -o /out/moya-dacha-server ./cmd/server
-RUN CGO_ENABLED=0 go build -o /out/goose github.com/pressly/goose/v3/cmd/goose
 
 FROM debian:trixie-slim
 
