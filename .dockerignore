@@ -1,0 +1,9 @@
+# Демо-образ собирается из backend/ и demo/ — остальное в контекст не нужно.
+.git
+.github
+bin
+docs
+mobile
+specs
+deploy
+*.md

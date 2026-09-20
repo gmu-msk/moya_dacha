@@ -1,0 +1,8 @@
+# Чего от генератора не нужно: свой git-пуш, CI чужого проекта, заготовки
+# тестов и документация — контракт и так лежит в specs/openapi.yaml.
+git_push.sh
+.travis.yml
+.gitignore
+doc/**
+test/**
+README.md

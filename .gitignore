@@ -26,3 +26,7 @@ local.properties
 
 # Logs
 *.log
+
+# Генератор Dart-клиента и снимки e2e-прогона
+.cache/
+demo/out/

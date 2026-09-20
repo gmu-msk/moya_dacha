@@ -1,0 +1,10 @@
+# Конфигурация генерации Dart-клиента из specs/openapi.yaml.
+# Запускается через `make generate` из корня репозитория.
+# Результат коммитится в git и руками не правится (ADR-0001).
+generatorName: dart
+inputSpec: ../specs/openapi.yaml
+outputDir: packages/moya_dacha_api
+additionalProperties:
+  pubName: moya_dacha_api
+  pubVersion: 0.1.0
+  pubDescription: Клиент API МояДачи, сгенерированный из specs/openapi.yaml
