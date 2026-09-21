@@ -12,6 +12,7 @@ import '../widgets/author_line.dart';
 import '../widgets/comments_view.dart';
 import '../widgets/confirm.dart';
 import '../widgets/like_button.dart';
+import '../widgets/report_dialog.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({
@@ -26,7 +27,8 @@ class PostScreen extends StatefulWidget {
   final String token;
 
   /// Кто смотрит: у своего поста и своего комментария есть «Удалить»,
-  /// у чужого нет (specs/007-deletion.md, требование 12).
+  /// у чужого — «Пожаловаться» (specs/007-deletion.md, требование 12,
+  /// specs/008-reports.md, требование 11).
   final String viewerId;
 
   /// Пост изменился: его лайкнули здесь, и лента должна показать то же
@@ -97,6 +99,21 @@ class _PostScreenState extends State<PostScreen> {
     }
   }
 
+  /// Пожаловаться на чужой пост. На экране от этого не меняется ничего:
+  /// жалоба — сигнал владельцу сервиса, а не действие над постом
+  /// (specs/008-reports.md, требование 12).
+  Future<void> _report() async {
+    await askAndReport(
+      context,
+      title: 'Пожаловаться на пост?',
+      question: 'Жалобу посмотрит владелец сервиса. Пост останется на '
+          'месте, и автор о ней не узнает.',
+      send: (reason) => PostsApi(
+        apiClient(token: widget.token),
+      ).reportPost(post.id, reportDraft: ReportDraft(reason: reason)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -112,6 +129,12 @@ class _PostScreenState extends State<PostScreen> {
             tooltip: 'Удалить пост',
             onPressed: _deleting ? null : _delete,
             icon: const Icon(Icons.delete_outline),
+          )
+        else
+          IconButton(
+            tooltip: 'Пожаловаться на пост',
+            onPressed: _report,
+            icon: const Icon(Icons.flag_outlined),
           ),
       ],
       child: ListView(
