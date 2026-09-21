@@ -165,6 +165,52 @@ func commentReports(t *testing.T, commentID, where string) []reportRow {
 	return reportsOn(t, "comment_id", commentID, where)
 }
 
+// reportCreatedAt — время жалобы на эту цель: по нему владелец сервиса
+// сортирует список, поэтому смотреть на него приходится прямо в базе
+// (ФТ-4, ADR-0017).
+func reportCreatedAt(t *testing.T, column, id, where string) time.Time {
+	t.Helper()
+
+	pool := connect(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var at time.Time
+	if err := pool.QueryRow(ctx, `SELECT created_at FROM reports WHERE `+column+` = $1`, id).Scan(&at); err != nil {
+		t.Fatalf("%s: не удалось прочитать время жалобы: %v", where, err)
+	}
+
+	return at
+}
+
+// moveReportIntoThePast отодвигает время жалобы на час назад. Две
+// жалобы подряд идут слишком близко друг к другу, чтобы различать их
+// по «сейчас»; с отодвинутым временем переписанное сразу видно (ФТ-4).
+func moveReportIntoThePast(t *testing.T, column, id string) time.Time {
+	t.Helper()
+
+	// Микросекунды — предел точности timestamptz: без обрезки время,
+	// записанное из Go, совпало бы не полностью.
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond)
+
+	if affected := execSQL(t, `UPDATE reports SET created_at = $1 WHERE `+column+` = $2`, at, id); affected != 1 {
+		t.Fatalf("время жалобы не проставилось: изменено строк %d", affected)
+	}
+
+	return at
+}
+
+// requireReportTime требует, чтобы время жалобы осталось тем же.
+func requireReportTime(t *testing.T, column, id string, want time.Time, where string) {
+	t.Helper()
+
+	if got := reportCreatedAt(t, column, id, where); !got.Equal(want) {
+		t.Errorf("%s: время жалобы было %s, стало %s — повторная жалоба не имеет права его двигать",
+			where, want.Format(time.RFC3339Nano), got.UTC().Format(time.RFC3339Nano))
+	}
+}
+
 // formatReports печатает жалобы так, чтобы в сообщении об ошибке было
 // видно и кто пожаловался, и что написал.
 func formatReports(reports []reportRow) string {
@@ -320,7 +366,6 @@ func TestReportOnPostWithoutBodyHasNoReason(t *testing.T) {
 // и причины нет («Причина из одних пробелов», «API»).
 func TestReportReasonOfOnlySpacesIsNoReason(t *testing.T) {
 	reasons := map[string]string{
-		"пустая строка":      "",
 		"один пробел":        " ",
 		"несколько пробелов": "     ",
 		"переводы строки":    "\n\n\n",
@@ -341,6 +386,43 @@ func TestReportReasonOfOnlySpacesIsNoReason(t *testing.T) {
 
 			requireReports(t, postReports(t, post.ID, "после жалобы с пустой причиной"),
 				[]reportRow{{reporterID, nil}}, "причина из одних пробелов")
+		})
+	}
+}
+
+// Пустая строка в причине и `null` — то же самое, что причины нет:
+// 202, и в базе NULL, а не пустая строка. И то и другое значит
+// «объяснять нечего» («Причина — пустая строка или `null`», «Модель
+// данных»).
+func TestReportReasonOfEmptyStringOrNullIsNoReason(t *testing.T) {
+	bodies := map[string]any{
+		"пустая строка": map[string]any{"reason": ""},
+		"null":          map[string]any{"reason": nil},
+	}
+
+	for caseName, body := range bodies {
+		t.Run(caseName, func(t *testing.T) {
+			baseURL := startAPI(t)
+
+			author, _ := signIn(t, baseURL, phonePretty)
+			reporter, reporterID := signIn(t, baseURL, otherPhonePretty)
+
+			post := postToReport(t, baseURL, author)
+			comment := commentOf(t, baseURL, author, post.ID, commentText)
+
+			requireAccepted(t, reportPost(t, baseURL, reporter, post.ID, body))
+			requireAccepted(t, reportComment(t, baseURL, reporter, post.ID, comment.ID, body))
+
+			requireReports(t, postReports(t, post.ID, "после жалобы на пост"),
+				[]reportRow{{reporterID, nil}}, "жалоба на пост, причина — "+caseName)
+			requireReports(t, commentReports(t, comment.ID, "после жалобы на комментарий"),
+				[]reportRow{{reporterID, nil}}, "жалоба на комментарий, причина — "+caseName)
+
+			// «Пусто» выглядит одинаково во всех строках: читать таблицу
+			// будет человек («Модель данных»).
+			if empty := countSQL(t, "SELECT count(*) FROM reports WHERE reason = ''"); empty != 0 {
+				t.Errorf("причины нет, а в базе лежит пустая строка: таких строк %d", empty)
+			}
 		})
 	}
 }
@@ -587,6 +669,39 @@ func TestReportOnTheSamePostTwiceKeepsOneReportAndTheFirstReason(t *testing.T) {
 	}
 }
 
+// Повторная жалоба не трогает первую запись ни причиной, ни временем:
+// владелец сервиса мог её уже прочитать, а по времени он жалобы
+// и сортирует (ФТ-4, «Повторная жалоба на тот же пост», «Повторная
+// жалоба на тот же комментарий»).
+func TestSecondReportKeepsTheTimeOfTheFirstOne(t *testing.T) {
+	baseURL := startAPI(t)
+
+	author, _ := signIn(t, baseURL, phonePretty)
+	reporter, reporterID := signIn(t, baseURL, otherPhonePretty)
+
+	post := postToReport(t, baseURL, author)
+	comment := commentOf(t, baseURL, author, post.ID, commentText)
+
+	requireAccepted(t, reportPostReason(t, baseURL, reporter, post.ID, reportReason))
+	requireAccepted(t, reportCommentReason(t, baseURL, reporter, post.ID, comment.ID, commentReportReason))
+
+	postAt := moveReportIntoThePast(t, "post_id", post.ID)
+	commentAt := moveReportIntoThePast(t, "comment_id", comment.ID)
+
+	// Повтор с другой причиной и повтор вовсе без причины.
+	requireAccepted(t, reportPostReason(t, baseURL, reporter, post.ID, "и вообще тут реклама"))
+	requireAccepted(t, reportComment(t, baseURL, reporter, post.ID, comment.ID, nil))
+
+	requireReportTime(t, "post_id", post.ID, postAt, "жалоба на пост после повтора")
+	requireReportTime(t, "comment_id", comment.ID, commentAt, "жалоба на комментарий после повтора")
+
+	// И причина осталась первой.
+	requireReports(t, postReports(t, post.ID, "после повтора"),
+		[]reportRow{{reporterID, reasonPtr(reportReason)}}, "причина жалобы на пост после повтора")
+	requireReports(t, commentReports(t, comment.ID, "после повтора"),
+		[]reportRow{{reporterID, reasonPtr(commentReportReason)}}, "причина жалобы на комментарий после повтора")
+}
+
 // Жалобы разных людей на один пост записываются каждая: сколько людей
 // пожаловалось — это первое, что увидит владелец сервиса («Жалобы двух
 // разных людей на один пост», ФТ-5).
@@ -629,6 +744,40 @@ func TestReportsOfOnePersonOnDifferentPostsAreBothRecorded(t *testing.T) {
 		[]reportRow{{reporterID, reasonPtr(reportReason)}}, "жалоба на первый пост")
 	requireReports(t, postReports(t, second.ID, "жалоба на второй пост"),
 		[]reportRow{{reporterID, nil}}, "жалоба на второй пост")
+}
+
+// Уникальность работает там, где ссылка заполнена: жалоба на пост
+// и жалоба на комментарий под ним от одного человека — две разные
+// записи, а не конфликт («Модель данных»).
+func TestReportsOfOnePersonOnAPostAndOnItsCommentAreTwoSeparateRows(t *testing.T) {
+	baseURL := startAPI(t)
+
+	author, _ := signIn(t, baseURL, phonePretty)
+	reporter, reporterID := signIn(t, baseURL, otherPhonePretty)
+
+	post := postToReport(t, baseURL, author)
+	comment := commentOf(t, baseURL, author, post.ID, commentText)
+
+	requireAccepted(t, reportPostReason(t, baseURL, reporter, post.ID, reportReason))
+	requireAccepted(t, reportCommentReason(t, baseURL, reporter, post.ID, comment.ID, commentReportReason))
+
+	requireReports(t, postReports(t, post.ID, "жалоба на пост"),
+		[]reportRow{{reporterID, reasonPtr(reportReason)}}, "жалоба на пост")
+	requireReports(t, commentReports(t, comment.ID, "жалоба на комментарий"),
+		[]reportRow{{reporterID, reasonPtr(commentReportReason)}}, "жалоба на комментарий под тем же постом")
+
+	if count := totalReports(t); count != 2 {
+		t.Errorf("жалоба на пост и жалоба на его комментарий — это две записи, а в таблице строк: %d", count)
+	}
+
+	// И повтор каждой из них по-прежнему ничего не добавляет: мешать
+	// друг другу они не должны ни в ту, ни в другую сторону.
+	requireAccepted(t, reportPost(t, baseURL, reporter, post.ID, nil))
+	requireAccepted(t, reportComment(t, baseURL, reporter, post.ID, comment.ID, nil))
+
+	if count := totalReports(t); count != 2 {
+		t.Errorf("после повторов в таблице строк: %d, а должно остаться две", count)
+	}
 }
 
 // Поста нет — 404 post_not_found. Идентификатор, который вовсе не похож
