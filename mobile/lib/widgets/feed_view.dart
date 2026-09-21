@@ -303,7 +303,26 @@ class FeedPostCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
-          LikeButton(post: post, token: token, onChanged: onChanged),
+          Row(
+            children: [
+              LikeButton(post: post, token: token, onChanged: onChanged),
+              // Число комментариев: по нему видно, где разговор идёт,
+              // а где ещё нет (specs/006-comments.md, требование 7).
+              // Сам разговор — на экране поста, поэтому кнопка ведёт туда.
+              TextButton.icon(
+                onPressed: onTap,
+                icon: const Icon(Icons.mode_comment_outlined),
+                label: Text(
+                  post.comments == 0 ? 'Комментировать' : '${post.comments}',
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppGap.small,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

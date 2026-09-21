@@ -9,6 +9,7 @@ import '../api.dart';
 import '../theme.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
+import '../widgets/comments_view.dart';
 import '../widgets/like_button.dart';
 
 class PostScreen extends StatefulWidget {
@@ -32,6 +33,26 @@ class PostScreen extends StatefulWidget {
 
 class _PostScreenState extends State<PostScreen> {
   late Post post = widget.post;
+
+  /// Перечитать пост: после своего комментария у него другое число, и
+  /// показать его должны и этот экран, и лента (specs/006-comments.md,
+  /// требование 7).
+  Future<void> _reload() async {
+    try {
+      final updated = await PostsApi(
+        apiClient(token: widget.token),
+      ).getPost(post.id);
+      if (!mounted || updated == null) {
+        return;
+      }
+      setState(() => post = updated);
+      widget.onChanged?.call(updated);
+    } on Exception catch (error) {
+      // Комментарий уже оставлен и виден: молчаливо разойтись здесь
+      // лучше, чем ругаться на то, что человеку удалось.
+      debugPrint('$logMarker post=reload_failed error=$error');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +97,12 @@ class _PostScreenState extends State<PostScreen> {
                 widget.onChanged?.call(updated);
               },
             ),
+          ),
+          const SizedBox(height: AppGap.medium),
+          CommentsView(
+            postId: post.id,
+            token: widget.token,
+            onAdded: _reload,
           ),
         ],
       ),
