@@ -721,6 +721,130 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /posts/{postId}/report:
+    post:
+      operationId: reportPost
+      summary: Пожаловаться на чужой пост
+      description: |
+        Жалоба — сигнал владельцу сервиса, который разбирает её вручную.
+        Она ничего не скрывает и ничего не меняет: пост остаётся на
+        месте, автор о жалобе не узнаёт (CONTEXT.md, ADR-0017).
+
+        На свой пост не жалуются — свой удаляют (specs/007-deletion.md).
+        Повторная жалоба того же человека принимается так же, как
+        первая, и ничего не меняет (specs/008-reports.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportDraft"
+      responses:
+        "202":
+          description: |
+            Жалоба принята; тела нет. Не `201` и не `204`: ресурса,
+            который клиент мог бы открыть, нет, а сделает по жалобе
+            что-то человек и позже (ADR-0017).
+        "400":
+          description: |
+            Причина длиннее 1000 символов (`invalid_reason`) или тело
+            запроса не разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Пост свой (`own_post`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /posts/{postId}/comments/{commentId}/report:
+    post:
+      operationId: reportComment
+      summary: Пожаловаться на чужой комментарий
+      description: |
+        Жалоба подаётся по адресу поста, под которым лежит комментарий:
+        пара должна сойтись, иначе `comment_not_found`
+        (specs/008-reports.md). На свой комментарий не жалуются — свой
+        удаляют.
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+        - name: commentId
+          in: path
+          required: true
+          description: Идентификатор комментария (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportDraft"
+      responses:
+        "202":
+          description: Жалоба принята; тела нет
+        "400":
+          description: |
+            Причина длиннее 1000 символов (`invalid_reason`) или тело
+            запроса не разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Комментарий свой (`own_comment`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: |
+            Поста нет (`post_not_found`) или комментария нет либо он под
+            другим постом (`comment_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -966,6 +1090,22 @@ components:
             Текст комментария, до 1000 символов. Края обрезаются, пустой
             текст не принимается (specs/006-comments.md).
           example: "И у нас такая же напасть, брызгали содой"
+
+    ReportDraft:
+      type: object
+      description: |
+        Из чего состоит жалоба — только причина, и та необязательна:
+        обязательная причина мешает пожаловаться на то, что и так
+        очевидно (specs/008-reports.md, требование 2).
+      properties:
+        reason:
+          type: string
+          nullable: true
+          description: |
+            Что не так, свободным текстом, до 1000 символов. Края
+            обрезаются; причина из одних пробелов — это отсутствие
+            причины, а не ошибка.
+          example: "Это не про дачу"
 
     Author:
       type: object

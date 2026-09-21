@@ -47,6 +47,7 @@ part 'model/media.dart';
 part 'model/post.dart';
 part 'model/post_draft.dart';
 part 'model/profile_update.dart';
+part 'model/report_draft.dart';
 part 'model/session_created.dart';
 part 'model/session_info.dart';
 part 'model/session_request.dart';
