@@ -61,6 +61,28 @@ String errorMessage(Object error) {
   return 'Сервер не отвечает. Проверьте, что стенд поднят';
 }
 
+/// Сколько секунд осталось ждать повторной отправки кода. Число приходит
+/// от сервиса вместе с отказом `too_many_requests`: счётчик на экране
+/// тикает по нему (specs/001-auth.md, требование 5).
+int? retryAfterSeconds(Object error) {
+  if (error is! ApiException) {
+    return null;
+  }
+  final body = error.message;
+  if (body == null) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map && decoded['retry_after'] is int) {
+      return decoded['retry_after'] as int;
+    }
+  } on FormatException {
+    // Тело ответа не JSON: сказать о нём нечего.
+  }
+  return null;
+}
+
 String? _errorField(Object error, String field) {
   if (error is! ApiException) {
     return null;
