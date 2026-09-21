@@ -183,9 +183,45 @@ class _MaskedFieldState extends State<MaskedField>
   bool _rejected = false;
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_keepCaretAtTheEnd);
+  }
+
+  @override
+  void didUpdateWidget(MaskedField old) {
+    super.didUpdateWidget(old);
+    if (old.controller != widget.controller) {
+      old.controller.removeListener(_keepCaretAtTheEnd);
+      widget.controller.addListener(_keepCaretAtTheEnd);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.controller.removeListener(_keepCaretAtTheEnd);
     _shake.dispose();
     super.dispose();
+  }
+
+  /// Курсор стоит за последней введённой цифрой и дальше не уходит.
+  ///
+  /// В незаполненную часть подсказки ему нельзя: там не текст, а запись
+  /// того, что ещё предстоит набрать, и поставленный туда курсор обещал
+  /// бы человеку ввод не с той цифры. Касание в хвост поля, как и переход
+  /// в конец текста при получении фокуса, возвращает курсор на место.
+  /// Выделение мышью или долгим нажатием не трогаем: им человек копирует
+  /// и вставляет.
+  void _keepCaretAtTheEnd() {
+    final controller = widget.controller;
+    final selection = controller.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
+      return;
+    }
+    final end = controller.mask.caret(controller.digits.length);
+    if (selection.baseOffset != end) {
+      controller.selection = TextSelection.collapsed(offset: end);
+    }
   }
 
   void _reject() {

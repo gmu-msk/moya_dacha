@@ -38,6 +38,30 @@ void main() {
     expect(_borderIsAlarming(tester), isTrue);
   });
 
+  testWidgets('курсор не уходит в незаполненную часть подсказки', (
+    tester,
+  ) async {
+    await _pump(tester, _Auth());
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final controller = field.controller!;
+
+    // Пустое поле: курсор стоит за +7, а не в начале и не в хвосте.
+    expect(controller.selection.baseOffset, 3);
+
+    await _typePhone(tester, '9152');
+    expect(controller.selection.baseOffset, 8);
+
+    // Так выглядит касание в хвост поля: курсор уводят за нули, и он
+    // обязан вернуться за последнюю введённую цифру.
+    controller.selection = const TextSelection.collapsed(offset: 15);
+    await tester.pump();
+    expect(controller.selection.baseOffset, 8);
+
+    // Следующая цифра встаёт на своё место, а не туда, куда ткнули.
+    await _typePhone(tester, '91523');
+    expect(_fieldText(tester), '+7(915)230-00-00');
+  });
+
   testWidgets('«Получить код» ждёт полного номера', (tester) async {
     final auth = _Auth();
     await _pump(tester, auth);
