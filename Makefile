@@ -15,7 +15,7 @@ TEST_LOG       := .cache/test.log
 
 .PHONY: help generate generate-server generate-client check-generated build test test-up test-down \
 	test-local test-ci pg-local-stop api-index \
-	migrate-test fmt vet migrate-up migrate-status app-get app-analyze app-test app-apk apk-phone apk-phone-install \
+	migrate-test fmt vet migrate-up migrate-status app-get app-analyze app-test theme-tokens app-apk apk-phone apk-phone-install \
 	demo demo-lan demo-down demo-reset demo-logs demo-psql demo-e2e \
 	stories story check-stories ci
 
@@ -111,6 +111,10 @@ app-analyze: ## Статический анализ приложения
 
 app-test: ## Проверить, что экраны собираются (не гейт, ADR-0012)
 	cd $(MOBILE) && flutter test
+
+theme-tokens: ## Числа темы для макета: цвета обеих палитр и размеры текста
+	@cd $(MOBILE) && flutter test tool/theme_tokens.dart --reporter silent 2>/dev/null \
+		| awk '/--- ТОКЕНЫ ТЕМЫ ---/{flag=1;next} /--- КОНЕЦ ---/{flag=0} flag{sub(/^Shell: /,""); print}'
 
 app-apk: ## Собрать debug-APK приложения (адрес стенда — как у эмулятора)
 	cd $(MOBILE) && flutter build apk --debug $(APP_DART_DEFINE)
