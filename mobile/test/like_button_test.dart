@@ -19,14 +19,13 @@ void main() {
     tester,
   ) async {
     await _pumpCard(tester, _post(likes: 0, liked: false));
-    expect(find.text('Нравится'), findsOneWidget);
+    expect(_likesShown(tester), isFalse);
 
     // Пост тот же самый, но пришёл заново: так лента получает его после
     // лайка на экране поста (FeedViewState.replace).
     await _pumpCard(tester, _post(likes: 1, liked: true));
 
     expect(find.text('1'), findsOneWidget);
-    expect(find.text('Нравится'), findsNothing);
     expect(_heartIsFilled(tester), isTrue);
   });
 
@@ -50,7 +49,7 @@ void main() {
       _post(id: '00000000-0000-0000-0000-000000000009', likes: 0, liked: false),
     );
 
-    expect(find.text('Нравится'), findsOneWidget);
+    expect(_likesShown(tester), isFalse);
     expect(find.text('3'), findsNothing);
     expect(_heartIsFilled(tester), isFalse);
   });
@@ -75,11 +74,20 @@ void main() {
     await tester.tap(find.byType(LikeButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('Нравится'), findsOneWidget);
+    expect(_likesShown(tester), isFalse);
     expect(_heartIsFilled(tester), isFalse);
     expect(find.byType(SnackBar), findsOneWidget);
   });
 }
+
+/// Видно ли число рядом с сердечком. Подписи словом у него нет, а ноль
+/// не показывается вовсе (specs/000-ui.md, правило 15), поэтому «отметок
+/// нет» — это отсутствие текста в кнопке.
+bool _likesShown(WidgetTester tester) => tester
+    .widgetList(
+      find.descendant(of: find.byType(LikeButton), matching: find.byType(Text)),
+    )
+    .isNotEmpty;
 
 Post _post({
   String id = '00000000-0000-0000-0000-000000000002',

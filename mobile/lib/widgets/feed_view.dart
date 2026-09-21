@@ -13,6 +13,7 @@ import 'author_line.dart';
 import 'empty_view.dart';
 import 'error_view.dart';
 import 'like_button.dart';
+import 'post_action.dart';
 import 'loading_view.dart';
 
 /// Сколько постов запрашивается за раз. Столько же сервис отдаёт
@@ -285,17 +286,26 @@ class FeedPostCard extends StatelessWidget {
                         : photo.width / photo.height,
                     child: Image.network(mediaUrl(photo.url), fit: BoxFit.cover),
                   ),
-                  if (post.media.length > 1)
+                  if (post.media.length > 1) ...[
                     Positioned(
                       top: AppGap.small,
                       right: AppGap.small,
                       child: _PhotoCount(count: post.media.length),
                     ),
+                    // Точки по нижнему краю: по ним видно, что фотография
+                    // не одна, ещё до того, как прочитано «1/4».
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: AppGap.small,
+                      child: _PhotoDots(count: post.media.length),
+                    ),
+                  ],
                 ],
               ),
             ),
           if (post.caption.isNotEmpty) ...[
-            const SizedBox(height: AppGap.small),
+            const SizedBox(height: AppGap.tiny),
             Text(
               post.caption,
               style: theme.textTheme.bodyLarge,
@@ -309,17 +319,11 @@ class FeedPostCard extends StatelessWidget {
               // Число комментариев: по нему видно, где разговор идёт,
               // а где ещё нет (specs/006-comments.md, требование 7).
               // Сам разговор — на экране поста, поэтому кнопка ведёт туда.
-              TextButton.icon(
+              PostAction(
+                icon: Icons.mode_comment_outlined,
+                count: post.comments,
+                tooltip: 'Комментарии',
                 onPressed: onTap,
-                icon: const Icon(Icons.mode_comment_outlined),
-                label: Text(
-                  post.comments == 0 ? 'Комментировать' : '${post.comments}',
-                ),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppGap.small,
-                  ),
-                ),
               ),
             ],
           ),
@@ -354,6 +358,37 @@ class _PhotoCount extends StatelessWidget {
           style: theme.textTheme.labelLarge?.copyWith(color: Colors.white),
         ),
       ),
+    );
+  }
+}
+
+/// Точки под фотографией: сколько их в посте. Первая — та, что видна;
+/// пролистать их можно на экране поста (specs/004-feed.md, требование 9).
+class _PhotoDots extends StatelessWidget {
+  const _PhotoDots({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < count; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                // Точки лежат на фотографии, а какая она — неизвестно,
+                // поэтому цвета темы здесь не годятся: белое на тёмной
+                // подложке видно на любом снимке.
+                color: i == 0 ? Colors.white : Colors.white54,
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox.square(dimension: AppGap.small),
+            ),
+          ),
+      ],
     );
   }
 }

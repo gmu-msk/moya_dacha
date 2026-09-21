@@ -1,9 +1,13 @@
-// Строка состояния сервиса внизу экрана.
+// Состояние сервиса — точкой в заголовке экрана.
 //
-// Продуктовой ценности в ней немного, но она показывает, дошло ли
-// приложение до сервиса и жива ли база, — это сквозной сценарий показа
+// Продуктовой ценности в нём нет: это отметка для владельца о том, дошло ли
+// приложение до сервиса и жива ли база, — сквозной сценарий показа
 // demo/stories/000-status. По ней же прогон в эмуляторе понимает, что
-// приложение доехало до ответа сервиса.
+// приложение доехало до ответа сервиса. Раз это не для дачника, места на
+// экране она почти не занимает (specs/000-ui.md, правило 13).
+//
+// Нажатие на точку открывает экран «Сервер»: адрес стенда вводится там,
+// и попасть туда надо с любого экрана, в том числе до входа (ADR-0013).
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
@@ -58,10 +62,6 @@ class _ServerStatusState extends State<ServerStatus> {
     if (changed == true && restart != null) {
       await restart();
     }
-    if (!mounted) {
-      return;
-    }
-    _check();
   }
 
   @override
@@ -69,42 +69,45 @@ class _ServerStatusState extends State<ServerStatus> {
     final theme = Theme.of(context);
     final alive = _alive;
 
-    return Column(
+    final String state;
+    final Color color;
+    if (alive == null) {
+      state = 'Проверяю сервер…';
+      color = theme.colorScheme.outline;
+    } else if (alive) {
+      state = 'Сервер отвечает, база жива';
+      color = theme.colorScheme.primary;
+    } else {
+      state = 'Сервер не отвечает';
+      color = theme.colorScheme.error;
+    }
+
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (alive == null)
-          Text('Проверяю сервер…', style: theme.textTheme.bodyMedium)
-        else
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                alive ? Icons.check_circle_outline : Icons.cloud_off,
-                color: alive
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.error,
-              ),
-              const SizedBox(width: AppGap.small),
-              Flexible(
-                child: Text(
-                  alive ? 'Сервер отвечает, база жива' : 'Сервер не отвечает',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-            ],
+        // Беда видна не одним цветом: рядом с красной точкой значок
+        // (specs/000-ui.md, правило 7). Когда всё хорошо, значка нет —
+        // хорошие новости места занимать не должны.
+        if (alive == false)
+          Icon(
+            Icons.cloud_off,
+            size: AppGap.medium,
+            color: theme.colorScheme.error,
           ),
-        // Адрес не просто показан, а открывает экран «Сервер»: одна и та
-        // же сборка ходит на любой стенд, и попасть к выбору адреса надо
-        // с любого экрана, в том числе до входа (ADR-0013).
-        TextButton(
+        IconButton(
           onPressed: _openServer,
-          child: Text(
-            apiBaseUrl,
-            style: theme.textTheme.bodySmall,
-            textAlign: TextAlign.center,
+          tooltip: '$state\n$apiBaseUrl',
+          icon: Container(
+            width: AppGap.small,
+            height: AppGap.small,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
         ),
-        TextButton(onPressed: _check, child: const Text('Проверить ещё раз')),
+        IconButton(
+          onPressed: _check,
+          tooltip: 'Проверить ещё раз',
+          icon: const Icon(Icons.refresh),
+        ),
       ],
     );
   }

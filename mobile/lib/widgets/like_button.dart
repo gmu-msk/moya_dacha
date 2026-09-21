@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
-import '../theme.dart';
+import 'post_action.dart';
 
 class LikeButton extends StatefulWidget {
   const LikeButton({
@@ -105,16 +105,12 @@ class _LikeButtonState extends State<LikeButton> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return TextButton.icon(
+    return PostAction(
+      icon: _liked ? Icons.favorite : Icons.favorite_border,
+      count: _likes,
+      tooltip: _liked ? 'Убрать отметку' : 'Нравится',
       onPressed: _toggle,
-      icon: Icon(
-        _liked ? Icons.favorite : Icons.favorite_border,
-        color: _liked ? theme.colorScheme.primary : null,
-      ),
-      label: Text(_likes == 0 ? 'Нравится' : '$_likes'),
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: AppGap.small),
-      ),
+      color: _liked ? theme.colorScheme.primary : null,
     );
   }
 }
