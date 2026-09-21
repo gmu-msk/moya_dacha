@@ -162,7 +162,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return AppScreen(
-      title: 'Лента',
+      // Заголовка нет: на главном экране в заголовке стоит логотип
+      // (specs/000-ui.md, правило 14).
       padded: false,
       actions: [
         if (user != null)
@@ -174,10 +175,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
       floatingActionButton: user == null
           ? null
-          : FloatingActionButton.extended(
+          // Кнопка без подписи: значок фотоаппарата понятен и сам,
+          // а подпись занимает половину ширины экрана.
+          : FloatingActionButton(
               onPressed: _newPost,
-              icon: const Icon(Icons.add_a_photo_outlined),
-              label: const Text('Новый пост'),
+              tooltip: 'Новый пост',
+              child: const Icon(Icons.add_a_photo_outlined),
             ),
       child: body,
     );

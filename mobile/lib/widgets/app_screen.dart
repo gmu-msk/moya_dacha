@@ -1,26 +1,30 @@
-// Каркас экрана: заголовок, поля, состояние сервиса внизу.
+// Каркас экрана: заголовок, поля, состояние сервиса значком в заголовке.
 //
 // Был одинаково повторён в экране входа и на главном (ADR-0012).
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'app_logo.dart';
 import 'server_status.dart';
 
 class AppScreen extends StatelessWidget {
   const AppScreen({
     super.key,
     required this.child,
-    this.title = 'МояДача',
+    this.title,
     this.actions,
     this.floatingActionButton,
     this.padded = true,
     this.showServerStatus = true,
   });
 
-  /// Содержимое экрана. Занимает всё место над строкой состояния сервиса.
+  /// Содержимое экрана. Занимает всё место под заголовком.
   final Widget child;
 
-  final String title;
+  /// Куда экран привёл: «Профиль», «Новый пост». Пусто — главный экран
+  /// приложения, и в заголовке стоит логотип, а не слово
+  /// (specs/000-ui.md, правило 14).
+  final String? title;
 
   /// Кнопки справа в заголовке: например, аватар, открывающий профиль.
   final List<Widget>? actions;
@@ -33,25 +37,30 @@ class AppScreen extends StatelessWidget {
   /// фотографии на маленьком экране должны идти во всю ширину.
   final bool padded;
 
-  /// Строка «Сервер отвечает, база жива» внизу (demo/stories/000-status).
+  /// Точка состояния сервиса в заголовке (demo/stories/000-status).
   final bool showServerStatus;
 
   @override
   Widget build(BuildContext context) {
+    final title = this.title;
+
     return Scaffold(
-      appBar: AppBar(title: Text(title), actions: actions),
+      appBar: AppBar(
+        title: title == null ? const AppLogo() : Text(title),
+        // Логотип стоит с краю, слово — по центру, как Material 3 и просит.
+        centerTitle: title == null ? false : null,
+        actions: [
+          if (showServerStatus) const ServerStatus(),
+          ...?actions,
+        ],
+      ),
       floatingActionButton: floatingActionButton,
       body: SafeArea(
         child: Padding(
           padding: padded
               ? const EdgeInsets.all(AppGap.large)
               : const EdgeInsets.symmetric(vertical: AppGap.small),
-          child: Column(
-            children: [
-              Expanded(child: child),
-              if (showServerStatus) const ServerStatus(),
-            ],
-          ),
+          child: child,
         ),
       ),
     );
