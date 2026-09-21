@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
 import '../widgets/comments_view.dart';
+import '../widgets/confirm.dart';
 import '../widgets/like_button.dart';
 
 class PostScreen extends StatefulWidget {
@@ -17,11 +18,16 @@ class PostScreen extends StatefulWidget {
     super.key,
     required this.post,
     required this.token,
+    required this.viewerId,
     this.onChanged,
   });
 
   final Post post;
   final String token;
+
+  /// Кто смотрит: у своего поста и своего комментария есть «Удалить»,
+  /// у чужого нет (specs/007-deletion.md, требование 12).
+  final String viewerId;
 
   /// Пост изменился: его лайкнули здесь, и лента должна показать то же
   /// число (specs/005-likes.md).
@@ -33,6 +39,10 @@ class PostScreen extends StatefulWidget {
 
 class _PostScreenState extends State<PostScreen> {
   late Post post = widget.post;
+
+  bool _deleting = false;
+
+  bool get _mine => post.author.id == widget.viewerId;
 
   /// Перечитать пост: после своего комментария у него другое число, и
   /// показать его должны и этот экран, и лента (specs/006-comments.md,
@@ -54,6 +64,39 @@ class _PostScreenState extends State<PostScreen> {
     }
   }
 
+  /// Удалить свой пост. Возвращаемся в ленту: показывать экран того,
+  /// чего больше нет, нечестно (specs/007-deletion.md).
+  Future<void> _delete() async {
+    final agreed = await confirmDelete(
+      context,
+      title: 'Удалить пост?',
+      question: 'Пост, его фотографии, лайки и комментарии исчезнут '
+          'безвозвратно.',
+    );
+    if (!agreed || !mounted) {
+      return;
+    }
+
+    setState(() => _deleting = true);
+    try {
+      await PostsApi(apiClient(token: widget.token)).deletePost(post.id);
+      debugPrint('$logMarker post=deleted id=${post.id}');
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } on Exception catch (error) {
+      debugPrint('$logMarker post=delete_failed error=$error');
+      if (!mounted) {
+        return;
+      }
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -63,6 +106,14 @@ class _PostScreenState extends State<PostScreen> {
       // Пост смотрят, а не проверяют связь: место лучше отдать
       // фотографиям.
       showServerStatus: false,
+      actions: [
+        if (_mine)
+          IconButton(
+            tooltip: 'Удалить пост',
+            onPressed: _deleting ? null : _delete,
+            icon: const Icon(Icons.delete_outline),
+          ),
+      ],
       child: ListView(
         children: [
           AuthorLine(author: post.author, when: post.createdAt),
@@ -102,7 +153,8 @@ class _PostScreenState extends State<PostScreen> {
           CommentsView(
             postId: post.id,
             token: widget.token,
-            onAdded: _reload,
+            viewerId: widget.viewerId,
+            onChanged: _reload,
           ),
         ],
       ),

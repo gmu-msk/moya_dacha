@@ -9,6 +9,7 @@ import 'package:moya_dacha_api/api.dart';
 import '../api.dart';
 import '../theme.dart';
 import 'author_line.dart';
+import 'confirm.dart';
 import 'error_view.dart';
 import 'loading_view.dart';
 
@@ -21,16 +22,21 @@ class CommentsView extends StatefulWidget {
     super.key,
     required this.postId,
     required this.token,
-    required this.onAdded,
+    required this.viewerId,
+    required this.onChanged,
   });
 
   final String postId;
   final String token;
 
-  /// Комментарий оставлен: у поста стало другое число, и показать его
-  /// должны все, кто этот пост показывает (specs/006-comments.md,
-  /// требование 7).
-  final VoidCallback onAdded;
+  /// Кто смотрит: «Удалить» есть только у своего комментария
+  /// (specs/007-deletion.md, требование 12).
+  final String viewerId;
+
+  /// Комментарий оставлен или удалён: у поста стало другое число, и
+  /// показать его должны все, кто этот пост показывает
+  /// (specs/006-comments.md, требование 7).
+  final VoidCallback onChanged;
 
   @override
   State<CommentsView> createState() => _CommentsViewState();
@@ -96,7 +102,7 @@ class _CommentsViewState extends State<CommentsView> {
         // Поле очищается только после ответа сервиса: пока не дошло,
         // написанное остаётся на месте (требование 13).
         _text.clear();
-        widget.onAdded();
+        widget.onChanged();
       }
     } on Exception catch (error) {
       debugPrint('$logMarker comment=failed error=$error');
@@ -110,6 +116,42 @@ class _CommentsViewState extends State<CommentsView> {
       if (mounted) {
         setState(() => _sending = false);
       }
+    }
+  }
+
+  /// Удалить свой комментарий. Пост остаётся, число у него уменьшается
+  /// (specs/007-deletion.md, требование 2).
+  Future<void> _delete(Comment comment) async {
+    final agreed = await confirmDelete(
+      context,
+      title: 'Удалить комментарий?',
+      question: 'Написанное исчезнет безвозвратно.',
+    );
+    if (!agreed || !mounted) {
+      return;
+    }
+
+    try {
+      await _api.deleteComment(widget.postId, comment.id);
+      debugPrint('$logMarker comment=deleted id=${comment.id}');
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => _comments = [
+          for (final item in _comments ?? const <Comment>[])
+            if (item.id != comment.id) item,
+        ],
+      );
+      widget.onChanged();
+    } on Exception catch (error) {
+      debugPrint('$logMarker comment=delete_failed error=$error');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
     }
   }
 
@@ -134,7 +176,13 @@ class _CommentsViewState extends State<CommentsView> {
             style: theme.textTheme.bodyMedium,
           )
         else
-          for (final comment in comments) _CommentTile(comment: comment),
+          for (final comment in comments)
+            _CommentTile(
+              comment: comment,
+              onDelete: comment.author.id == widget.viewerId
+                  ? () => _delete(comment)
+                  : null,
+            ),
         const SizedBox(height: AppGap.medium),
         _Composer(controller: _text, sending: _sending, onSend: _send),
       ],
@@ -144,9 +192,13 @@ class _CommentsViewState extends State<CommentsView> {
 
 /// Один комментарий: кто, когда и что написал.
 class _CommentTile extends StatelessWidget {
-  const _CommentTile({required this.comment});
+  const _CommentTile({required this.comment, required this.onDelete});
 
   final Comment comment;
+
+  /// Удалить этот комментарий. null — комментарий чужой, и удалять его
+  /// нечем (specs/007-deletion.md, требование 3).
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +209,22 @@ class _CommentTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AuthorLine(author: comment.author, when: comment.createdAt),
+          Row(
+            children: [
+              Expanded(
+                child: AuthorLine(
+                  author: comment.author,
+                  when: comment.createdAt,
+                ),
+              ),
+              if (onDelete != null)
+                IconButton(
+                  tooltip: 'Удалить комментарий',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+            ],
+          ),
           Text(comment.text, style: theme.textTheme.bodyLarge),
         ],
       ),

@@ -89,15 +89,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _newPost() async {
+    final user = _user;
     final post = await Navigator.of(context).push<Post>(
       MaterialPageRoute(builder: (_) => NewPostScreen(token: widget.token)),
     );
-    if (post == null || !mounted) {
+    if (post == null || user == null || !mounted) {
       return;
     }
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PostScreen(post: post, token: widget.token),
+        builder: (_) => PostScreen(
+          post: post,
+          token: widget.token,
+          viewerId: user.id,
+        ),
       ),
     );
     // Свой пост человек должен увидеть первым в ленте, вернувшись
@@ -105,16 +110,27 @@ class _HomeScreenState extends State<HomeScreen> {
     _feed.currentState?.refresh();
   }
 
-  void _openPost(Post post) {
-    Navigator.of(context).push(
+  Future<void> _openPost(Post post) async {
+    final user = _user;
+    if (user == null) {
+      return;
+    }
+
+    final deleted = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => PostScreen(
           post: post,
           token: widget.token,
+          viewerId: user.id,
           onChanged: (updated) => _feed.currentState?.replace(updated),
         ),
       ),
     );
+    // Пост удалён: в ленте его больше нет, и показывать его там нельзя
+    // (specs/007-deletion.md, требование 7).
+    if (deleted == true) {
+      _feed.currentState?.refresh();
+    }
   }
 
   @override
