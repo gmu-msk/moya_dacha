@@ -20,6 +20,7 @@ class Post {
     this.media = const [],
     required this.likes,
     required this.liked,
+    required this.comments,
   });
 
   /// Идентификатор поста (UUID)
@@ -42,6 +43,9 @@ class Post {
   /// Отметил ли пост тот, кто спрашивает
   bool liked;
 
+  /// Сколько комментариев под постом
+  int comments;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Post &&
     other.id == id &&
@@ -50,7 +54,8 @@ class Post {
     other.author == author &&
     _deepEquality.equals(other.media, media) &&
     other.likes == likes &&
-    other.liked == liked;
+    other.liked == liked &&
+    other.comments == comments;
 
   @override
   int get hashCode =>
@@ -61,10 +66,11 @@ class Post {
     (author.hashCode) +
     (media.hashCode) +
     (likes.hashCode) +
-    (liked.hashCode);
+    (liked.hashCode) +
+    (comments.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -75,6 +81,7 @@ class Post {
       json[r'media'] = this.media;
       json[r'likes'] = this.likes;
       json[r'liked'] = this.liked;
+      json[r'comments'] = this.comments;
     return json;
   }
 
@@ -103,6 +110,8 @@ class Post {
         assert(json[r'likes'] != null, 'Required key "Post[likes]" has a null value in JSON.');
         assert(json.containsKey(r'liked'), 'Required key "Post[liked]" is missing from JSON.');
         assert(json[r'liked'] != null, 'Required key "Post[liked]" has a null value in JSON.');
+        assert(json.containsKey(r'comments'), 'Required key "Post[comments]" is missing from JSON.');
+        assert(json[r'comments'] != null, 'Required key "Post[comments]" has a null value in JSON.');
         return true;
       }());
 
@@ -114,6 +123,7 @@ class Post {
         media: Media.listFromJson(json[r'media']),
         likes: mapValueOfType<int>(json, r'likes')!,
         liked: mapValueOfType<bool>(json, r'liked')!,
+        comments: mapValueOfType<int>(json, r'comments')!,
       );
     }
     return null;
@@ -168,6 +178,7 @@ class Post {
     'media',
     'likes',
     'liked',
+    'comments',
   };
 }
 

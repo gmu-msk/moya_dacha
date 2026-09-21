@@ -189,6 +189,12 @@ class ApiClient {
           return AuthCodeRequest.fromJson(value);
         case 'Author':
           return Author.fromJson(value);
+        case 'Comment':
+          return Comment.fromJson(value);
+        case 'CommentDraft':
+          return CommentDraft.fromJson(value);
+        case 'Comments':
+          return Comments.fromJson(value);
         case 'CurrentUser':
           return CurrentUser.fromJson(value);
         case 'Error':

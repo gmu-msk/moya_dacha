@@ -543,6 +543,96 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /posts/{postId}/comments:
+    get:
+      operationId: getComments
+      summary: Комментарии поста
+      description: |
+        Комментарии поста от старого к новому: это разговор, и читается
+        он сверху вниз. Приходят целиком, без страниц — под постом их
+        столько, что курсор не нужен (specs/006-comments.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Комментарии поста
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comments"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: addComment
+      summary: Оставить комментарий
+      description: |
+        Комментарии плоские: ответов на комментарий не существует
+        (CONTEXT.md). В ответе — созданный комментарий, а не пост:
+        весь разговор на каждую реплику не отдаётся
+        (specs/006-comments.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentDraft"
+      responses:
+        "201":
+          description: Комментарий оставлен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          description: |
+            Текста нет или он из одних пробелов (`empty_comment`), текст
+            длиннее 1000 символов (`invalid_comment`), тело запроса не
+            разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -685,7 +775,7 @@ components:
     Post:
       type: object
       description: Пост — от одной до четырёх фотографий и необязательная подпись.
-      required: [id, created_at, caption, author, media, likes, liked]
+      required: [id, created_at, caption, author, media, likes, liked, comments]
       properties:
         id:
           type: string
@@ -717,6 +807,11 @@ components:
           type: boolean
           description: Отметил ли пост тот, кто спрашивает
           example: true
+        comments:
+          type: integer
+          format: int32
+          description: Сколько комментариев под постом
+          example: 2
 
     Feed:
       type: object
@@ -736,6 +831,53 @@ components:
             Курсор на следующую страницу. Отсутствует, когда за этой
             страницей ничего нет.
           example: "MjAyNi0wOS0yMFQxMDowMDowMFp8N2Y0ZTFhOTA"
+
+    Comments:
+      type: object
+      description: |
+        Комментарии одного поста, от старого к новому. У поста без
+        комментариев `items` пустой (specs/006-comments.md).
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Комментарии поста, старые сверху
+          items:
+            $ref: "#/components/schemas/Comment"
+
+    Comment:
+      type: object
+      description: |
+        Текст, оставленный пользователем под постом. Комментарии плоские:
+        ответов на комментарий не существует (CONTEXT.md).
+      required: [id, created_at, text, author]
+      properties:
+        id:
+          type: string
+          description: Идентификатор комментария (UUID)
+          example: "7f4e1a90-5c3d-4f21-9a8b-6c5d4e3f2a10"
+        created_at:
+          type: string
+          format: date-time
+          description: Когда комментарий оставлен
+        text:
+          type: string
+          description: Текст комментария
+          example: "И у нас такая же напасть, брызгали содой"
+        author:
+          $ref: "#/components/schemas/Author"
+
+    CommentDraft:
+      type: object
+      description: Из чего состоит комментарий — только текст.
+      required: [text]
+      properties:
+        text:
+          type: string
+          description: |
+            Текст комментария, до 1000 символов. Края обрезаются, пустой
+            текст не принимается (specs/006-comments.md).
+          example: "И у нас такая же напасть, брызгали содой"
 
     Author:
       type: object

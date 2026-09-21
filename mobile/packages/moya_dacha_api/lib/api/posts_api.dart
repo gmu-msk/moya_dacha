@@ -16,6 +16,70 @@ class PostsApi {
 
   final ApiClient apiClient;
 
+  /// Оставить комментарий
+  ///
+  /// Комментарии плоские: ответов на комментарий не существует (CONTEXT.md). В ответе — созданный комментарий, а не пост: весь разговор на каждую реплику не отдаётся (specs/006-comments.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [CommentDraft] commentDraft (required):
+  Future<Response> addCommentWithHttpInfo(String postId, CommentDraft commentDraft, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/comments'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = commentDraft;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Оставить комментарий
+  ///
+  /// Комментарии плоские: ответов на комментарий не существует (CONTEXT.md). В ответе — созданный комментарий, а не пост: весь разговор на каждую реплику не отдаётся (specs/006-comments.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [CommentDraft] commentDraft (required):
+  Future<Comment?> addComment(String postId, CommentDraft commentDraft, { Future<void>? abortTrigger, }) async {
+    final response = await addCommentWithHttpInfo(postId, commentDraft, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Comment',) as Comment;
+    
+    }
+    return null;
+  }
+
   /// Опубликовать пост
   ///
   /// От одной до четырёх уже загруженных фотографий и необязательная подпись. Поста без медиа не существует (docs/adr/0006-post-is-media.md).  Порядок фотографий в посте — порядок идентификаторов в `media_ids`. 
@@ -68,6 +132,66 @@ class PostsApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
+  /// Комментарии поста
+  ///
+  /// Комментарии поста от старого к новому: это разговор, и читается он сверху вниз. Приходят целиком, без страниц — под постом их столько, что курсор не нужен (specs/006-comments.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Response> getCommentsWithHttpInfo(String postId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/comments'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Комментарии поста
+  ///
+  /// Комментарии поста от старого к новому: это разговор, и читается он сверху вниз. Приходят целиком, без страниц — под постом их столько, что курсор не нужен (specs/006-comments.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Comments?> getComments(String postId, { Future<void>? abortTrigger, }) async {
+    final response = await getCommentsWithHttpInfo(postId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Comments',) as Comments;
     
     }
     return null;
