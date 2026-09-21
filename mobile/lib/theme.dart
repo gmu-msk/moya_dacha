@@ -21,6 +21,68 @@ const _fontScale = 1.25;
 /// касания — 48dp, а нашим пользователям и этого мало.
 const _tapTargetHeight = 56.0;
 
+/// Скругление рамки у полей ввода. Столько же даёт `OutlineInputBorder`
+/// по умолчанию — величина названа, чтобы её можно было покрутить.
+const _inputRadius = 4.0;
+
+/// Величины темы, которые можно покрутить, не пересобирая приложение.
+///
+/// Значения по умолчанию — те, с которыми приложение живёт: продуктовые
+/// экраны вызывают [appTheme] без настройки и получают ровно прежнюю тему.
+/// Другие значения подставляет только песочница витрины
+/// (`mobile/lib/screens/gallery_screen.dart`, ADR-0012): владелец крутит
+/// их на своём телефоне и присылает то, что понравилось, а сюда они
+/// попадают правкой констант выше.
+///
+/// Отступов [AppGap] здесь нет и быть не может: они — константы времени
+/// компиляции, экраны подставляют их прямо в свои `EdgeInsets`, и без
+/// пересборки они не меняются.
+@immutable
+class ThemeTuning {
+  const ThemeTuning({
+    this.seed = _seed,
+    this.fontScale = _fontScale,
+    this.tapTargetHeight = _tapTargetHeight,
+    this.inputRadius = _inputRadius,
+  });
+
+  /// Цвет-семя, из которого выводится вся палитра.
+  final Color seed;
+
+  /// Множитель размера текста поверх материалового.
+  final double fontScale;
+
+  /// Наименьшая высота кнопки.
+  final double tapTargetHeight;
+
+  /// Скругление рамки полей ввода.
+  final double inputRadius;
+
+  /// То же самое в виде констант этого файла: песочница витрины
+  /// показывает их и даёт скопировать, чтобы прислать в задачу.
+  String asThemeConstants() {
+    final hex = seed.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase();
+    return 'const _seed = Color(0x$hex);\n'
+        'const _fontScale = ${fontScale.toStringAsFixed(2)};\n'
+        'const _tapTargetHeight = ${tapTargetHeight.toStringAsFixed(1)};\n'
+        'const _inputRadius = ${inputRadius.toStringAsFixed(1)};';
+  }
+
+  ThemeTuning copyWith({
+    Color? seed,
+    double? fontScale,
+    double? tapTargetHeight,
+    double? inputRadius,
+  }) {
+    return ThemeTuning(
+      seed: seed ?? this.seed,
+      fontScale: fontScale ?? this.fontScale,
+      tapTargetHeight: tapTargetHeight ?? this.tapTargetHeight,
+      inputRadius: inputRadius ?? this.inputRadius,
+    );
+  }
+}
+
 /// Отступы. Других чисел отступа в экранах быть не должно.
 abstract final class AppGap {
   /// Между строками одного блока.
@@ -35,12 +97,21 @@ abstract final class AppGap {
 
 /// Тема светлая или тёмная. Какая из них показана, решает система
 /// (`themeMode: ThemeMode.system`), своего переключателя в приложении нет.
-ThemeData appTheme(Brightness brightness) {
+ThemeData appTheme(
+  Brightness brightness, {
+  ThemeTuning tuning = const ThemeTuning(),
+}) {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: _seed,
+    seedColor: tuning.seed,
     brightness: brightness,
   );
   final base = ThemeData(colorScheme: colorScheme);
+
+  // Кнопка не ниже tuning.tapTargetHeight, какой бы короткой ни была
+  // надпись.
+  final buttonSize = ButtonStyle(
+    minimumSize: WidgetStatePropertyAll(Size(64, tuning.tapTargetHeight)),
+  );
 
   return base.copyWith(
     // Размеры текста живут в «геометрии» темы, а не в textTheme: в самой
@@ -51,26 +122,25 @@ ThemeData appTheme(Brightness brightness) {
     typography: Typography.material2021(
       platform: base.platform,
       colorScheme: colorScheme,
-      englishLike: Typography.englishLike2021.apply(fontSizeFactor: _fontScale),
-      dense: Typography.dense2021.apply(fontSizeFactor: _fontScale),
-      tall: Typography.tall2021.apply(fontSizeFactor: _fontScale),
+      englishLike: Typography.englishLike2021.apply(
+        fontSizeFactor: tuning.fontScale,
+      ),
+      dense: Typography.dense2021.apply(fontSizeFactor: tuning.fontScale),
+      tall: Typography.tall2021.apply(fontSizeFactor: tuning.fontScale),
     ),
     // Стандартная плотность, а не компактная: цели касания не ужимаются.
     visualDensity: VisualDensity.standard,
     materialTapTargetSize: MaterialTapTargetSize.padded,
     appBarTheme: base.appBarTheme.copyWith(centerTitle: true),
-    filledButtonTheme: const FilledButtonThemeData(style: _buttonSize),
-    outlinedButtonTheme: const OutlinedButtonThemeData(style: _buttonSize),
-    textButtonTheme: const TextButtonThemeData(style: _buttonSize),
+    filledButtonTheme: FilledButtonThemeData(style: buttonSize),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: buttonSize),
+    textButtonTheme: TextButtonThemeData(style: buttonSize),
     // Рамка у полей ввода — общая: экран её не повторяет.
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
-      border: const OutlineInputBorder(),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(tuning.inputRadius),
+      ),
       contentPadding: const EdgeInsets.all(AppGap.medium),
     ),
   );
 }
-
-/// Кнопка не ниже [_tapTargetHeight], какой бы короткой ни была надпись.
-const _buttonSize = ButtonStyle(
-  minimumSize: WidgetStatePropertyAll(Size(64, _tapTargetHeight)),
-);
