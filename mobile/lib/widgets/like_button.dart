@@ -38,7 +38,17 @@ class _LikeButtonState extends State<LikeButton> {
   @override
   void didUpdateWidget(LikeButton old) {
     super.didUpdateWidget(old);
-    if (widget.post.id != old.post.id) {
+    // Пост сверху стал другим: либо на этом месте теперь другой пост,
+    // либо тот же, но отмеченный не здесь — на экране поста, откуда
+    // лента получает его заново. Сверять только идентификатор мало:
+    // лайк, поставленный внутри поста, в ленту тогда не доезжает.
+    //
+    // Своё касание при этом не теряется: пока сверху ничего не менялось,
+    // показывается то, что мы поставили сами, не дожидаясь сервиса
+    // (specs/005-likes.md, требование 9).
+    if (widget.post.id != old.post.id ||
+        widget.post.liked != old.post.liked ||
+        widget.post.likes != old.post.likes) {
       _liked = widget.post.liked;
       _likes = widget.post.likes;
     }
