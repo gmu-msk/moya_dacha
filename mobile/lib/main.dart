@@ -36,6 +36,7 @@ class MoyaDachaApp extends StatefulWidget {
 
 class _MoyaDachaAppState extends State<MoyaDachaApp> {
   final SessionStore _session = SessionStore();
+  final GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
 
   String? _token;
   bool _restored = false;
@@ -75,6 +76,7 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
       _token = null;
       _restored = false;
     });
+    closePushedScreens(_navigator.currentState);
     await _restore();
   }
 
@@ -85,6 +87,8 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
       return;
     }
     setState(() => _token = null);
+    // Выходят из аккаунта в профиле, а профиль открыт поверх ленты.
+    closePushedScreens(_navigator.currentState);
   }
 
   @override
@@ -108,6 +112,7 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
       restart: _restart,
       child: MaterialApp(
         title: 'МояДача',
+        navigatorKey: _navigator,
         // Светлая и тёмная тема лежат рядом, показанную выбирает система
         // (ADR-0012). Своего переключателя в приложении нет.
         theme: appTheme(Brightness.light),
@@ -121,3 +126,13 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
     );
   }
 }
+
+/// Закрыть экраны, открытые поверх главного.
+///
+/// Смена `home` меняет только нижний экран стопки: открытые поверх него
+/// остаются на месте и видны. Выйдя из аккаунта в профиле, человек так и
+/// смотрел бы на свой профиль, хотя приложение уже забыло токен. Экраны
+/// прошлого входа закрываются принудительно: профиль перехватывает
+/// «назад» (`PopScope`), и `maybePop` его бы не закрыл.
+void closePushedScreens(NavigatorState? navigator) =>
+    navigator?.popUntil((route) => route.isFirst);
