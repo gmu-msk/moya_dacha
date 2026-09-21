@@ -113,6 +113,9 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
         theme: appTheme(Brightness.light),
         darkTheme: appTheme(Brightness.dark),
         themeMode: ThemeMode.system,
+        // Край списка показывается свечением, а не растяжением
+        // содержимого (specs/000-ui.md, правило 1).
+        scrollBehavior: const AppScrollBehavior(),
         home: home,
       ),
     );
