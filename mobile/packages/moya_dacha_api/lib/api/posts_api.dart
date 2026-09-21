@@ -137,6 +137,117 @@ class PostsApi {
     return null;
   }
 
+  /// Удалить свой комментарий
+  ///
+  /// Комментарий удаляется по адресу своего поста: сначала должен найтись пост, потом комментарий под ним, и только потом проверяется, чей он. Чужой комментарий не удаляется даже автором поста (specs/007-deletion.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [String] commentId (required):
+  ///   Идентификатор комментария (UUID)
+  Future<Response> deleteCommentWithHttpInfo(String postId, String commentId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/comments/{commentId}'
+      .replaceAll('{postId}', postId)
+      .replaceAll('{commentId}', commentId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Удалить свой комментарий
+  ///
+  /// Комментарий удаляется по адресу своего поста: сначала должен найтись пост, потом комментарий под ним, и только потом проверяется, чей он. Чужой комментарий не удаляется даже автором поста (specs/007-deletion.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [String] commentId (required):
+  ///   Идентификатор комментария (UUID)
+  Future<void> deleteComment(String postId, String commentId, { Future<void>? abortTrigger, }) async {
+    final response = await deleteCommentWithHttpInfo(postId, commentId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
+  /// Удалить свой пост
+  ///
+  /// Удаление жёсткое: вместе с постом уходят его фотографии, лайки и комментарии, в том числе чужие (docs/adr/0007-hard-delete.md). Удалить можно только своё; чужое убирает владелец сервиса по жалобе (specs/007-deletion.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Response> deletePostWithHttpInfo(String postId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Удалить свой пост
+  ///
+  /// Удаление жёсткое: вместе с постом уходят его фотографии, лайки и комментарии, в том числе чужие (docs/adr/0007-hard-delete.md). Удалить можно только своё; чужое убирает владелец сервиса по жалобе (specs/007-deletion.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<void> deletePost(String postId, { Future<void>? abortTrigger, }) async {
+    final response = await deletePostWithHttpInfo(postId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Комментарии поста
   ///
   /// Комментарии поста от старого к новому: это разговор, и читается он сверху вниз. Приходят целиком, без страниц — под постом их столько, что курсор не нужен (specs/006-comments.md). 

@@ -414,6 +414,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+    delete:
+      operationId: deletePost
+      summary: Удалить свой пост
+      description: |
+        Удаление жёсткое: вместе с постом уходят его фотографии, лайки и
+        комментарии, в том числе чужие
+        (docs/adr/0007-hard-delete.md). Удалить можно только своё; чужое
+        убирает владелец сервиса по жалобе (specs/007-deletion.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Пост удалён; тела нет
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Пост есть, но он чужой (`not_your_post`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /feed:
     get:
       operationId: getFeed
@@ -628,6 +668,54 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Поста с таким идентификатором нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /posts/{postId}/comments/{commentId}:
+    delete:
+      operationId: deleteComment
+      summary: Удалить свой комментарий
+      description: |
+        Комментарий удаляется по адресу своего поста: сначала должен
+        найтись пост, потом комментарий под ним, и только потом
+        проверяется, чей он. Чужой комментарий не удаляется даже автором
+        поста (specs/007-deletion.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+        - name: commentId
+          in: path
+          required: true
+          description: Идентификатор комментария (UUID)
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Комментарий удалён; тела нет
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Комментарий есть, но он чужой (`not_your_comment`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: |
+            Поста нет (`post_not_found`) или комментария нет либо он под
+            другим постом (`comment_not_found`)
           content:
             application/json:
               schema:
