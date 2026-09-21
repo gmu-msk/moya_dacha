@@ -150,6 +150,21 @@ void main() {
       await _pump(tester, brightness, const GalleryScreen(), textScale: 2);
     });
 
+    testWidgets('песочница витрины раскрывается в $theme теме', (tester) async {
+      await _pump(tester, brightness, const GalleryScreen());
+      await tester.tap(find.text('Песочница'));
+      await tester.pumpAndSettle();
+      expect(find.text('Значения для темы'), findsOneWidget);
+    });
+
+    testWidgets('песочница витрины выживает при крупном шрифте в $theme теме', (
+      tester,
+    ) async {
+      await _pump(tester, brightness, const GalleryScreen(), textScale: 2);
+      await tester.tap(find.text('Песочница'));
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('экран сервера рисуется в $theme теме', (tester) async {
       await _pump(tester, brightness, const ServerScreen());
     });
