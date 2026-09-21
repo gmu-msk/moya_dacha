@@ -59,6 +59,10 @@ void main() {
   }
 }
 
+/// Кто смотрит на разговор. Комментариев в тесте нет — сети нет, —
+/// поэтому важен только сам факт, что экрану нужен зритель.
+const viewerId = '00000000-0000-0000-0000-000000000001';
+
 Future<void> _pump(
   WidgetTester tester, {
   Brightness brightness = Brightness.light,
@@ -74,7 +78,8 @@ Future<void> _pump(
             child: CommentsView(
               postId: '00000000-0000-0000-0000-000000000002',
               token: 'т',
-              onAdded: () {},
+              viewerId: viewerId,
+              onChanged: () {},
             ),
           ),
         ),

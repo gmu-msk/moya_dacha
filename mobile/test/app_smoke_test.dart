@@ -82,7 +82,11 @@ void main() {
     });
 
     testWidgets('пост рисуется в $theme теме', (tester) async {
-      await _pump(tester, brightness, PostScreen(post: post, token: 'т'));
+      await _pump(
+        tester,
+        brightness,
+        PostScreen(post: post, token: 'т', viewerId: user.id),
+      );
     });
 
     testWidgets('пост в ленте рисуется в $theme теме', (tester) async {
