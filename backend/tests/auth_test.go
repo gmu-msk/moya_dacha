@@ -94,6 +94,39 @@ func signOut(t *testing.T, baseURL, token string) *http.Response {
 	return do(t, http.MethodDelete, baseURL+"/auth/session", token, nil)
 }
 
+// tooSoon требует, чтобы ответ был отказом «слишком рано», и возвращает
+// остаток секунд из поля retry_after (схема AuthCodeTooSoon,
+// specs/001-auth.md, «Функциональные требования», п. 5).
+func tooSoon(t *testing.T, resp *http.Response) int {
+	t.Helper()
+
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("на повторный запрос кода ожидался статус 429, получен %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Code       string `json:"code"`
+		Message    string `json:"message"`
+		RetryAfter *int   `json:"retry_after"`
+	}
+	decode(t, resp, &body)
+
+	if body.Code != "too_many_requests" {
+		t.Fatalf("ожидалась ошибка too_many_requests, получена %q", body.Code)
+	}
+	if body.Message == "" {
+		t.Errorf("в ошибке %q пустое сообщение для пользователя", body.Code)
+	}
+	if body.RetryAfter == nil {
+		t.Fatalf("в отказе 429 нет поля retry_after: приложению не из чего считать счётчик")
+	}
+	if *body.RetryAfter < 1 {
+		t.Fatalf("остаток retry_after=%d: меньше одной секунды он быть не может", *body.RetryAfter)
+	}
+
+	return *body.RetryAfter
+}
+
 // --- POST /api/auth/code: запрос кода ------------------------------------
 
 // Запрос кода принимается, и ответ сообщает сроки по умолчанию из спеки:
@@ -237,6 +270,60 @@ func TestRequestCodeTwiceWithinResendWindowIsRejected(t *testing.T) {
 	signed := createSession(t, baseURL, phonePretty, authCode)
 	if signed.StatusCode != http.StatusOK {
 		t.Fatalf("первый код должен был остаться живым, но вход по нему дал %d", signed.StatusCode)
+	}
+}
+
+// Отказ «слишком рано» сообщает остаток секунд: приложение рисует по нему
+// живой счётчик, и считать ему больше не из чего (ФТ-5). Остаток — не меньше
+// секунды и не больше окна повтора, настроенного в сервисе.
+func TestRequestCodeTooSoonReportsSecondsLeft(t *testing.T) {
+	baseURL := startAPI(t)
+
+	requestCode(t, baseURL, phonePretty)
+
+	// Номер записан иначе: остаток считается по нормализованному номеру.
+	retryAfter := tooSoon(t, postJSON(t, baseURL+"/auth/code", map[string]any{"phone": phoneSpaced}))
+
+	if retryAfter > 60 {
+		t.Errorf("окно повтора по умолчанию — 60 секунд, а ответ просит ждать %d", retryAfter)
+	}
+}
+
+// Остаток считается по тому окну, с которым сервис работает на самом деле,
+// и уменьшается с его ходом.
+func TestRetryAfterCountsDownTheRealResendWindow(t *testing.T) {
+	baseURL := startAPIWith(t, api.Config{ResendAfter: 3 * time.Second})
+
+	requestCode(t, baseURL, phonePretty)
+
+	first := tooSoon(t, postJSON(t, baseURL+"/auth/code", map[string]any{"phone": phonePretty}))
+	if first > 3 {
+		t.Fatalf("сервис настроен на окно в 3 секунды, а ответ просит ждать %d", first)
+	}
+	if first < 2 {
+		t.Fatalf("окно из 3 секунд только началось, а ответ просит ждать всего %d", first)
+	}
+
+	time.Sleep(1200 * time.Millisecond)
+
+	second := tooSoon(t, postJSON(t, baseURL+"/auth/code", map[string]any{"phone": phonePretty}))
+	if second >= first {
+		t.Errorf("за секунду с лишним остаток должен был уменьшиться: было %d, стало %d", first, second)
+	}
+}
+
+// Пока окно не закрылось, остаток не обнуляется: хвост меньше секунды
+// сервис сообщает как одну секунду, иначе счётчик в приложении показывал бы
+// «0» при живом ограничении.
+func TestRetryAfterIsAtLeastOneSecondAtTheEndOfTheWindow(t *testing.T) {
+	baseURL := startAPIWith(t, api.Config{ResendAfter: 300 * time.Millisecond})
+
+	requestCode(t, baseURL, phonePretty)
+
+	retryAfter := tooSoon(t, postJSON(t, baseURL+"/auth/code", map[string]any{"phone": phonePretty}))
+
+	if retryAfter != 1 {
+		t.Errorf("от окна в 300 миллисекунд остаётся меньше секунды, ожидался retry_after=1, получен %d", retryAfter)
 	}
 }
 
@@ -439,6 +526,33 @@ func TestSignInRejectsWrongCode(t *testing.T) {
 	}
 	if code := errorCode(t, resp); code != "invalid_code" {
 		t.Fatalf("ожидалась ошибка invalid_code, получена %q", code)
+	}
+}
+
+// Неверный код объясняется пользователю словами: приложение показывает
+// message как есть, поэтому текст — часть контракта этого экрана.
+func TestSignInExplainsWrongCodeToTheUser(t *testing.T) {
+	baseURL := startAPI(t)
+
+	requestCode(t, baseURL, phonePretty)
+
+	resp := createSession(t, baseURL, phonePretty, "0000")
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("ожидался статус 401, получен %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	decode(t, resp, &body)
+
+	if body.Code != "invalid_code" {
+		t.Fatalf("ожидалась ошибка invalid_code, получена %q", body.Code)
+	}
+	if body.Message != "Неверный код" {
+		t.Errorf("пользователю показывается message: ожидалось «Неверный код», получено %q", body.Message)
 	}
 }
 

@@ -151,7 +151,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
           ErrorView(message: 'Сервер не отвечает', onRetry: () {}),
 
           _section(theme, 'Ошибка, которую повторять нечем'),
-          const ErrorView(message: 'Код не подошёл'),
+          const ErrorView(message: 'Неверный код'),
 
           _section(theme, 'Пустой экран'),
           SizedBox(

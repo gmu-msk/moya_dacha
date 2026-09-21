@@ -38,28 +38,44 @@ func (s *Server) RequestAuthCode(ctx context.Context, request gen.RequestAuthCod
 
 	// Выдача кода и проверка «не чаще раза в минуту» — один запрос:
 	// два параллельных запроса кода на один номер не должны разъехаться.
-	// Если условие не выполнено, строка не обновляется и ничего не вернётся.
+	// Если условие не выполнено, строка не обновляется, и тогда остаётся
+	// сказать, сколько ждать: приложение рисует по этому числу живой
+	// счётчик (specs/001-auth.md, требование 5). Прежний `created_at`
+	// виден здесь же — CTE и внешний запрос смотрят на один снимок базы,
+	// а вставка, если она случилась, в этот снимок ещё не попала.
 	const query = `
-		INSERT INTO auth_codes (phone, code_hash, attempts_left, expires_at, created_at)
-		VALUES ($1, $2, $3, now() + make_interval(secs => $4::double precision), now())
-		ON CONFLICT (phone) DO UPDATE
-		SET code_hash     = excluded.code_hash,
-		    attempts_left = excluded.attempts_left,
-		    expires_at    = excluded.expires_at,
-		    created_at    = excluded.created_at
-		WHERE auth_codes.created_at <= now() - make_interval(secs => $5::double precision)
-		RETURNING phone`
+		WITH issued AS (
+			INSERT INTO auth_codes (phone, code_hash, attempts_left, expires_at, created_at)
+			VALUES ($1, $2, $3, now() + make_interval(secs => $4::double precision), now())
+			ON CONFLICT (phone) DO UPDATE
+			SET code_hash     = excluded.code_hash,
+			    attempts_left = excluded.attempts_left,
+			    expires_at    = excluded.expires_at,
+			    created_at    = excluded.created_at
+			WHERE auth_codes.created_at <= now() - make_interval(secs => $5::double precision)
+			RETURNING phone
+		)
+		SELECT
+			EXISTS (SELECT 1 FROM issued),
+			coalesce((
+				SELECT ceil(extract(epoch FROM
+					created_at + make_interval(secs => $5::double precision) - now()))
+				FROM auth_codes WHERE phone = $1
+			), 0)`
 
-	var stored string
-	err = s.db.QueryRow(ctx, query,
+	var (
+		issued     bool
+		secondsAgo float64
+	)
+	if err := s.db.QueryRow(ctx, query,
 		phone, auth.Hash(code), auth.MaxAttempts,
 		s.cfg.CodeTTL.Seconds(), s.cfg.ResendAfter.Seconds(),
-	).Scan(&stored)
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		return gen.RequestAuthCode429JSONResponse(errTooManyRequests), nil
-	case err != nil:
+	).Scan(&issued, &secondsAgo); err != nil {
 		return nil, err
+	}
+
+	if !issued {
+		return gen.RequestAuthCode429JSONResponse(tooManyRequests(secondsAgo)), nil
 	}
 
 	if err := s.cfg.CodeSender.Send(ctx, phone, code); err != nil {
@@ -275,13 +291,9 @@ var (
 		Code:    "invalid_phone",
 		Message: "Это не похоже на номер мобильного телефона",
 	}
-	errTooManyRequests = gen.Error{
-		Code:    "too_many_requests",
-		Message: "Код уже отправлен. Подождите минуту и попробуйте снова",
-	}
 	errInvalidCode = gen.Error{
 		Code:    "invalid_code",
-		Message: "Код не подошёл",
+		Message: "Неверный код",
 	}
 	errCodeExpired = gen.Error{
 		Code:    "code_expired",
@@ -296,3 +308,20 @@ var (
 		Message: "Нужно войти заново",
 	}
 )
+
+// tooManyRequests — отказ выдать код раньше срока вместе с остатком времени.
+//
+// Сам текст короткий: подробную фразу с номером и убывающим счётчиком
+// приложение собирает само — секунды в ней тикают, и сервису такую строку
+// не написать (specs/001-auth.md, требование 5).
+func tooManyRequests(secondsLeft float64) gen.AuthCodeTooSoon {
+	retryAfter := int32(secondsLeft)
+	if retryAfter < 1 {
+		retryAfter = 1
+	}
+	return gen.AuthCodeTooSoon{
+		Code:       "too_many_requests",
+		Message:    "На этот номер код уже отправлен",
+		RetryAfter: retryAfter,
+	}
+}

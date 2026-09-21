@@ -187,6 +187,8 @@ class ApiClient {
           return AuthCodeAccepted.fromJson(value);
         case 'AuthCodeRequest':
           return AuthCodeRequest.fromJson(value);
+        case 'AuthCodeTooSoon':
+          return AuthCodeTooSoon.fromJson(value);
         case 'Author':
           return Author.fromJson(value);
         case 'Comment':

@@ -35,6 +35,7 @@ part 'api/profile_api.dart';
 
 part 'model/auth_code_accepted.dart';
 part 'model/auth_code_request.dart';
+part 'model/auth_code_too_soon.dart';
 part 'model/author.dart';
 part 'model/comment.dart';
 part 'model/comment_draft.dart';

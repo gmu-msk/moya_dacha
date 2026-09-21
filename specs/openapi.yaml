@@ -76,7 +76,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/AuthCodeTooSoon"
 
   /auth/session:
     post:
@@ -882,6 +882,27 @@ components:
             Номер телефона в любом привычном виде: `+7 900 123-45-67`,
             `8 900 123 45 67`, `79001234567` — это один и тот же номер.
           example: "+7 900 123-45-67"
+
+    AuthCodeTooSoon:
+      description: |
+        Та же ошибка, что и всюду, плюс остаток времени: приложение рисует
+        по нему живой счётчик (specs/001-auth.md, требование 5).
+      type: object
+      required: [code, message, retry_after]
+      properties:
+        code:
+          type: string
+          description: Машиночитаемый код ошибки
+          example: too_many_requests
+        message:
+          type: string
+          description: Человекочитаемое описание, пригодное для показа пользователю
+        retry_after:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Через сколько секунд можно запросить код снова
+          example: 15
 
     AuthCodeAccepted:
       type: object

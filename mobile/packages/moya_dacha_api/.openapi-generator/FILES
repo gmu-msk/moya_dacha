@@ -14,6 +14,7 @@ lib/auth/http_bearer_auth.dart
 lib/auth/oauth.dart
 lib/model/auth_code_accepted.dart
 lib/model/auth_code_request.dart
+lib/model/auth_code_too_soon.dart
 lib/model/author.dart
 lib/model/comment.dart
 lib/model/comment_draft.dart
