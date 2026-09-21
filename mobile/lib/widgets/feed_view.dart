@@ -205,6 +205,10 @@ class FeedViewState extends State<FeedView> {
           }
           final post = _posts[index];
           return FeedPostCard(
+            // Состояние карточки должно ехать за постом, а не за местом
+            // в списке: иначе после обновления ленты сердечко остаётся
+            // от того, кто был здесь раньше.
+            key: ValueKey(post.id),
             post: post,
             token: widget.token,
             onTap: () => widget.onOpenPost(post),
