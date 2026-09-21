@@ -64,6 +64,8 @@
 Постоянный список, искать его заново не нужно:
 
     specs/NNN-slug.md                     спецификация — пишется первой
+    specs/000-ui.md                       общие правила интерфейса: правится, только
+                                          если требование касается всех экранов
     specs/openapi.yaml                    контракт: ручки и схемы фичи
     backend/migrations/000NN_slug.sql     схема БД, forward-only
     backend/internal/api/slug.go          тела хендлеров (руками)

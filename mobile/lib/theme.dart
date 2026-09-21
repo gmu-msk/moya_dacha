@@ -144,3 +144,41 @@ ThemeData appTheme(
     ),
   );
 }
+
+/// Поведение прокрутки, общее для всего приложения.
+///
+/// Android с 12-й версии показывает край списка растяжением содержимого:
+/// при прокрутке до упора картинки и текст плывут. На крупном шрифте и
+/// на фотографиях это читается как поломка, поэтому край показываем
+/// по-старому — свечением у границы (`GlowingOverscrollIndicator`).
+/// Свечение ничего не двигает: оно появляется на краю, гаснет само и
+/// говорит ровно одно — дальше прокручивать нечего.
+///
+/// Физика прокрутки при этом материаловая, то есть список упирается
+/// в край, а не отпружинивает.
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    switch (getPlatform(context)) {
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        // Там прокрутка упругая, край виден и без указателя.
+        return child;
+      case TargetPlatform.android:
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+        return GlowingOverscrollIndicator(
+          axisDirection: details.direction,
+          color: Theme.of(context).colorScheme.secondary,
+          child: child,
+        );
+    }
+  }
+}
