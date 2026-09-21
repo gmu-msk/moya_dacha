@@ -53,7 +53,8 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 
 // feedPage читает страницу ленты и решает, есть ли продолжение.
 // viewerID нужен, чтобы у каждого поста был признак «я отметил»
-// (specs/005-likes.md, требование 4).
+// (specs/005-likes.md, требование 4). Число комментариев приходит там
+// же: в ленте видно, где разговор идёт (specs/006-comments.md).
 func (s *Server) feedPage(ctx context.Context, viewerID string, after *feedCursor, limit int) (gen.Feed, error) {
 	var (
 		afterTime *time.Time
@@ -71,7 +72,8 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, after *feedCurso
 			EXISTS (
 				SELECT 1 FROM post_likes l
 				WHERE l.post_id = p.id AND l.user_id = $4::uuid
-			)
+			),
+			(SELECT count(*) FROM comments c WHERE c.post_id = p.id)
 		FROM posts p JOIN users u ON u.id = p.author_id
 		WHERE $1::timestamptz IS NULL
 		   OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid)
@@ -91,7 +93,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, after *feedCurso
 		if err := rows.Scan(
 			&post.Id, &post.CreatedAt, &post.Caption,
 			&post.Author.Id, &post.Author.Name, &avatarKey,
-			&post.Likes, &post.Liked,
+			&post.Likes, &post.Liked, &post.Comments,
 		); err != nil {
 			return gen.Feed{}, err
 		}

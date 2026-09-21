@@ -15,6 +15,9 @@ lib/auth/oauth.dart
 lib/model/auth_code_accepted.dart
 lib/model/auth_code_request.dart
 lib/model/author.dart
+lib/model/comment.dart
+lib/model/comment_draft.dart
+lib/model/comments.dart
 lib/model/current_user.dart
 lib/model/error.dart
 lib/model/feed.dart

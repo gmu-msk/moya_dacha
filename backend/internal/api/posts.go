@@ -219,9 +219,10 @@ func (s *Server) forgetUnpublishedMedia(ctx context.Context, authorID string) {
 	}
 }
 
-// post собирает пост целиком: сам пост, его автора, его медиа и лайки.
-// Признак «я отметил» считается для того, кто спрашивает, поэтому
-// viewerID — часть запроса, а не поста (specs/005-likes.md).
+// post собирает пост целиком: сам пост, его автора, его медиа, лайки и
+// число комментариев. Признак «я отметил» считается для того, кто
+// спрашивает, поэтому viewerID — часть запроса, а не поста
+// (specs/005-likes.md).
 func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error) {
 	var (
 		post      gen.Post
@@ -229,13 +230,14 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 	)
 	if err := s.db.QueryRow(ctx, `
 		SELECT p.id, p.created_at, p.caption, u.id, u.name, u.avatar_key,
-			`+likeColumns+`
+			`+likeColumns+`,
+			`+commentColumn+`
 		FROM posts p JOIN users u ON u.id = p.author_id
 		WHERE p.id = $1`, id, viewerID,
 	).Scan(
 		&post.Id, &post.CreatedAt, &post.Caption,
 		&post.Author.Id, &post.Author.Name, &avatarKey,
-		&post.Likes, &post.Liked,
+		&post.Likes, &post.Liked, &post.Comments,
 	); err != nil {
 		return gen.Post{}, err
 	}
