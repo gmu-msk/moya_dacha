@@ -211,6 +211,8 @@ class ApiClient {
           return PostDraft.fromJson(value);
         case 'ProfileUpdate':
           return ProfileUpdate.fromJson(value);
+        case 'ReportDraft':
+          return ReportDraft.fromJson(value);
         case 'SessionCreated':
           return SessionCreated.fromJson(value);
         case 'SessionInfo':

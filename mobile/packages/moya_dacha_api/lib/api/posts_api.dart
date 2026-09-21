@@ -500,6 +500,125 @@ class PostsApi {
     return null;
   }
 
+  /// Пожаловаться на чужой комментарий
+  ///
+  /// Жалоба подаётся по адресу поста, под которым лежит комментарий: пара должна сойтись, иначе `comment_not_found` (specs/008-reports.md). На свой комментарий не жалуются — свой удаляют. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [String] commentId (required):
+  ///   Идентификатор комментария (UUID)
+  ///
+  /// * [ReportDraft] reportDraft:
+  Future<Response> reportCommentWithHttpInfo(String postId, String commentId, { ReportDraft? reportDraft, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/comments/{commentId}/report'
+      .replaceAll('{postId}', postId)
+      .replaceAll('{commentId}', commentId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = reportDraft;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Пожаловаться на чужой комментарий
+  ///
+  /// Жалоба подаётся по адресу поста, под которым лежит комментарий: пара должна сойтись, иначе `comment_not_found` (specs/008-reports.md). На свой комментарий не жалуются — свой удаляют. 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [String] commentId (required):
+  ///   Идентификатор комментария (UUID)
+  ///
+  /// * [ReportDraft] reportDraft:
+  Future<void> reportComment(String postId, String commentId, { ReportDraft? reportDraft, Future<void>? abortTrigger, }) async {
+    final response = await reportCommentWithHttpInfo(postId, commentId, reportDraft: reportDraft, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
+  /// Пожаловаться на чужой пост
+  ///
+  /// Жалоба — сигнал владельцу сервиса, который разбирает её вручную. Она ничего не скрывает и ничего не меняет: пост остаётся на месте, автор о жалобе не узнаёт (CONTEXT.md, ADR-0017).  На свой пост не жалуются — свой удаляют (specs/007-deletion.md). Повторная жалоба того же человека принимается так же, как первая, и ничего не меняет (specs/008-reports.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [ReportDraft] reportDraft:
+  Future<Response> reportPostWithHttpInfo(String postId, { ReportDraft? reportDraft, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/report'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = reportDraft;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Пожаловаться на чужой пост
+  ///
+  /// Жалоба — сигнал владельцу сервиса, который разбирает её вручную. Она ничего не скрывает и ничего не меняет: пост остаётся на месте, автор о жалобе не узнаёт (CONTEXT.md, ADR-0017).  На свой пост не жалуются — свой удаляют (specs/007-deletion.md). Повторная жалоба того же человека принимается так же, как первая, и ничего не меняет (specs/008-reports.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [ReportDraft] reportDraft:
+  Future<void> reportPost(String postId, { ReportDraft? reportDraft, Future<void>? abortTrigger, }) async {
+    final response = await reportPostWithHttpInfo(postId, reportDraft: reportDraft, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Снять лайк
   ///
   /// Идемпотентно: снять лайк, которого не было, — не ошибка (specs/005-likes.md). 
