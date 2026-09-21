@@ -51,6 +51,7 @@ void main() {
     media: [],
     likes: 2,
     liked: true,
+    comments: 1,
   );
 
   for (final brightness in Brightness.values) {

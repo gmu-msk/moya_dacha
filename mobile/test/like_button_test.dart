@@ -98,6 +98,7 @@ Post _post({
   media: [],
   likes: likes,
   liked: liked,
+  comments: 0,
 );
 
 /// Показать пост в ленте. Повторный вызов с тем же деревом обновляет уже
@@ -119,6 +120,7 @@ Future<void> _pumpCard(WidgetTester tester, Post post) async {
   await tester.pump();
 }
 
-/// Закрашено ли сердечко: пустое и закрашенное — разные значки.
+/// Закрашено ли сердечко: пустое и закрашенное — разные значки. Рядом
+/// в карточке есть и другие значки, поэтому ищется именно сердечко.
 bool _heartIsFilled(WidgetTester tester) =>
-    tester.widget<Icon>(find.byType(Icon)).icon == Icons.favorite;
+    find.byIcon(Icons.favorite).evaluate().isNotEmpty;
