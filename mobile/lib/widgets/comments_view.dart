@@ -12,6 +12,7 @@ import 'author_line.dart';
 import 'confirm.dart';
 import 'error_view.dart';
 import 'loading_view.dart';
+import 'report_dialog.dart';
 
 /// Сколько символов помещается в комментарий. То же число, что и на
 /// сервисе (specs/006-comments.md, требование 4).
@@ -29,8 +30,9 @@ class CommentsView extends StatefulWidget {
   final String postId;
   final String token;
 
-  /// Кто смотрит: «Удалить» есть только у своего комментария
-  /// (specs/007-deletion.md, требование 12).
+  /// Кто смотрит: у своего комментария «Удалить», у чужого —
+  /// «Пожаловаться» (specs/007-deletion.md, требование 12,
+  /// specs/008-reports.md, требование 11).
   final String viewerId;
 
   /// Комментарий оставлен или удалён: у поста стало другое число, и
@@ -155,6 +157,23 @@ class _CommentsViewState extends State<CommentsView> {
     }
   }
 
+  /// Пожаловаться на чужой комментарий. Комментарий остаётся на месте,
+  /// и число комментариев у поста не меняется
+  /// (specs/008-reports.md, требование 1).
+  Future<void> _report(Comment comment) async {
+    await askAndReport(
+      context,
+      title: 'Пожаловаться на комментарий?',
+      question: 'Жалобу посмотрит владелец сервиса. Комментарий '
+          'останется на месте, и автор о ней не узнает.',
+      send: (reason) => _api.reportComment(
+        widget.postId,
+        comment.id,
+        reportDraft: ReportDraft(reason: reason),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -179,9 +198,9 @@ class _CommentsViewState extends State<CommentsView> {
           for (final comment in comments)
             _CommentTile(
               comment: comment,
-              onDelete: comment.author.id == widget.viewerId
-                  ? () => _delete(comment)
-                  : null,
+              mine: comment.author.id == widget.viewerId,
+              onDelete: () => _delete(comment),
+              onReport: () => _report(comment),
             ),
         const SizedBox(height: AppGap.medium),
         _Composer(controller: _text, sending: _sending, onSend: _send),
@@ -192,13 +211,21 @@ class _CommentsViewState extends State<CommentsView> {
 
 /// Один комментарий: кто, когда и что написал.
 class _CommentTile extends StatelessWidget {
-  const _CommentTile({required this.comment, required this.onDelete});
+  const _CommentTile({
+    required this.comment,
+    required this.mine,
+    required this.onDelete,
+    required this.onReport,
+  });
 
   final Comment comment;
 
-  /// Удалить этот комментарий. null — комментарий чужой, и удалять его
-  /// нечем (specs/007-deletion.md, требование 3).
-  final VoidCallback? onDelete;
+  /// Свой ли это комментарий. Своё удаляют, на чужое жалуются — и
+  /// никогда наоборот (specs/008-reports.md, требование 3).
+  final bool mine;
+
+  final VoidCallback onDelete;
+  final VoidCallback onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -217,11 +244,17 @@ class _CommentTile extends StatelessWidget {
                   when: comment.createdAt,
                 ),
               ),
-              if (onDelete != null)
+              if (mine)
                 IconButton(
                   tooltip: 'Удалить комментарий',
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline),
+                )
+              else
+                IconButton(
+                  tooltip: 'Пожаловаться на комментарий',
+                  onPressed: onReport,
+                  icon: const Icon(Icons.flag_outlined),
                 ),
             ],
           ),
