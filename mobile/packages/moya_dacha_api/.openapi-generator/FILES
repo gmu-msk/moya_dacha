@@ -4,6 +4,7 @@ lib/api/auth_api.dart
 lib/api/operations_api.dart
 lib/api/posts_api.dart
 lib/api/profile_api.dart
+lib/api/users_api.dart
 lib/api_client.dart
 lib/api_exception.dart
 lib/api_helper.dart
@@ -31,4 +32,5 @@ lib/model/report_draft.dart
 lib/model/session_created.dart
 lib/model/session_info.dart
 lib/model/session_request.dart
+lib/model/user_profile.dart
 pubspec.yaml

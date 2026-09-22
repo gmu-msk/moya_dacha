@@ -1,7 +1,9 @@
-// Экран профиля: имя, «о себе» и аватар (specs/002-profile.md).
+// Правка своего профиля: имя, «о себе» и аватар (specs/002-profile.md).
 //
-// Всё, что здесь видно, принадлежит владельцу токена: чужих профилей
-// в приложении пока нет — автор появится вместе с лентой.
+// Всё, что здесь видно, принадлежит владельцу токена, и номер телефона
+// показывается только здесь. Открывается кнопкой «Изменить профиль» из
+// своего профиля (specs/009-user-profile.md), который выглядит так же,
+// как чужой.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' show MultipartFile;
@@ -137,8 +139,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final saved = _saved;
 
     return PopScope(
-      // Наверх возвращается свежий профиль: главный экран показывает имя
-      // и аватар и должен показывать те, что сейчас в сервисе.
+      // Наверх возвращается свежий профиль: и свой профиль, и шапка ленты
+      // показывают имя и аватар и должны показывать те, что в сервисе.
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
@@ -146,7 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       },
       child: AppScreen(
-        title: 'Профиль',
+        title: 'Изменить профиль',
         // Свой профиль правят, а не проверяют связь: строка состояния
         // сервиса здесь только мешает.
         showServerStatus: false,

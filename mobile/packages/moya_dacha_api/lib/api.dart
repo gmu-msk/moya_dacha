@@ -32,6 +32,7 @@ part 'api/auth_api.dart';
 part 'api/operations_api.dart';
 part 'api/posts_api.dart';
 part 'api/profile_api.dart';
+part 'api/users_api.dart';
 
 part 'model/auth_code_accepted.dart';
 part 'model/auth_code_request.dart';
@@ -52,6 +53,7 @@ part 'model/report_draft.dart';
 part 'model/session_created.dart';
 part 'model/session_info.dart';
 part 'model/session_request.dart';
+part 'model/user_profile.dart';
 
 
 /// An [ApiClient] instance that uses the default values obtained from
