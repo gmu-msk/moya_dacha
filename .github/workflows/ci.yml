@@ -186,7 +186,15 @@ jobs:
       - name: Выбросить кэши сборки
         run: |
           docker builder prune --all --force
-          rm -rf ~/.gradle
+          # После сборки APK демон Gradle ещё жив и дописывает в свой кэш,
+          # пока его стирают: rm падает на «Directory not empty». Сначала
+          # гасим демон и ждём, пока он выйдет.
+          pkill -f GradleDaemon || true
+          for _ in $(seq 1 30); do
+            pgrep -f GradleDaemon >/dev/null || break
+            sleep 1
+          done
+          rm -rf ~/.gradle || { sleep 2; rm -rf ~/.gradle; }
           df -h /
 
       # Эмулятор без аппаратной виртуализации бесполезно медленный.
