@@ -35,15 +35,20 @@ final _someone = CurrentUser(
   about: '',
 );
 
-/// Цвета-семёна, между которыми переключается песочница. Первый —
-/// нынешний цвет приложения.
-const _seeds = <String, Color>{
-  'Огород': Color(0xFF3F7D3F),
-  'Трава': Color(0xFF6B7D2E),
-  'Вода': Color(0xFF2E6F8E),
-  'Земля': Color(0xFF8E5A2E),
-  'Кирпич': Color(0xFFA5402E),
-  'Слива': Color(0xFF7D3F6B),
+/// Пары красок, между которыми переключается песочница: основная и
+/// вторая. Первая пара — та, с которой живёт приложение; остальные —
+/// дачные схемы с холста макетов, их показывали владельцу при выборе
+/// темы (specs/000-ui.md, раздел «Вид»).
+const _palettes = <String, (Color, Color)>{
+  'Ситец': (Color(0xFFC7323C), Color(0xFF2F5AA8)),
+  'Трава': (Color(0xFF4C7A3F), Color(0xFF7E6338)),
+  'Хвоя': (Color(0xFF2E5F4C), Color(0xFF8A6A3E)),
+  'Мох': (Color(0xFF667A33), Color(0xFF7A5B46)),
+  'Небо': (Color(0xFF3F6E96), Color(0xFF8F6520)),
+  'Дерево': (Color(0xFF7A5236), Color(0xFF52753F)),
+  'Солнце': (Color(0xFF96681A), Color(0xFF4A6B85)),
+  'Иван-чай': (Color(0xFF7A5F8C), Color(0xFF5C7A55)),
+  'Грядка': (Color(0xFF6B4F3A), Color(0xFF4F7A4A)),
 };
 
 class GalleryScreen extends StatefulWidget {
@@ -207,21 +212,29 @@ class _GalleryScreenState extends State<GalleryScreen> {
           const SizedBox(height: AppGap.medium),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text('Цвет', style: theme.textTheme.labelLarge),
+            child: Text('Краски', style: theme.textTheme.labelLarge),
           ),
           const SizedBox(height: AppGap.small),
           Wrap(
             spacing: AppGap.small,
             runSpacing: AppGap.small,
             children: [
-              for (final seed in _seeds.entries)
+              for (final palette in _palettes.entries)
                 ChoiceChip(
-                  label: Text(seed.key),
-                  avatar: CircleAvatar(backgroundColor: seed.value),
-                  selected: _tuning.seed == seed.value,
+                  label: Text(palette.key),
+                  avatar: _TwoTone(
+                    primary: palette.value.$1,
+                    secondary: palette.value.$2,
+                  ),
+                  selected:
+                      _tuning.primary == palette.value.$1 &&
+                      _tuning.secondary == palette.value.$2,
                   onSelected: (_) {
                     setState(
-                      () => _tuning = _tuning.copyWith(seed: seed.value),
+                      () => _tuning = _tuning.copyWith(
+                        primary: palette.value.$1,
+                        secondary: palette.value.$2,
+                      ),
                     );
                   },
                 ),
@@ -260,6 +273,17 @@ class _GalleryScreenState extends State<GalleryScreen> {
             format: (v) => '${v.round()} dp',
             onChanged: (v) =>
                 setState(() => _tuning = _tuning.copyWith(inputRadius: v)),
+          ),
+          _slider(
+            theme,
+            label: 'Скругление карточки',
+            value: _tuning.cardRadius,
+            min: 0,
+            max: 28,
+            divisions: 14,
+            format: (v) => '${v.round()} dp',
+            onChanged: (v) =>
+                setState(() => _tuning = _tuning.copyWith(cardRadius: v)),
           ),
 
           const SizedBox(height: AppGap.medium),
@@ -363,6 +387,44 @@ class _GalleryScreenState extends State<GalleryScreen> {
         style: theme.textTheme.titleMedium?.copyWith(
           color: theme.colorScheme.primary,
         ),
+      ),
+    );
+  }
+}
+
+/// Две краски схемы одним значком: основная кружком, вторая — уголком
+/// поверх него. Так в списке видно пару, а не один цвет из двух.
+class _TwoTone extends StatelessWidget {
+  const _TwoTone({required this.primary, required this.secondary});
+
+  final Color primary;
+  final Color secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: primary, shape: BoxShape.circle),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: secondary,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

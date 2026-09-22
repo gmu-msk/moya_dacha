@@ -72,6 +72,23 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Шрифты темы «Ситец» лежат в репозитории, а не качаются в рантайме:
+  # на дачной связи скачивать шрифт при первом запуске нечем, а без него
+  # приложение выглядело бы каждый раз по-разному. Оба шрифта под OFL,
+  # лицензии лежат рядом с файлами в mobile/fonts/. Файлы обрезаны до
+  # кириллицы, латиницы и знаков препинания — отсюда их размер.
+  fonts:
+    - family: Rubik
+      fonts:
+        - asset: fonts/Rubik-SemiBold.ttf
+          weight: 600
+    - family: Golos Text
+      fonts:
+        - asset: fonts/GolosText-Regular.ttf
+          weight: 400
+        - asset: fonts/GolosText-Medium.ttf
+          weight: 500
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

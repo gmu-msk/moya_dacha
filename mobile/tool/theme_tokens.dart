@@ -1,10 +1,10 @@
 // Числа темы для макета: цвета обеих палитр и размеры текста.
 //
 // Макет экрана рисуется не на глаз, а из этих значений (specs/000-ui.md,
-// раздел «Макеты»). Считает их сам Flutter: палитру выводит
-// `ColorScheme.fromSeed` из цвета-семени, а размеры текста появляются
-// только после того, как `MaterialApp` домешает в тему геометрию, —
-// поэтому это прогон в тестовом окружении, а не обычный скрипт.
+// раздел «Макеты»). Считает их сам Flutter: палитру выводит `appTheme`
+// из двух красок темы, а размеры текста появляются только после того,
+// как `MaterialApp` домешает в тему геометрию, — поэтому это прогон
+// в тестовом окружении, а не обычный скрипт.
 //
 // Запускать через `make theme-tokens`: он прогоняет этот файл и печатает
 // то, что между маркерами.
@@ -59,17 +59,28 @@ void main() {
       },
       'кнопка': {'наименьшаяВысота': tuning.tapTargetHeight},
       'поляВвода': {'скругление': tuning.inputRadius},
-      'шрифт': {'множитель': tuning.fontScale},
+      'карточка': {
+        'скругление': tuning.cardRadius,
+        'кант': AppShape.hairline,
+      },
+      'фотография': {'скругление': AppShape.photo},
+      'шрифт': {
+        'множитель': tuning.fontScale,
+        'заголовки': 'Rubik 600',
+        'текст': 'Golos Text 400/500',
+      },
     };
 
     for (final brightness in Brightness.values) {
       late TextTheme textTheme;
+      late ColorScheme colorScheme;
       await tester.pumpWidget(
         MaterialApp(
           theme: appTheme(brightness),
           home: Builder(
             builder: (context) {
               textTheme = Theme.of(context).textTheme;
+              colorScheme = Theme.of(context).colorScheme;
               return const SizedBox.shrink();
             },
           ),
@@ -78,9 +89,7 @@ void main() {
 
       final name = brightness == Brightness.light ? 'светлая' : 'тёмная';
       out[name] = {
-        'цвета': colors(
-          ColorScheme.fromSeed(seedColor: tuning.seed, brightness: brightness),
-        ),
+        'цвета': colors(colorScheme),
         'размерыТекста': textSizes(textTheme),
       };
     }

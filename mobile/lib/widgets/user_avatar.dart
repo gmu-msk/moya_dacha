@@ -23,6 +23,11 @@ abstract final class AvatarRadius {
   static const inProfile = 56.0;
 }
 
+/// Чей аватар: свой или соседа. От этого зависит краска заливки —
+/// имена и аватары авторов в ленте идут второй краской темы, свой аватар
+/// в заголовке экрана — основной.
+enum AvatarTone { own, author }
+
 class UserAvatar extends StatelessWidget {
   const UserAvatar({super.key, required this.user, this.radius = 24});
 
@@ -30,8 +35,12 @@ class UserAvatar extends StatelessWidget {
   final double radius;
 
   @override
-  Widget build(BuildContext context) =>
-      Avatar(name: user.name, link: user.avatarUrl, radius: radius);
+  Widget build(BuildContext context) => Avatar(
+    name: user.name,
+    link: user.avatarUrl,
+    radius: radius,
+    tone: AvatarTone.own,
+  );
 }
 
 /// Аватар автора — то же самое для публичного представления пользователя:
@@ -53,29 +62,35 @@ class Avatar extends StatelessWidget {
     required this.name,
     required this.link,
     this.radius = 24,
+    this.tone = AvatarTone.author,
   });
 
   final String name;
   final String? link;
   final double radius;
+  final AvatarTone tone;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final link = this.link;
+    final own = tone == AvatarTone.own;
+    final background = own
+        ? theme.colorScheme.primaryContainer
+        : theme.colorScheme.secondaryContainer;
+    final foreground = own
+        ? theme.colorScheme.onPrimaryContainer
+        : theme.colorScheme.onSecondaryContainer;
 
     return CircleAvatar(
       radius: radius,
-      backgroundColor: theme.colorScheme.primaryContainer,
+      backgroundColor: background,
       foregroundImage: link == null || link.isEmpty
           ? null
           : NetworkImage(mediaUrl(link)),
       child: Text(
         _initial(name),
-        style: TextStyle(
-          fontSize: radius * 0.8,
-          color: theme.colorScheme.onPrimaryContainer,
-        ),
+        style: TextStyle(fontSize: radius * 0.8, color: foreground),
       ),
     );
   }

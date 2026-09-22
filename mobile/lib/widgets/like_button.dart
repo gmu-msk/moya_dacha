@@ -110,7 +110,9 @@ class _LikeButtonState extends State<LikeButton> {
       count: _likes,
       tooltip: _liked ? 'Убрать отметку' : 'Нравится',
       onPressed: _toggle,
-      color: _liked ? theme.colorScheme.primary : null,
+      // Краска у сердечка одна и та же: отмечено оно или нет, видно
+      // по заливке значка, а не по цвету (specs/000-ui.md, правило 7).
+      color: theme.colorScheme.primary,
     );
   }
 }
