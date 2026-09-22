@@ -221,6 +221,8 @@ class ApiClient {
           return SessionInfo.fromJson(value);
         case 'SessionRequest':
           return SessionRequest.fromJson(value);
+        case 'UserProfile':
+          return UserProfile.fromJson(value);
         default:
           dynamic match;
           if (value is List && (match = _regList.firstMatch(targetType)?.group(1)) != null) {

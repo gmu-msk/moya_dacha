@@ -44,7 +44,7 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 		after = &parsed
 	}
 
-	page, err := s.feedPage(ctx, current.user.Id, after, limit)
+	page, err := s.feedPage(ctx, current.user.Id, "", after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -55,13 +55,21 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 // viewerID нужен, чтобы у каждого поста был признак «я отметил»
 // (specs/005-likes.md, требование 4). Число комментариев приходит там
 // же: в ленте видно, где разговор идёт (specs/006-comments.md).
-func (s *Server) feedPage(ctx context.Context, viewerID string, after *feedCursor, limit int) (gen.Feed, error) {
+//
+// authorID сужает ленту до постов одного человека — так страницами
+// отдаются посты в профиле (specs/009-user-profile.md). Пустой — лента
+// всех.
+func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, after *feedCursor, limit int) (gen.Feed, error) {
 	var (
 		afterTime *time.Time
 		afterID   *string
 	)
 	if after != nil {
 		afterTime, afterID = &after.createdAt, &after.id
+	}
+	var author *string
+	if authorID != "" {
+		author = &authorID
 	}
 
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
@@ -75,10 +83,11 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, after *feedCurso
 			),
 			(SELECT count(*) FROM comments c WHERE c.post_id = p.id)
 		FROM posts p JOIN users u ON u.id = p.author_id
-		WHERE $1::timestamptz IS NULL
-		   OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid)
+		WHERE ($5::uuid IS NULL OR p.author_id = $5::uuid)
+		  AND ($1::timestamptz IS NULL
+		       OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid))
 		ORDER BY p.created_at DESC, p.id DESC
-		LIMIT $3`, afterTime, afterID, limit+1, viewerID)
+		LIMIT $3`, afterTime, afterID, limit+1, viewerID, author)
 	if err != nil {
 		return gen.Feed{}, err
 	}

@@ -13,6 +13,7 @@ import '../widgets/comments_view.dart';
 import '../widgets/confirm.dart';
 import '../widgets/like_button.dart';
 import '../widgets/report_dialog.dart';
+import 'user_screen.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({
@@ -114,6 +115,21 @@ class _PostScreenState extends State<PostScreen> {
     );
   }
 
+  /// Профиль автора поста или комментария (specs/009-user-profile.md,
+  /// требование 9).
+  void _openAuthor(Author author) => openUserProfile(
+    context,
+    token: widget.token,
+    viewerId: widget.viewerId,
+    userId: author.id,
+    onPostChanged: (updated) {
+      if (updated.id == post.id) {
+        setState(() => post = updated);
+        widget.onChanged?.call(updated);
+      }
+    },
+  );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -139,7 +155,11 @@ class _PostScreenState extends State<PostScreen> {
       ],
       child: ListView(
         children: [
-          AuthorLine(author: post.author, when: post.createdAt),
+          AuthorLine(
+            author: post.author,
+            when: post.createdAt,
+            onTap: () => _openAuthor(post.author),
+          ),
           for (final media in post.media)
             Padding(
               padding: const EdgeInsets.only(bottom: AppGap.small),
@@ -178,6 +198,7 @@ class _PostScreenState extends State<PostScreen> {
             token: widget.token,
             viewerId: widget.viewerId,
             onChanged: _reload,
+            onOpenAuthor: _openAuthor,
           ),
         ],
       ),

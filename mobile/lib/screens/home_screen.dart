@@ -2,8 +2,9 @@
 //
 // Всё, что до ленты, экран делает ради неё: узнаёт, кто вошёл, и, если
 // человек ещё не знакомился, показывает знакомство (specs/002-profile.md).
-// Дальше он отдаёт место постам: аватар в заголовке ведёт в профиль,
-// кнопка внизу — к новому посту.
+// Дальше он отдаёт место постам: аватар в заголовке ведёт в свой профиль,
+// имя автора поста — в его (specs/009-user-profile.md), кнопка внизу —
+// к новому посту.
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
@@ -16,7 +17,7 @@ import '../widgets/user_avatar.dart';
 import 'intro_screen.dart';
 import 'new_post_screen.dart';
 import 'post_screen.dart';
-import 'profile_screen.dart';
+import 'user_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -70,22 +71,29 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _openProfile(CurrentUser user) async {
-    final updated = await Navigator.of(context).push<CurrentUser>(
-      MaterialPageRoute(
-        builder: (_) => ProfileScreen(
-          token: widget.token,
-          user: user,
-          onSignedOut: widget.onSignedOut,
-        ),
-      ),
-    );
-    if (updated != null && mounted) {
-      setState(() => _user = updated);
-      // Имя и аватар автора лежат в каждом посте, поэтому после правки
-      // профиля лента показывает старые, пока её не перечитать.
-      _feed.currentState?.refresh();
+  /// Профиль человека: свой — из заголовка, чужой — по автору поста.
+  Future<void> _openProfile(String userId) async {
+    final user = _user;
+    if (user == null) {
+      return;
     }
+    await openUserProfile(
+      context,
+      token: widget.token,
+      viewerId: user.id,
+      userId: userId,
+      onPostChanged: (post) => _feed.currentState?.replace(post),
+      onPostDeleted: () => _feed.currentState?.refresh(),
+      onProfileEdited: (updated) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _user = updated);
+        // Имя и аватар автора лежат в каждом посте, поэтому после правки
+        // профиля лента показывает старые, пока её не перечитать.
+        _feed.currentState?.refresh();
+      },
+    );
   }
 
   Future<void> _newPost() async {
@@ -154,6 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
         token: widget.token,
         onOpenPost: _openPost,
         onNewPost: _newPost,
+        onOpenAuthor: (author) => _openProfile(author.id),
       );
     } else if (error != null) {
       body = ErrorView(message: error, onRetry: _load);
@@ -169,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (user != null)
           IconButton(
             tooltip: 'Профиль',
-            onPressed: () => _openProfile(user),
+            onPressed: () => _openProfile(user.id),
             icon: UserAvatar(user: user, radius: AvatarRadius.inBar),
           ),
       ],

@@ -9,12 +9,21 @@ import 'package:moya_dacha_api/api.dart';
 import 'user_avatar.dart';
 
 class AuthorLine extends StatelessWidget {
-  const AuthorLine({super.key, required this.author, required this.when});
+  const AuthorLine({
+    super.key,
+    required this.author,
+    required this.when,
+    this.onTap,
+  });
 
   final Author author;
 
   /// Когда пост выложен.
   final DateTime when;
+
+  /// Открыть профиль автора: имя и аватар ведут к нему
+  /// (specs/009-user-profile.md, требование 9).
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +31,7 @@ class AuthorLine extends StatelessWidget {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      onTap: onTap,
       leading: AuthorAvatar(author: author, radius: AvatarRadius.inPost),
       // Имя — вторая краска темы: по ней видно, где кончается один пост
       // и начинается следующий, даже когда фотографии похожи.
@@ -61,18 +71,18 @@ String whenPosted(DateTime moment, {DateTime? from}) {
     return 'только что';
   }
   if (passed.inMinutes < 60) {
-    return '${_count(passed.inMinutes, 'минуту', 'минуты', 'минут')} назад';
+    return '${countWord(passed.inMinutes, 'минуту', 'минуты', 'минут')} назад';
   }
 
   final days = _calendarDays(local, now);
   if (days == 0) {
-    return '${_count(passed.inHours, 'час', 'часа', 'часов')} назад';
+    return '${countWord(passed.inHours, 'час', 'часа', 'часов')} назад';
   }
   if (days == 1) {
     return 'вчера';
   }
   if (days < 7) {
-    return '${_count(days, 'день', 'дня', 'дней')} назад';
+    return '${countWord(days, 'день', 'дня', 'дней')} назад';
   }
 
   final months = _calendarMonths(local, now);
@@ -80,19 +90,19 @@ String whenPosted(DateTime moment, {DateTime? from}) {
     final weeks = days ~/ 7;
     return weeks == 1
         ? 'на прошлой неделе'
-        : '${_count(weeks, 'неделю', 'недели', 'недель')} назад';
+        : '${countWord(weeks, 'неделю', 'недели', 'недель')} назад';
   }
   if (months == 1) {
     return 'в прошлом месяце';
   }
   if (months < 12) {
-    return '${_count(months, 'месяц', 'месяца', 'месяцев')} назад';
+    return '${countWord(months, 'месяц', 'месяца', 'месяцев')} назад';
   }
 
   final years = months ~/ 12;
   return years == 1
       ? 'в прошлом году'
-      : '${_count(years, 'год', 'года', 'лет')} назад';
+      : '${countWord(years, 'год', 'года', 'лет')} назад';
 }
 
 /// Сколько календарных дней между двумя моментами: полночь считается
@@ -114,7 +124,7 @@ int _calendarMonths(DateTime from, DateTime to) {
 }
 
 /// Число со словом в нужном падеже: 1 минуту, 2 минуты, 5 минут.
-String _count(int number, String one, String few, String many) {
+String countWord(int number, String one, String few, String many) {
   final lastTwo = number % 100;
   final last = number % 10;
 

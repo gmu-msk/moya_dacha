@@ -30,12 +30,16 @@ class FeedView extends StatefulWidget {
     required this.token,
     required this.onOpenPost,
     required this.onNewPost,
+    this.onOpenAuthor,
   });
 
   final String token;
 
   /// Открыть пост целиком: все фотографии и подпись.
   final void Function(Post post) onOpenPost;
+
+  /// Открыть профиль автора поста (specs/009-user-profile.md).
+  final void Function(Author author)? onOpenAuthor;
 
   /// Выложить первый пост — из пустой ленты.
   final VoidCallback onNewPost;
@@ -214,6 +218,7 @@ class FeedViewState extends State<FeedView> {
             token: widget.token,
             onTap: () => widget.onOpenPost(post),
             onChanged: replace,
+            onOpenAuthor: widget.onOpenAuthor,
           );
         },
       ),
@@ -248,6 +253,8 @@ class FeedPostCard extends StatelessWidget {
     required this.token,
     required this.onTap,
     required this.onChanged,
+    this.onOpenAuthor,
+    this.showAuthor = true,
   });
 
   final Post post;
@@ -256,6 +263,14 @@ class FeedPostCard extends StatelessWidget {
 
   /// Пост изменился: его лайкнули прямо здесь.
   final void Function(Post post) onChanged;
+
+  /// Открыть профиль автора: касанием имени или аватара.
+  final void Function(Author author)? onOpenAuthor;
+
+  /// Показывать ли строку автора. В постах одного человека её нет: автор
+  /// один и назван в заголовке экрана (specs/009-user-profile.md,
+  /// требование 11) — остаётся только время.
+  final bool showAuthor;
 
   /// Сколько строк подписи видно в ленте.
   static const captionLines = 3;
@@ -276,7 +291,24 @@ class FeedPostCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AuthorLine(author: post.author, when: post.createdAt),
+              if (showAuthor)
+                AuthorLine(
+                  author: post.author,
+                  when: post.createdAt,
+                  onTap: onOpenAuthor == null
+                      ? null
+                      : () => onOpenAuthor!(post.author),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppGap.small),
+                  child: Text(
+                    whenPosted(post.createdAt),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               if (photo != null)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppShape.photo),

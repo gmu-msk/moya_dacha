@@ -110,6 +110,7 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
 
     return AppScope(
       restart: _restart,
+      signOut: _signedOut,
       child: MaterialApp(
         title: 'МояДача',
         navigatorKey: _navigator,

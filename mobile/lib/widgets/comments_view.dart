@@ -25,6 +25,7 @@ class CommentsView extends StatefulWidget {
     required this.token,
     required this.viewerId,
     required this.onChanged,
+    this.onOpenAuthor,
   });
 
   final String postId;
@@ -39,6 +40,10 @@ class CommentsView extends StatefulWidget {
   /// показать его должны все, кто этот пост показывает
   /// (specs/006-comments.md, требование 7).
   final VoidCallback onChanged;
+
+  /// Открыть профиль того, кто написал комментарий
+  /// (specs/009-user-profile.md, требование 9).
+  final void Function(Author author)? onOpenAuthor;
 
   @override
   State<CommentsView> createState() => _CommentsViewState();
@@ -201,6 +206,9 @@ class _CommentsViewState extends State<CommentsView> {
               mine: comment.author.id == widget.viewerId,
               onDelete: () => _delete(comment),
               onReport: () => _report(comment),
+              onOpenAuthor: widget.onOpenAuthor == null
+                  ? null
+                  : () => widget.onOpenAuthor!(comment.author),
             ),
         const SizedBox(height: AppGap.medium),
         _Composer(controller: _text, sending: _sending, onSend: _send),
@@ -216,6 +224,7 @@ class _CommentTile extends StatelessWidget {
     required this.mine,
     required this.onDelete,
     required this.onReport,
+    this.onOpenAuthor,
   });
 
   final Comment comment;
@@ -226,6 +235,7 @@ class _CommentTile extends StatelessWidget {
 
   final VoidCallback onDelete;
   final VoidCallback onReport;
+  final VoidCallback? onOpenAuthor;
 
   @override
   Widget build(BuildContext context) {
@@ -242,6 +252,7 @@ class _CommentTile extends StatelessWidget {
                 child: AuthorLine(
                   author: comment.author,
                   when: comment.createdAt,
+                  onTap: onOpenAuthor,
                 ),
               ),
               if (mine)
