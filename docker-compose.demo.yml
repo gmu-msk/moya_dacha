@@ -46,7 +46,8 @@ services:
     environment:
       DATABASE_URL: postgres://moya_dacha:moya_dacha@postgres:5432/moya_dacha?sslmode=disable
       # Стенд под конкретный сценарий показа: поверх общих данных льются
-      # данные этого сценария (demo/stories/README.md). Пусто — только общие.
+      # данные этого сценария (demo/stories/README.md). Пусто — «Живая дача»,
+      # demo/stories/000-dacha.
       DEMO_STORY: "${DEMO_STORY:-}"
     volumes:
       - ./demo/seed.sh:/usr/local/bin/seed.sh:ro
