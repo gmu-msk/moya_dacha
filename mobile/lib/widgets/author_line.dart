@@ -18,10 +18,19 @@ class AuthorLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: AuthorAvatar(author: author, radius: AvatarRadius.inPost),
-      title: Text(author.name),
+      // Имя — вторая краска темы: по ней видно, где кончается один пост
+      // и начинается следующий, даже когда фотографии похожи.
+      title: Text(
+        author.name,
+        style: theme.textTheme.titleMedium?.copyWith(
+          color: theme.colorScheme.secondary,
+        ),
+      ),
       subtitle: Text(whenPosted(when)),
     );
   }

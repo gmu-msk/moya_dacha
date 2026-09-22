@@ -265,69 +265,84 @@ class FeedPostCard extends StatelessWidget {
     final theme = Theme.of(context);
     final photo = post.media.isEmpty ? null : post.media.first;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppGap.small),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AuthorLine(author: post.author, when: post.createdAt),
-          if (photo != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppGap.small),
-              child: Stack(
-                children: [
-                  AspectRatio(
-                    // Размеры приходят вместе с постом, поэтому место под
-                    // фотографию занято до её загрузки и лента не дёргается
-                    // (specs/004-feed.md, требование 10).
-                    aspectRatio: photo.height == 0
-                        ? 1
-                        : photo.width / photo.height,
-                    child: Image.network(mediaUrl(photo.url), fit: BoxFit.cover),
-                  ),
-                  if (post.media.length > 1) ...[
-                    Positioned(
-                      top: AppGap.small,
-                      right: AppGap.small,
-                      child: _PhotoCount(count: post.media.length),
-                    ),
-                    // Точки по нижнему краю: по ним видно, что фотография
-                    // не одна, ещё до того, как прочитано «1/4».
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: AppGap.small,
-                      child: _PhotoDots(count: post.media.length),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          if (post.caption.isNotEmpty) ...[
-            const SizedBox(height: AppGap.tiny),
-            Text(
-              post.caption,
-              style: theme.textTheme.bodyLarge,
-              maxLines: captionLines,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          Row(
+    // Пост — карточка на полотне: белая подложка, тонкий кант и
+    // скругление приходят из темы, экран их не повторяет (ADR-0012).
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppGap.medium),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              LikeButton(post: post, token: token, onChanged: onChanged),
-              // Число комментариев: по нему видно, где разговор идёт,
-              // а где ещё нет (specs/006-comments.md, требование 7).
-              // Сам разговор — на экране поста, поэтому кнопка ведёт туда.
-              PostAction(
-                icon: Icons.mode_comment_outlined,
-                count: post.comments,
-                tooltip: 'Комментарии',
-                onPressed: onTap,
+              AuthorLine(author: post.author, when: post.createdAt),
+              if (photo != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppShape.photo),
+                  child: Stack(
+                    children: [
+                      AspectRatio(
+                        // Размеры приходят вместе с постом, поэтому место
+                        // под фотографию занято до её загрузки и лента
+                        // не дёргается (specs/004-feed.md, требование 10).
+                        aspectRatio: photo.height == 0
+                            ? 1
+                            : photo.width / photo.height,
+                        child: Image.network(
+                          mediaUrl(photo.url),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      if (post.media.length > 1) ...[
+                        Positioned(
+                          top: AppGap.small,
+                          right: AppGap.small,
+                          child: _PhotoCount(count: post.media.length),
+                        ),
+                        // Точки по нижнему краю: по ним видно, что
+                        // фотография не одна, ещё до того, как прочитано
+                        // «1/4».
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: AppGap.small,
+                          child: _PhotoDots(count: post.media.length),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              if (post.caption.isNotEmpty) ...[
+                const SizedBox(height: AppGap.small),
+                Text(
+                  post.caption,
+                  style: theme.textTheme.bodyLarge,
+                  maxLines: captionLines,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              Row(
+                children: [
+                  LikeButton(post: post, token: token, onChanged: onChanged),
+                  // Число комментариев: по нему видно, где разговор идёт,
+                  // а где ещё нет (specs/006-comments.md, требование 7).
+                  // Сам разговор — на экране поста, поэтому кнопка ведёт
+                  // туда.
+                  PostAction(
+                    icon: Icons.mode_comment_outlined,
+                    count: post.comments,
+                    tooltip: 'Комментарии',
+                    onPressed: onTap,
+                    // Комментарии — вторая краска темы, отметка — основная:
+                    // в ряду под постом их видно порознь.
+                    color: theme.colorScheme.secondary,
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
