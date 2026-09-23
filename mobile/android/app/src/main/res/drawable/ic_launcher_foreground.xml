@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Передний слой иконки: светлый штакетник и мак на васильковом фоне
+     (фон — @color/ic_launcher_background). Исходник знака —
+     mobile/tool/logo/znak.svg, в заголовке тот же знак рисует
+     mobile/lib/widgets/app_logo.dart. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.44"
+        android:scaleY="0.44"
+        android:translateX="32"
+        android:translateY="32">
+        <path
+            android:pathData="M84,44 C86,36 86,28 83,20"
+            android:strokeColor="#4C7A3F"
+            android:strokeWidth="3"
+            android:strokeLineCap="round" />
+        <path
+            android:fillColor="#FFFCF5"
+            android:pathData="M12,44 L21,34 L30,44 L30,92 L12,92 Z M41,30 L50,20 L59,30 L59,92 L41,92 Z M70,44 L79,34 L88,44 L88,92 L70,92 Z M8,60 H92 A2,2 0 0 1 94,62 V65 A2,2 0 0 1 92,67 H8 A2,2 0 0 1 6,65 V62 A2,2 0 0 1 8,60 Z" />
+        <path
+            android:fillColor="#C7323C"
+            android:pathData="M65.92,10.559999999999999 a8.64,8.64 0 1,0 17.28,0 a8.64,8.64 0 1,0 -17.28,0 Z M80.80,10.559999999999999 a8.64,8.64 0 1,0 17.28,0 a8.64,8.64 0 1,0 -17.28,0 Z M80.80,25.44 a8.64,8.64 0 1,0 17.28,0 a8.64,8.64 0 1,0 -17.28,0 Z M65.92,25.44 a8.64,8.64 0 1,0 17.28,0 a8.64,8.64 0 1,0 -17.28,0 Z" />
+        <path
+            android:fillColor="#221E1A"
+            android:pathData="M77.92,18 a4.08,4.08 0 1,0 8.16,0 a4.08,4.08 0 1,0 -8.16,0 Z" />
+    </group>
+</vector>
