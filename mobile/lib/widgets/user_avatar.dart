@@ -12,6 +12,9 @@ abstract final class AvatarRadius {
   /// Кнопкой в заголовке экрана.
   static const inBar = 16.0;
 
+  /// Значком «Профиль» в нижней панели (specs/011-bottom-bar.md).
+  static const inBottomBar = 11.0;
+
   /// Рядом с постом и комментарием: вровень с двумя строками справа —
   /// именем и временем (specs/000-ui.md, правило 12).
   static const inPost = 24.0;

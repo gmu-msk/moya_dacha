@@ -10,6 +10,7 @@ import 'package:moya_dacha_api/api.dart';
 import '../api.dart';
 import '../theme.dart';
 import 'author_line.dart';
+import 'bottom_bar.dart';
 import 'empty_view.dart';
 import 'error_view.dart';
 import 'like_button.dart';
@@ -86,6 +87,10 @@ class FeedViewState extends State<FeedView> {
   /// Обновление ленты: первая страница запрашивается заново и показывается
   /// вместо накопленного (specs/004-feed.md, требование 12).
   Future<void> refresh() => _refresh();
+
+  /// К самому верху ленты: повторное касание «Ленты» в нижней панели
+  /// (specs/011-bottom-bar.md, требование 4).
+  Future<void> scrollToTop() => scrollBackToTop(_scroll);
 
   /// Показать пост заново: его лайкнули здесь или на экране поста,
   /// и в ленте должно быть то же число (specs/005-likes.md).

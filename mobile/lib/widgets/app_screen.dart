@@ -13,7 +13,6 @@ class AppScreen extends StatelessWidget {
     required this.child,
     this.title,
     this.actions,
-    this.floatingActionButton,
     this.padded = true,
     this.showServerStatus = true,
   });
@@ -26,12 +25,8 @@ class AppScreen extends StatelessWidget {
   /// (specs/000-ui.md, правило 14).
   final String? title;
 
-  /// Кнопки справа в заголовке: например, аватар, открывающий профиль.
+  /// Кнопки справа в заголовке: например, «пожаловаться» на экране поста.
   final List<Widget>? actions;
-
-  /// Главное действие экрана, если оно должно быть под рукой при
-  /// прокрутке: «Новый пост» в ленте.
-  final Widget? floatingActionButton;
 
   /// Поля по краям содержимого. Лента отступы задаёт себе сама:
   /// фотографии на маленьком экране должны идти во всю ширину.
@@ -49,12 +44,8 @@ class AppScreen extends StatelessWidget {
         title: title == null ? const AppLogo() : Text(title),
         // Логотип стоит с краю, слово — по центру, как Material 3 и просит.
         centerTitle: title == null ? false : null,
-        actions: [
-          if (showServerStatus) const ServerStatus(),
-          ...?actions,
-        ],
+        actions: [if (showServerStatus) const ServerStatus(), ...?actions],
       ),
-      floatingActionButton: floatingActionButton,
       body: SafeArea(
         child: Padding(
           padding: padded
