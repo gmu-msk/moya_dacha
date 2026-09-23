@@ -97,3 +97,4 @@ Android, раздача через **внутреннее тестировани
 - [specs/007-deletion.md](007-deletion.md) — готово
 - specs/008-reports.md
 - [specs/009-user-profile.md](009-user-profile.md) — профиль пользователя для соседей, после MVP-списка
+- [specs/011-bottom-bar.md](011-bottom-bar.md) — нижняя панель: лента, новый пост, профиль

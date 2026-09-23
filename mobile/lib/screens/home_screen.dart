@@ -1,30 +1,27 @@
-// Главный экран — лента (specs/004-feed.md).
+// Главный экран — лента и свой профиль под нижней панелью
+// (specs/004-feed.md, specs/011-bottom-bar.md).
 //
 // Всё, что до ленты, экран делает ради неё: узнаёт, кто вошёл, и, если
 // человек ещё не знакомился, показывает знакомство (specs/002-profile.md).
-// Дальше он отдаёт место постам: аватар в заголовке ведёт в свой профиль,
-// имя автора поста — в его (specs/009-user-profile.md), кнопка внизу —
-// к новому посту.
+// Дальше внизу встаёт панель: «Лента», «Новый пост» и «Профиль». Лента и
+// профиль — разделы, оба живут здесь и помнят, где их оставили; новый
+// пост и чужой профиль открываются поверх.
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 import '../widgets/app_screen.dart';
+import '../widgets/bottom_bar.dart';
 import '../widgets/error_view.dart';
 import '../widgets/feed_view.dart';
 import '../widgets/loading_view.dart';
-import '../widgets/user_avatar.dart';
 import 'intro_screen.dart';
 import 'new_post_screen.dart';
 import 'post_screen.dart';
 import 'user_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    required this.token,
-    required this.onSignedOut,
-  });
+  const HomeScreen({super.key, required this.token, required this.onSignedOut});
 
   final String token;
 
@@ -37,9 +34,15 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<FeedViewState> _feed = GlobalKey<FeedViewState>();
+  final GlobalKey<UserScreenState> _profile = GlobalKey<UserScreenState>();
 
   CurrentUser? _user;
   String? _error;
+  HomeTab _tab = HomeTab.feed;
+
+  /// Профиль строится при первом касании «Профиля», а не при входе:
+  /// кто туда не заходил, не ждёт лишнего запроса.
+  bool _profileOpened = false;
 
   @override
   void initState() {
@@ -73,10 +76,51 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// Профиль человека: свой — из заголовка, чужой — по автору поста.
+  /// Касание раздела в нижней панели. Касание уже открытого возвращает
+  /// его к самому верху (specs/011-bottom-bar.md, требование 4).
+  void _select(HomeTab tab) {
+    if (tab == _tab) {
+      switch (tab) {
+        case HomeTab.feed:
+          _feed.currentState?.scrollToTop();
+        case HomeTab.profile:
+          _profile.currentState?.scrollToTop();
+      }
+      return;
+    }
+    setState(() {
+      _tab = tab;
+      _profileOpened = _profileOpened || tab == HomeTab.profile;
+    });
+  }
+
+  /// Свой пост выложен или удалён: он должен появиться или исчезнуть
+  /// и в ленте, и в сетке своего профиля (specs/011-bottom-bar.md,
+  /// требование 8).
+  void _ownPostsChanged() {
+    _feed.currentState?.refresh();
+    _profile.currentState?.refresh();
+  }
+
+  /// Свой никнейм или аватар поправили: они в панели и в каждом своём
+  /// посте ленты, поэтому лента перечитывается.
+  void _profileEdited(CurrentUser updated) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _user = updated);
+    _feed.currentState?.refresh();
+  }
+
+  /// Профиль человека по автору поста. Свой — раздел «Профиль», а не
+  /// второй экран поверх ленты (specs/011-bottom-bar.md, требование 7).
   Future<void> _openProfile(String userId) async {
     final user = _user;
     if (user == null) {
+      return;
+    }
+    if (userId == user.id) {
+      _select(HomeTab.profile);
       return;
     }
     await openUserProfile(
@@ -85,19 +129,15 @@ class _HomeScreenState extends State<HomeScreen> {
       viewerId: user.id,
       userId: userId,
       onPostChanged: (post) => _feed.currentState?.replace(post),
-      onPostDeleted: () => _feed.currentState?.refresh(),
-      onProfileEdited: (updated) {
-        if (!mounted) {
-          return;
-        }
-        setState(() => _user = updated);
-        // Никнейм и аватар автора лежат в каждом посте, поэтому после правки
-        // профиля лента показывает старые, пока её не перечитать.
-        _feed.currentState?.refresh();
-      },
+      onPostDeleted: _ownPostsChanged,
+      onProfileEdited: _profileEdited,
     );
   }
 
+  /// «Новый пост» в панели или в пустой ленте. Опубликовав, человек видит
+  /// свой пост, а закрыв его — ленту с самого верха, где его пост первый
+  /// (specs/011-bottom-bar.md, требование 5; specs/004-feed.md,
+  /// требование 8).
   Future<void> _newPost() async {
     final user = _user;
     final post = await Navigator.of(context).push<Post>(
@@ -108,16 +148,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PostScreen(
-          post: post,
-          token: widget.token,
-          viewerId: user.id,
-        ),
+        builder: (_) =>
+            PostScreen(post: post, token: widget.token, viewerId: user.id),
       ),
     );
-    // Свой пост человек должен увидеть первым в ленте, вернувшись
-    // с экрана поста (specs/004-feed.md, требование 8).
-    _feed.currentState?.refresh();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _tab = HomeTab.feed);
+    _feed.currentState?.scrollToTop();
+    _ownPostsChanged();
   }
 
   Future<void> _openPost(Post post) async {
@@ -139,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Пост удалён: в ленте его больше нет, и показывать его там нельзя
     // (specs/007-deletion.md, требование 7).
     if (deleted == true) {
-      _feed.currentState?.refresh();
+      _ownPostsChanged();
     }
   }
 
@@ -159,43 +199,65 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    final Widget body;
-    if (user != null) {
-      body = FeedView(
+    if (user == null) {
+      // Пока неизвестно, кто вошёл, панели нет: без человека нечем
+      // показать профиль (specs/011-bottom-bar.md, «Ограничения»).
+      return AppScreen(
+        padded: false,
+        child: error != null
+            ? ErrorView(message: error, onRetry: _load)
+            : const LoadingView(label: 'Открываю ленту…'),
+      );
+    }
+
+    final feed = AppScreen(
+      // Заголовка нет: на главном экране в заголовке стоит логотип
+      // (specs/000-ui.md, правило 14).
+      padded: false,
+      child: FeedView(
         key: _feed,
         token: widget.token,
         onOpenPost: _openPost,
         onNewPost: _newPost,
         onOpenAuthor: (author) => _openProfile(author.id),
-      );
-    } else if (error != null) {
-      body = ErrorView(message: error, onRetry: _load);
-    } else {
-      body = const LoadingView(label: 'Открываю ленту…');
-    }
+      ),
+    );
 
-    return AppScreen(
-      // Заголовка нет: на главном экране в заголовке стоит логотип
-      // (specs/000-ui.md, правило 14).
-      padded: false,
-      actions: [
-        if (user != null)
-          IconButton(
-            tooltip: 'Профиль',
-            onPressed: () => _openProfile(user.id),
-            icon: UserAvatar(user: user, radius: AvatarRadius.inBar),
-          ),
-      ],
-      floatingActionButton: user == null
-          ? null
-          // Кнопка без подписи: значок фотоаппарата понятен и сам,
-          // а подпись занимает половину ширины экрана.
-          : FloatingActionButton(
-              onPressed: _newPost,
-              tooltip: 'Новый пост',
-              child: const Icon(Icons.add_a_photo_outlined),
-            ),
-      child: body,
+    return PopScope(
+      // «Назад» в профиле возвращает в ленту, а не закрывает приложение
+      // (specs/011-bottom-bar.md, требование 9).
+      canPop: _tab == HomeTab.feed,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          setState(() => _tab = HomeTab.feed);
+        }
+      },
+      child: Scaffold(
+        body: IndexedStack(
+          index: _tab.index,
+          children: [
+            feed,
+            if (_profileOpened)
+              UserScreen(
+                key: _profile,
+                token: widget.token,
+                viewerId: user.id,
+                userId: user.id,
+                onPostChanged: (post) => _feed.currentState?.replace(post),
+                onPostDeleted: () => _feed.currentState?.refresh(),
+                onProfileEdited: _profileEdited,
+              )
+            else
+              const SizedBox.shrink(),
+          ],
+        ),
+        bottomNavigationBar: AppBottomBar(
+          tab: _tab,
+          user: user,
+          onSelect: _select,
+          onNewPost: _newPost,
+        ),
+      ),
     );
   }
 }

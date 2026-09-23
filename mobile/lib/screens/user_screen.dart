@@ -12,6 +12,7 @@ import '../app_scope.dart';
 import '../theme.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
+import '../widgets/bottom_bar.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading_view.dart';
@@ -79,10 +80,10 @@ class UserScreen extends StatefulWidget {
   final void Function(CurrentUser user)? onProfileEdited;
 
   @override
-  State<UserScreen> createState() => _UserScreenState();
+  State<UserScreen> createState() => UserScreenState();
 }
 
-class _UserScreenState extends State<UserScreen> {
+class UserScreenState extends State<UserScreen> {
   final ScrollController _scroll = ScrollController();
   late final UserPostsPager _posts = UserPostsPager(
     token: widget.token,
@@ -112,6 +113,14 @@ class _UserScreenState extends State<UserScreen> {
   }
 
   void _onPosts() => setState(() {});
+
+  /// Перечитать профиль: свой пост выложен или удалён в ленте, а профиль
+  /// открыт разделом нижней панели (specs/011-bottom-bar.md, требование 8).
+  Future<void> refresh() => _load();
+
+  /// К самому верху профиля: повторное касание «Профиля» в нижней панели
+  /// (specs/011-bottom-bar.md, требование 4).
+  Future<void> scrollToTop() => scrollBackToTop(_scroll);
 
   void _onScroll() {
     if (!_scroll.hasClients) {
