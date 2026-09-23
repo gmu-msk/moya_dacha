@@ -142,6 +142,16 @@ abstract final class AppShape {
   static const hairline = 1.5;
 }
 
+/// Краски логотипа, которых нет в палитре Material. Штакетник и мак
+/// логотип берёт из темы (василёк и мак), а зелень стебля — отсюда:
+/// больше зелёного в приложении нигде нет (specs/000-ui.md, «Логотип»).
+abstract final class AppBrand {
+  /// Стебель мака: в тёмной теме светлее, чтобы не пропал на фоне.
+  static Color stem(Brightness brightness) => brightness == Brightness.light
+      ? const Color(0xFF4C7A3F)
+      : const Color(0xFF86B070);
+}
+
 /// Нейтраль «Ситца» — тёплое белое полотно и белая карточка на нём.
 /// От выбранных красок не зависит: меняются краски, полотно остаётся.
 ColorScheme _neutral(ColorScheme scheme, Brightness brightness) {

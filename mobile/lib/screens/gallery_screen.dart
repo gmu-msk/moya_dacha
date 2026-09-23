@@ -16,6 +16,7 @@ import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import '../widgets/app_logo.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
@@ -109,6 +110,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
       child: ListView(
         children: [
           _playground(theme),
+
+          _section(theme, 'Логотип'),
+          const Align(alignment: Alignment.centerLeft, child: AppLogo()),
 
           _section(theme, 'Текст'),
           Text('Заголовок экрана', style: theme.textTheme.titleLarge),
