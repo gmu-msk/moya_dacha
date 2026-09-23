@@ -35,6 +35,8 @@ void main() {
     id: '00000000-0000-0000-0000-000000000001',
     phone: '+79000000001',
     createdAt: DateTime(2026, 4, 1),
+    nickname: 'petya_kamaz',
+    nicknameChosen: true,
     name: 'Пётр',
     about: 'Три сотки под картошку',
   );
@@ -47,7 +49,7 @@ void main() {
     id: '00000000-0000-0000-0000-000000000002',
     createdAt: DateTime(2026, 6, 1, 9, 30),
     caption: 'Первая клубника в этом году',
-    author: Author(id: user.id, name: user.name),
+    author: Author(id: user.id, nickname: user.nickname, name: user.name),
     media: [],
     likes: 2,
     liked: true,
@@ -66,7 +68,11 @@ void main() {
     });
 
     testWidgets('знакомство рисуется в $theme теме', (tester) async {
-      await _pump(tester, brightness, IntroScreen(token: 'т', onDone: (_) {}));
+      await _pump(
+        tester,
+        brightness,
+        IntroScreen(token: 'т', user: user, onDone: (_) {}),
+      );
     });
 
     testWidgets('профиль рисуется в $theme теме', (tester) async {

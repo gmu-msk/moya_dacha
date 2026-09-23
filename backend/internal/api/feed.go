@@ -75,7 +75,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, after 
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
 	// только отвечает на вопрос «есть ли что-то дальше».
 	rows, err := s.db.Query(ctx, `
-		SELECT p.id, p.created_at, p.caption, u.id, u.name, u.avatar_key,
+		SELECT p.id, p.created_at, p.caption, u.id, u.nickname, u.name, u.avatar_key,
 			(SELECT count(*) FROM post_likes l WHERE l.post_id = p.id),
 			EXISTS (
 				SELECT 1 FROM post_likes l
@@ -101,7 +101,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, after 
 		)
 		if err := rows.Scan(
 			&post.Id, &post.CreatedAt, &post.Caption,
-			&post.Author.Id, &post.Author.Name, &avatarKey,
+			&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 			&post.Likes, &post.Liked, &post.Comments,
 		); err != nil {
 			return gen.Feed{}, err

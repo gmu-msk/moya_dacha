@@ -51,7 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _error = null);
     try {
       final user = await ProfileApi(apiClient(token: widget.token)).getMe();
-      debugPrint('$logMarker screen=home user=${user?.id} name=${user?.name}');
+      debugPrint(
+        '$logMarker screen=home user=${user?.id} nickname=${user?.nickname}',
+      );
       if (!mounted) {
         return;
       }
@@ -89,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         setState(() => _user = updated);
-        // Имя и аватар автора лежат в каждом посте, поэтому после правки
+        // Никнейм и аватар автора лежат в каждом посте, поэтому после правки
         // профиля лента показывает старые, пока её не перечитать.
         _feed.currentState?.refresh();
       },
@@ -146,11 +148,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = _user;
     final error = _error;
 
-    // Имя пустое — пользователь ещё не знакомился. Это единственное
-    // состояние, в котором приложение не пускает дальше.
-    if (user != null && user.name.isEmpty) {
+    // Никнейм не выбран — пользователь ещё не знакомился или завёлся
+    // до никнеймов и носит временный. Это единственное состояние,
+    // в котором приложение не пускает дальше (specs/010-nicknames.md).
+    if (user != null && !user.nicknameChosen) {
       return IntroScreen(
         token: widget.token,
+        user: user,
         onDone: (introduced) => setState(() => _user = introduced),
       );
     }

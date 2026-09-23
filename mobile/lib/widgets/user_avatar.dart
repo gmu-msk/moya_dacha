@@ -36,7 +36,7 @@ class UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Avatar(
-    name: user.name,
+    name: user.nickname,
     link: user.avatarUrl,
     radius: radius,
     tone: AvatarTone.own,
@@ -53,7 +53,7 @@ class AuthorAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Avatar(name: author.name, link: author.avatarUrl, radius: radius);
+      Avatar(name: author.nickname, link: author.avatarUrl, radius: radius);
 }
 
 class Avatar extends StatelessWidget {

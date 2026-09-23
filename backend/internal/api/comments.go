@@ -82,7 +82,7 @@ func (s *Server) AddComment(ctx context.Context, request gen.AddCommentRequestOb
 			VALUES ($1, $2, $3)
 			RETURNING id, created_at, author_id, text
 		)
-		SELECT c.id, c.created_at, c.text, u.id, u.name, u.avatar_key
+		SELECT c.id, c.created_at, c.text, u.id, u.nickname, u.name, u.avatar_key
 		FROM added c JOIN users u ON u.id = c.author_id`,
 		request.PostId, current.user.Id, text)
 
@@ -114,7 +114,7 @@ func (s *Server) postExists(ctx context.Context, id string) (bool, error) {
 // (specs/006-comments.md, требование 5).
 func (s *Server) comments(ctx context.Context, postID string) ([]gen.Comment, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, c.created_at, c.text, u.id, u.name, u.avatar_key
+		SELECT c.id, c.created_at, c.text, u.id, u.nickname, u.name, u.avatar_key
 		FROM comments c JOIN users u ON u.id = c.author_id
 		WHERE c.post_id = $1
 		ORDER BY c.created_at, c.id`, postID)
@@ -150,7 +150,7 @@ func (s *Server) scanComment(row scannable) (gen.Comment, error) {
 	)
 	if err := row.Scan(
 		&comment.Id, &comment.CreatedAt, &comment.Text,
-		&comment.Author.Id, &comment.Author.Name, &avatarKey,
+		&comment.Author.Id, &comment.Author.Nickname, &comment.Author.Name, &avatarKey,
 	); err != nil {
 		return gen.Comment{}, err
 	}

@@ -99,6 +99,7 @@ Post _post({
   caption: 'Первая клубника в этом году',
   author: Author(
     id: '00000000-0000-0000-0000-000000000001',
+    nickname: 'kolya_kartofel',
     name: 'Николай',
   ),
   // Фотографий нет нарочно: Image.network в тесте ходить некуда, а

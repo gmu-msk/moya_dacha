@@ -26,6 +26,7 @@ const (
 // проверяется по сырому ответу, а не по этой структуре.
 type userProfilePayload struct {
 	ID        string  `json:"id"`
+	Nickname  string  `json:"nickname"`
 	Name      string  `json:"name"`
 	About     string  `json:"about"`
 	AvatarURL *string `json:"avatar_url"`

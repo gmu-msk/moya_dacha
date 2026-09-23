@@ -14,6 +14,7 @@ class UserProfile {
   /// Returns a new [UserProfile] instance.
   UserProfile({
     required this.id,
+    required this.nickname,
     required this.name,
     required this.about,
     this.avatarUrl,
@@ -24,7 +25,10 @@ class UserProfile {
   /// Идентификатор пользователя (UUID)
   String id;
 
-  /// Отображаемое имя
+  /// Никнейм — крупно на странице пользователя
+  String nickname;
+
+  /// Полное имя, может быть пустым; на странице — под никнеймом
   String name;
 
   /// Короткое «о себе», может быть пустым
@@ -42,6 +46,7 @@ class UserProfile {
   @override
   bool operator ==(Object other) => identical(this, other) || other is UserProfile &&
     other.id == id &&
+    other.nickname == nickname &&
     other.name == name &&
     other.about == about &&
     other.avatarUrl == avatarUrl &&
@@ -52,6 +57,7 @@ class UserProfile {
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (id.hashCode) +
+    (nickname.hashCode) +
     (name.hashCode) +
     (about.hashCode) +
     (avatarUrl == null ? 0 : avatarUrl!.hashCode) +
@@ -59,11 +65,12 @@ class UserProfile {
     (posts.hashCode);
 
   @override
-  String toString() => 'UserProfile[id=$id, name=$name, about=$about, avatarUrl=$avatarUrl, createdAt=$createdAt, posts=$posts]';
+  String toString() => 'UserProfile[id=$id, nickname=$nickname, name=$name, about=$about, avatarUrl=$avatarUrl, createdAt=$createdAt, posts=$posts]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
       json[r'id'] = this.id;
+      json[r'nickname'] = this.nickname;
       json[r'name'] = this.name;
       json[r'about'] = this.about;
     if (this.avatarUrl != null) {
@@ -89,6 +96,8 @@ class UserProfile {
       assert(() {
         assert(json.containsKey(r'id'), 'Required key "UserProfile[id]" is missing from JSON.');
         assert(json[r'id'] != null, 'Required key "UserProfile[id]" has a null value in JSON.');
+        assert(json.containsKey(r'nickname'), 'Required key "UserProfile[nickname]" is missing from JSON.');
+        assert(json[r'nickname'] != null, 'Required key "UserProfile[nickname]" has a null value in JSON.');
         assert(json.containsKey(r'name'), 'Required key "UserProfile[name]" is missing from JSON.');
         assert(json[r'name'] != null, 'Required key "UserProfile[name]" has a null value in JSON.');
         assert(json.containsKey(r'about'), 'Required key "UserProfile[about]" is missing from JSON.');
@@ -102,6 +111,7 @@ class UserProfile {
 
       return UserProfile(
         id: mapValueOfType<String>(json, r'id')!,
+        nickname: mapValueOfType<String>(json, r'nickname')!,
         name: mapValueOfType<String>(json, r'name')!,
         about: mapValueOfType<String>(json, r'about')!,
         avatarUrl: mapValueOfType<String>(json, r'avatar_url'),
@@ -155,6 +165,7 @@ class UserProfile {
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
     'id',
+    'nickname',
     'name',
     'about',
     'created_at',

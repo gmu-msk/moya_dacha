@@ -221,6 +221,8 @@ class _Auth implements AuthGateway {
         id: '00000000-0000-0000-0000-000000000001',
         phone: '+79152345678',
         createdAt: DateTime(2026, 4, 1),
+        nickname: 'petya_kamaz',
+        nicknameChosen: true,
         name: 'Пётр',
         about: '',
       ),

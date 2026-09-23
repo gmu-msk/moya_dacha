@@ -35,6 +35,7 @@ void main() {
     caption: 'Кот Василий охраняет рассаду',
     author: Author(
       id: '00000000-0000-0000-0000-000000000002',
+      nickname: 'valya_teplitsa',
       name: 'Валентина',
     ),
     // Фотографий нет нарочно: Image.network в тесте ходить некуда.
@@ -60,11 +61,11 @@ void main() {
       ),
     );
 
-    expect(find.text('Валентина'), findsNothing);
+    expect(find.text('valya_teplitsa'), findsNothing);
     expect(find.text('Кот Василий охраняет рассаду'), findsOneWidget);
   });
 
-  testWidgets('в ленте имя автора открывает его профиль', (tester) async {
+  testWidgets('в ленте никнейм автора открывает его профиль', (tester) async {
     Author? opened;
     await tester.pumpWidget(
       MaterialApp(
@@ -81,7 +82,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Валентина'));
+    await tester.tap(find.text('valya_teplitsa'));
     expect(opened?.id, post.author.id);
   });
 }

@@ -177,10 +177,11 @@ paths:
 
     put:
       operationId: updateMe
-      summary: Изменить имя и «о себе»
+      summary: Изменить полное имя и «о себе»
       description: |
         Замена обоих полей сразу, а не частичное изменение: пустое
-        `about` очищает поле.
+        `about` или `name` очищает поле. Никнейм меняется отдельно —
+        `PUT /me/nickname`.
       tags: [profile]
       security:
         - bearerAuth: []
@@ -199,7 +200,7 @@ paths:
                 $ref: "#/components/schemas/CurrentUser"
         "400":
           description: |
-            Имя пустое или слишком длинное (`invalid_name`),
+            Имя слишком длинное или не в одну строку (`invalid_name`),
             «о себе» слишком длинное (`invalid_about`)
           content:
             application/json:
@@ -207,6 +208,51 @@ paths:
                 $ref: "#/components/schemas/Error"
         "401":
           description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/nickname:
+    put:
+      operationId: setNickname
+      summary: Выбрать или сменить никнейм
+      description: |
+        Никнейм уникален без учёта регистра и хранится так, как его ввели.
+        После успешной смены `nickname_chosen` становится `true`.
+        Свой же никнейм в другом регистре — не ошибка. См. specs/010-nicknames.md.
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NicknameUpdate"
+      responses:
+        "200":
+          description: Никнейм сохранён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "400":
+          description: |
+            Никнейм не подходит под правила (`invalid_nickname`) или тело
+            запроса не разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Никнейм занят другим пользователем (`nickname_taken`)
           content:
             application/json:
               schema:
@@ -1061,12 +1107,24 @@ components:
         Пользователь, каким его видит он сам. Номер телефона возвращается
         только владельцу сессии и не входит в публичное представление
         автора — см. CONTEXT.md.
-      required: [id, phone, created_at, name, about]
+      required: [id, phone, created_at, nickname, nickname_chosen, name, about]
       properties:
         id:
           type: string
           description: Идентификатор пользователя (UUID)
           example: "0b3f4d3a-1d2e-4a5b-8c7d-9e0f1a2b3c4d"
+        nickname:
+          type: string
+          description: |
+            Уникальный никнейм: им пользователь подписан везде. Пока
+            пользователь не выбрал его сам, он временный — `dachnik_…`.
+          example: "Valya_dacha"
+        nickname_chosen:
+          type: boolean
+          description: |
+            Выбран ли никнейм самим пользователем. Пока `false`, приложение
+            показывает экран знакомства.
+          example: true
         phone:
           type: string
           description: Нормализованный номер телефона
@@ -1077,9 +1135,7 @@ components:
           description: Когда пользователь зарегистрировался
         name:
           type: string
-          description: |
-            Отображаемое имя. Пустая строка означает, что пользователь ещё
-            не знакомился: приложение показывает ему экран знакомства.
+          description: Полное имя, может быть пустым
           example: "Николай"
         about:
           type: string
@@ -1093,13 +1149,24 @@ components:
             относительной — клиент достраивает её до адреса сервиса.
           example: "/media/avatars/6f1c8a2b4d5e6f70.jpg"
 
+    NicknameUpdate:
+      type: object
+      required: [nickname]
+      properties:
+        nickname:
+          type: string
+          description: |
+            От 3 до 20 символов: латинские буквы, цифры и `_`. Пробелы
+            по краям обрезаются.
+          example: "Valya_dacha"
+
     ProfileUpdate:
       type: object
       required: [name]
       properties:
         name:
           type: string
-          description: Отображаемое имя, от 1 до 50 символов, одна строка
+          description: Полное имя, до 50 символов, одна строка, может быть пустым
           example: "Николай"
         about:
           type: string
@@ -1235,15 +1302,19 @@ components:
         Публичное представление пользователя: то, чем он подписан рядом
         с постом, комментарием и лайком. Номер телефона в него не входит
         и входить не может — см. CONTEXT.md.
-      required: [id, name]
+      required: [id, nickname, name]
       properties:
         id:
           type: string
           description: Идентификатор пользователя (UUID)
           example: "0b3f4d3a-1d2e-4a5b-8c7d-9e0f1a2b3c4d"
+        nickname:
+          type: string
+          description: Никнейм — им автор подписан
+          example: "Kolya_58"
         name:
           type: string
-          description: Отображаемое имя
+          description: Полное имя, может быть пустым
           example: "Николай"
         avatar_url:
           type: string
@@ -1258,15 +1329,19 @@ components:
       description: |
         Пользователь, каким его видят соседи: публичное представление автора
         и то, что о себе рассказал он сам. Номера телефона нет — см. CONTEXT.md.
-      required: [id, name, about, created_at, posts]
+      required: [id, nickname, name, about, created_at, posts]
       properties:
         id:
           type: string
           description: Идентификатор пользователя (UUID)
           example: "0b3f4d3a-1d2e-4a5b-8c7d-9e0f1a2b3c4d"
+        nickname:
+          type: string
+          description: Никнейм — крупно на странице пользователя
+          example: "Valya_dacha"
         name:
           type: string
-          description: Отображаемое имя
+          description: Полное имя, может быть пустым; на странице — под никнеймом
           example: "Валентина"
         about:
           type: string

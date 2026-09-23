@@ -32,6 +32,8 @@ final _someone = CurrentUser(
   id: '00000000-0000-0000-0000-000000000000',
   phone: '+79000000000',
   createdAt: DateTime(2026),
+  nickname: 'petya_kamaz',
+  nicknameChosen: true,
   name: 'Пётр',
   about: '',
 );
