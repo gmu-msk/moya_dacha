@@ -196,8 +196,8 @@ func avatarOf(t *testing.T, baseURL, token string, content []byte) string {
 // --- GET /api/me: мой профиль --------------------------------------------
 
 // У только что зарегистрировавшегося пользователя имя и «о себе» пустые,
-// аватара нет: приложение показывает ему экран знакомства
-// (ФТ-1, «API / контракт данных»).
+// аватара нет (ФТ-1, «API / контракт данных»). Экран знакомства теперь
+// показывается по nickname_chosen — это проверяет nicknames_test.go.
 func TestProfileOfNewUserIsEmptyAndReadyForIntroduction(t *testing.T) {
 	baseURL := startAPI(t)
 
@@ -364,8 +364,9 @@ func TestUpdateProfileTrimsSpacesAroundName(t *testing.T) {
 	}
 }
 
-// Имя обязательно: пустое или из одних пробелов — 400 invalid_name.
-func TestUpdateProfileRejectsEmptyOrBlankName(t *testing.T) {
+// С 010-nicknames имя необязательно: пустое или из одних пробелов — 200,
+// и прежнее имя очищается («Ограничения и edge cases»).
+func TestUpdateProfileClearsNameWhenItIsEmptyOrBlank(t *testing.T) {
 	names := map[string]string{
 		"пустое":       "",
 		"один пробел":  " ",
@@ -377,14 +378,21 @@ func TestUpdateProfileRejectsEmptyOrBlankName(t *testing.T) {
 			baseURL := startAPI(t)
 
 			token, _ := signIn(t, baseURL, phonePretty)
+			introduce(t, baseURL, token, profileName)
 
-			resp := updateProfile(t, baseURL, token, map[string]any{"name": name, "about": ""})
+			resp := updateProfile(t, baseURL, token, map[string]any{"name": name, "about": profileAbout})
+			profile := profileOK(t, resp)
 
-			if resp.StatusCode != http.StatusBadRequest {
-				t.Fatalf("на имя %q ожидался статус 400, получен %d", name, resp.StatusCode)
+			if profile.Name != "" {
+				t.Errorf("на имя %q ожидалось пустое имя, получено %q", name, profile.Name)
 			}
-			if code := errorCode(t, resp); code != "invalid_name" {
-				t.Fatalf("ожидалась ошибка invalid_name, получена %q", code)
+			if profile.About != profileAbout {
+				t.Errorf("ожидалось «о себе» %q, получено %q", profileAbout, profile.About)
+			}
+
+			stored := profileOK(t, getProfile(t, baseURL, token))
+			if stored.Name != "" {
+				t.Errorf("после сохранения ожидалось пустое имя, получено %q", stored.Name)
 			}
 		})
 	}

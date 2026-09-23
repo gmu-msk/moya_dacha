@@ -229,14 +229,14 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		avatarKey *string
 	)
 	if err := s.db.QueryRow(ctx, `
-		SELECT p.id, p.created_at, p.caption, u.id, u.name, u.avatar_key,
+		SELECT p.id, p.created_at, p.caption, u.id, u.nickname, u.name, u.avatar_key,
 			`+likeColumns+`,
 			`+commentColumn+`
 		FROM posts p JOIN users u ON u.id = p.author_id
 		WHERE p.id = $1`, id, viewerID,
 	).Scan(
 		&post.Id, &post.CreatedAt, &post.Caption,
-		&post.Author.Id, &post.Author.Name, &avatarKey,
+		&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 		&post.Likes, &post.Liked, &post.Comments,
 	); err != nil {
 		return gen.Post{}, err

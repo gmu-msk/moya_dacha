@@ -52,11 +52,13 @@ JOIN valentina_photos f ON f.k = (g + 1) % (SELECT count(*) FROM valentina_photo
 
 -- Зинаида: пришла позавчера, без аватара и без постов. Её профиль
 -- открывается по имени под комментарием.
-INSERT INTO users (id, phone, created_at, name, about)
+INSERT INTO users (id, phone, created_at, nickname, nickname_chosen, name, about)
 VALUES (
 	'16161616-1616-4616-8616-161616161616',
 	'+79000000016',
 	now() - interval '2 days',
+	'zina_novaya',
+	true,
 	'Зинаида',
 	''
 );

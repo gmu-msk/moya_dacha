@@ -46,6 +46,7 @@ part 'model/error.dart';
 part 'model/feed.dart';
 part 'model/health.dart';
 part 'model/media.dart';
+part 'model/nickname_update.dart';
 part 'model/post.dart';
 part 'model/post_draft.dart';
 part 'model/profile_update.dart';

@@ -1,4 +1,5 @@
-// Правка своего профиля: имя, «о себе» и аватар (specs/002-profile.md).
+// Правка своего профиля: никнейм, полное имя, «о себе» и аватар
+// (specs/002-profile.md, specs/010-nicknames.md).
 //
 // Всё, что здесь видно, принадлежит владельцу токена, и номер телефона
 // показывается только здесь. Открывается кнопкой «Изменить профиль» из
@@ -37,6 +38,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late CurrentUser _user = widget.user;
+  late final TextEditingController _nickname = TextEditingController(
+    text: _user.nickname,
+  );
   late final TextEditingController _name = TextEditingController(
     text: _user.name,
   );
@@ -44,6 +48,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     text: _user.about,
   );
 
+  /// Ошибка никнейма — под его полем, остальные — под кнопкой.
+  String? _nicknameError;
   String? _error;
   String? _saved;
   bool _busy = false;
@@ -52,6 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    _nickname.dispose();
     _name.dispose();
     _about.dispose();
     super.dispose();
@@ -65,6 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ) async {
     setState(() {
       _busy = true;
+      _nicknameError = null;
       _error = null;
       _saved = null;
     });
@@ -80,6 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       setState(() {
         _user = user;
+        _nickname.text = user.nickname;
         _name.text = user.name;
         _about.text = user.about;
         _busy = false;
@@ -90,17 +99,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) {
         return;
       }
+      final code = serviceErrorCode(error);
       setState(() {
         _busy = false;
-        _error = errorMessage(error);
+        if (code == 'invalid_nickname' || code == 'nickname_taken') {
+          _nicknameError = errorMessage(error);
+        } else {
+          _error = errorMessage(error);
+        }
       });
     }
   }
 
-  Future<void> _save() => _change(
-    () => _api.updateMe(ProfileUpdate(name: _name.text, about: _about.text)),
-    'Сохранено',
-  );
+  /// Никнейм меняется отдельной операцией и только если он правда
+  /// другой: занятым может оказаться лишь новый (specs/010-nicknames.md).
+  Future<void> _save() => _change(() async {
+    if (_nickname.text.trim() != _user.nickname) {
+      await _api.setNickname(NicknameUpdate(nickname: _nickname.text));
+    }
+    return _api.updateMe(ProfileUpdate(name: _name.text, about: _about.text));
+  }, 'Сохранено');
 
   Future<void> _pickAvatar() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -140,7 +158,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return PopScope(
       // Наверх возвращается свежий профиль: и свой профиль, и шапка ленты
-      // показывают имя и аватар и должны показывать те, что в сервисе.
+      // показывают никнейм и аватар и должны показывать те, что в сервисе.
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
@@ -177,11 +195,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: AppGap.large),
             TextField(
+              controller: _nickname,
+              enabled: !_busy,
+              keyboardType: TextInputType.visiblePassword,
+              autocorrect: false,
+              enableSuggestions: false,
+              inputFormatters: [LengthLimitingTextInputFormatter(20)],
+              decoration: InputDecoration(
+                labelText: 'Никнейм',
+                helperText: 'Латиница, цифры и _, от 3 до 20 символов',
+                errorText: _nicknameError,
+                errorMaxLines: 2,
+              ),
+            ),
+            const SizedBox(height: AppGap.medium),
+            TextField(
               controller: _name,
               enabled: !_busy,
               textCapitalization: TextCapitalization.words,
               inputFormatters: [LengthLimitingTextInputFormatter(50)],
-              decoration: const InputDecoration(labelText: 'Имя'),
+              decoration: const InputDecoration(labelText: 'Полное имя'),
             ),
             const SizedBox(height: AppGap.medium),
             TextField(

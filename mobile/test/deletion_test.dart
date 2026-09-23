@@ -62,7 +62,7 @@ Future<void> _pumpPost(
     id: '00000000-0000-0000-0000-00000000000a',
     createdAt: DateTime(2026, 6, 1, 9, 30),
     caption: 'Первая клубника в этом году',
-    author: Author(id: authorId, name: 'Николай'),
+    author: Author(id: authorId, nickname: 'kolya_kartofel', name: 'Николай'),
     // Фотографий нет нарочно: Image.network в тесте ходить некуда
     // (сами фотографии — на показе, ADR-0009).
     media: [],

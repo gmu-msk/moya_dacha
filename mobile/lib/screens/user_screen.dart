@@ -207,7 +207,7 @@ class _UserScreenState extends State<UserScreen> {
           builder: (_) => UserPostsScreen(
             posts: _posts,
             startAt: index,
-            title: profile.name,
+            title: profile.nickname,
             token: widget.token,
             viewerId: widget.viewerId,
             onPostChanged: widget.onPostChanged,
@@ -286,7 +286,7 @@ class _UserScreenState extends State<UserScreen> {
                 title: 'Постов пока нет',
                 hint: _mine
                     ? 'Выложите первый — он появится здесь и в ленте'
-                    : 'Когда ${profile.name} что-нибудь выложит, '
+                    : 'Когда ${profile.nickname} что-нибудь выложит, '
                           'это появится здесь и в ленте',
               ),
             ),
@@ -329,7 +329,7 @@ class _UserScreenState extends State<UserScreen> {
   }
 }
 
-/// Кто это: аватар, имя, сколько постов, с какого времени здесь
+/// Кто это: аватар, никнейм и полное имя, сколько постов, с какого времени здесь
 /// и «о себе» (specs/009-user-profile.md, требование 1).
 class _Header extends StatelessWidget {
   const _Header({required this.profile, required this.mine});
@@ -350,7 +350,7 @@ class _Header extends StatelessWidget {
         Row(
           children: [
             Avatar(
-              name: profile.name,
+              name: profile.nickname,
               link: profile.avatarUrl,
               radius: AvatarRadius.onScreen,
               tone: mine ? AvatarTone.own : AvatarTone.author,
@@ -360,13 +360,17 @@ class _Header extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Имя — вторая краска темы, как у автора в ленте.
+                  // Никнейм — вторая краска темы, как у автора в ленте,
+                  // полное имя под ним, если человек его указал
+                  // (specs/010-nicknames.md, требование 9).
                   Text(
-                    profile.name,
+                    profile.nickname,
                     style: theme.textTheme.titleLarge?.copyWith(
                       color: theme.colorScheme.secondary,
                     ),
                   ),
+                  if (profile.name.isNotEmpty)
+                    Text(profile.name, style: theme.textTheme.titleMedium),
                   Text(postsCount(profile.posts), style: quiet),
                   Text(hereSince(profile.createdAt), style: quiet),
                 ],

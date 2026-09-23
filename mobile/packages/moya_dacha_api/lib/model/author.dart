@@ -14,6 +14,7 @@ class Author {
   /// Returns a new [Author] instance.
   Author({
     required this.id,
+    required this.nickname,
     required this.name,
     this.avatarUrl,
   });
@@ -21,7 +22,10 @@ class Author {
   /// Идентификатор пользователя (UUID)
   String id;
 
-  /// Отображаемое имя
+  /// Никнейм — им автор подписан
+  String nickname;
+
+  /// Полное имя, может быть пустым
   String name;
 
   /// Ссылка на аватар или `null`, если аватара нет. Может быть относительной — клиент достраивает её до адреса сервиса. 
@@ -30,6 +34,7 @@ class Author {
   @override
   bool operator ==(Object other) => identical(this, other) || other is Author &&
     other.id == id &&
+    other.nickname == nickname &&
     other.name == name &&
     other.avatarUrl == avatarUrl;
 
@@ -37,15 +42,17 @@ class Author {
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (id.hashCode) +
+    (nickname.hashCode) +
     (name.hashCode) +
     (avatarUrl == null ? 0 : avatarUrl!.hashCode);
 
   @override
-  String toString() => 'Author[id=$id, name=$name, avatarUrl=$avatarUrl]';
+  String toString() => 'Author[id=$id, nickname=$nickname, name=$name, avatarUrl=$avatarUrl]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
       json[r'id'] = this.id;
+      json[r'nickname'] = this.nickname;
       json[r'name'] = this.name;
     if (this.avatarUrl != null) {
       json[r'avatar_url'] = this.avatarUrl;
@@ -68,6 +75,8 @@ class Author {
       assert(() {
         assert(json.containsKey(r'id'), 'Required key "Author[id]" is missing from JSON.');
         assert(json[r'id'] != null, 'Required key "Author[id]" has a null value in JSON.');
+        assert(json.containsKey(r'nickname'), 'Required key "Author[nickname]" is missing from JSON.');
+        assert(json[r'nickname'] != null, 'Required key "Author[nickname]" has a null value in JSON.');
         assert(json.containsKey(r'name'), 'Required key "Author[name]" is missing from JSON.');
         assert(json[r'name'] != null, 'Required key "Author[name]" has a null value in JSON.');
         return true;
@@ -75,6 +84,7 @@ class Author {
 
       return Author(
         id: mapValueOfType<String>(json, r'id')!,
+        nickname: mapValueOfType<String>(json, r'nickname')!,
         name: mapValueOfType<String>(json, r'name')!,
         avatarUrl: mapValueOfType<String>(json, r'avatar_url'),
       );
@@ -125,6 +135,7 @@ class Author {
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
     'id',
+    'nickname',
     'name',
   };
 }

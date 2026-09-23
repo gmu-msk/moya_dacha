@@ -33,10 +33,10 @@ class AuthorLine extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       onTap: onTap,
       leading: AuthorAvatar(author: author, radius: AvatarRadius.inPost),
-      // Имя — вторая краска темы: по ней видно, где кончается один пост
+      // Никнейм — вторая краска темы: по ней видно, где кончается один пост
       // и начинается следующий, даже когда фотографии похожи.
       title: Text(
-        author.name,
+        author.nickname,
         style: theme.textTheme.titleMedium?.copyWith(
           color: theme.colorScheme.secondary,
         ),

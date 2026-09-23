@@ -25,6 +25,7 @@ lib/model/error.dart
 lib/model/feed.dart
 lib/model/health.dart
 lib/model/media.dart
+lib/model/nickname_update.dart
 lib/model/post.dart
 lib/model/post_draft.dart
 lib/model/profile_update.dart

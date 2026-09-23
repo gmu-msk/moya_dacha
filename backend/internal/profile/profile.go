@@ -1,9 +1,10 @@
-// Package profile — правила, которым подчиняются имя и «о себе»
-// (specs/002-profile.md).
+// Package profile — правила, которым подчиняются никнейм, имя и «о себе»
+// (specs/002-profile.md, specs/010-nicknames.md).
 package profile
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -16,22 +17,39 @@ const (
 	MaxAboutLength = 200
 )
 
+// nicknamePattern — никнейм целиком: от 3 до 20 латинских букв, цифр
+// и подчёркиваний.
+var nicknamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{3,20}$`)
+
 var (
-	// ErrInvalidName — имя пустое, слишком длинное или не одна строка.
+	// ErrInvalidNickname — никнейм не подходит под правила.
+	ErrInvalidNickname = errors.New("никнейм не подходит")
+	// ErrInvalidName — имя слишком длинное или не одна строка.
 	ErrInvalidName = errors.New("имя не подходит")
 	// ErrInvalidAbout — «о себе» слишком длинное или не одна строка.
 	ErrInvalidAbout = errors.New("«о себе» не подходит")
 )
 
-// NormalizeName проверяет имя и обрезает пробелы по краям.
-// Имя обязательно: пользователь без имени не подписан нигде.
+// NormalizeNickname проверяет никнейм и обрезает пробелы по краям.
+// Регистр не трогает: никнейм хранится так, как его ввели, а уникален
+// без учёта регистра — это забота базы.
+func NormalizeNickname(raw string) (string, error) {
+	nickname := strings.TrimSpace(raw)
+	if !nicknamePattern.MatchString(nickname) {
+		return "", ErrInvalidNickname
+	}
+	return nickname, nil
+}
+
+// NormalizeName проверяет полное имя и обрезает пробелы по краям.
+// Имя необязательно: пользователя подписывает никнейм.
 func NormalizeName(raw string) (string, error) {
 	if hasControl(raw) {
 		return "", ErrInvalidName
 	}
 
 	name := strings.TrimSpace(raw)
-	if name == "" || utf8.RuneCountInString(name) > MaxNameLength {
+	if utf8.RuneCountInString(name) > MaxNameLength {
 		return "", ErrInvalidName
 	}
 	return name, nil

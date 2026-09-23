@@ -14,6 +14,8 @@ class CurrentUser {
   /// Returns a new [CurrentUser] instance.
   CurrentUser({
     required this.id,
+    required this.nickname,
+    required this.nicknameChosen,
     required this.phone,
     required this.createdAt,
     required this.name,
@@ -24,13 +26,19 @@ class CurrentUser {
   /// Идентификатор пользователя (UUID)
   String id;
 
+  /// Уникальный никнейм: им пользователь подписан везде. Пока пользователь не выбрал его сам, он временный — `dachnik_…`. 
+  String nickname;
+
+  /// Выбран ли никнейм самим пользователем. Пока `false`, приложение показывает экран знакомства. 
+  bool nicknameChosen;
+
   /// Нормализованный номер телефона
   String phone;
 
   /// Когда пользователь зарегистрировался
   DateTime createdAt;
 
-  /// Отображаемое имя. Пустая строка означает, что пользователь ещё не знакомился: приложение показывает ему экран знакомства. 
+  /// Полное имя, может быть пустым
   String name;
 
   /// Короткое «о себе», может быть пустым
@@ -42,6 +50,8 @@ class CurrentUser {
   @override
   bool operator ==(Object other) => identical(this, other) || other is CurrentUser &&
     other.id == id &&
+    other.nickname == nickname &&
+    other.nicknameChosen == nicknameChosen &&
     other.phone == phone &&
     other.createdAt == createdAt &&
     other.name == name &&
@@ -52,6 +62,8 @@ class CurrentUser {
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (id.hashCode) +
+    (nickname.hashCode) +
+    (nicknameChosen.hashCode) +
     (phone.hashCode) +
     (createdAt.hashCode) +
     (name.hashCode) +
@@ -59,11 +71,13 @@ class CurrentUser {
     (avatarUrl == null ? 0 : avatarUrl!.hashCode);
 
   @override
-  String toString() => 'CurrentUser[id=$id, phone=$phone, createdAt=$createdAt, name=$name, about=$about, avatarUrl=$avatarUrl]';
+  String toString() => 'CurrentUser[id=$id, nickname=$nickname, nicknameChosen=$nicknameChosen, phone=$phone, createdAt=$createdAt, name=$name, about=$about, avatarUrl=$avatarUrl]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
       json[r'id'] = this.id;
+      json[r'nickname'] = this.nickname;
+      json[r'nickname_chosen'] = this.nicknameChosen;
       json[r'phone'] = this.phone;
       json[r'created_at'] = this.createdAt.toUtc().toIso8601String();
       json[r'name'] = this.name;
@@ -89,6 +103,10 @@ class CurrentUser {
       assert(() {
         assert(json.containsKey(r'id'), 'Required key "CurrentUser[id]" is missing from JSON.');
         assert(json[r'id'] != null, 'Required key "CurrentUser[id]" has a null value in JSON.');
+        assert(json.containsKey(r'nickname'), 'Required key "CurrentUser[nickname]" is missing from JSON.');
+        assert(json[r'nickname'] != null, 'Required key "CurrentUser[nickname]" has a null value in JSON.');
+        assert(json.containsKey(r'nickname_chosen'), 'Required key "CurrentUser[nickname_chosen]" is missing from JSON.');
+        assert(json[r'nickname_chosen'] != null, 'Required key "CurrentUser[nickname_chosen]" has a null value in JSON.');
         assert(json.containsKey(r'phone'), 'Required key "CurrentUser[phone]" is missing from JSON.');
         assert(json[r'phone'] != null, 'Required key "CurrentUser[phone]" has a null value in JSON.');
         assert(json.containsKey(r'created_at'), 'Required key "CurrentUser[created_at]" is missing from JSON.');
@@ -102,6 +120,8 @@ class CurrentUser {
 
       return CurrentUser(
         id: mapValueOfType<String>(json, r'id')!,
+        nickname: mapValueOfType<String>(json, r'nickname')!,
+        nicknameChosen: mapValueOfType<bool>(json, r'nickname_chosen')!,
         phone: mapValueOfType<String>(json, r'phone')!,
         createdAt: mapDateTime(json, r'created_at', r'')!,
         name: mapValueOfType<String>(json, r'name')!,
@@ -155,6 +175,8 @@ class CurrentUser {
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
     'id',
+    'nickname',
+    'nickname_chosen',
     'phone',
     'created_at',
     'name',

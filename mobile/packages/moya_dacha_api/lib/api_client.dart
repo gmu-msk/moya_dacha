@@ -207,6 +207,8 @@ class ApiClient {
           return Health.fromJson(value);
         case 'Media':
           return Media.fromJson(value);
+        case 'NicknameUpdate':
+          return NicknameUpdate.fromJson(value);
         case 'Post':
           return Post.fromJson(value);
         case 'PostDraft':

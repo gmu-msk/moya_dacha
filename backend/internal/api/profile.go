@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/gmu-msk/moya_dacha/backend/api/gen"
 	"github.com/gmu-msk/moya_dacha/backend/internal/media"
@@ -17,11 +18,11 @@ import (
 
 // userColumns — поля, из которых собирается профиль. Порядок совпадает
 // с scanUser: читать их из базы нужно везде одинаково.
-const userColumns = `id, phone, created_at, name, about, avatar_key`
+const userColumns = `id, phone, created_at, nickname, nickname_chosen, name, about, avatar_key`
 
 // userColumnsPrefixed — те же поля, когда в запросе несколько таблиц
 // и users названа u.
-const userColumnsPrefixed = `u.id, u.phone, u.created_at, u.name, u.about, u.avatar_key`
+const userColumnsPrefixed = `u.id, u.phone, u.created_at, u.nickname, u.nickname_chosen, u.name, u.about, u.avatar_key`
 
 // GetMe отдаёт профиль владельца токена.
 func (s *Server) GetMe(ctx context.Context, _ gen.GetMeRequestObject) (gen.GetMeResponseObject, error) {
@@ -32,7 +33,7 @@ func (s *Server) GetMe(ctx context.Context, _ gen.GetMeRequestObject) (gen.GetMe
 	return gen.GetMe200JSONResponse(current.user), nil
 }
 
-// UpdateMe меняет имя и «о себе» — оба поля сразу.
+// UpdateMe меняет полное имя и «о себе» — оба поля сразу.
 func (s *Server) UpdateMe(ctx context.Context, request gen.UpdateMeRequestObject) (gen.UpdateMeResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -65,6 +66,38 @@ func (s *Server) UpdateMe(ctx context.Context, request gen.UpdateMeRequestObject
 	}
 
 	return gen.UpdateMe200JSONResponse(user), nil
+}
+
+// SetNickname выбирает или меняет никнейм (specs/010-nicknames.md).
+// Занятость проверяет уникальный индекс по lower(nickname): проверка
+// перед записью не спасла бы от двух одновременных запросов.
+func (s *Server) SetNickname(ctx context.Context, request gen.SetNicknameRequestObject) (gen.SetNicknameResponseObject, error) {
+	current, ok := sessionFrom(ctx)
+	if !ok {
+		return gen.SetNickname401JSONResponse(errUnauthorized), nil
+	}
+	if request.Body == nil {
+		return gen.SetNickname400JSONResponse(errEmptyRequest), nil
+	}
+
+	nickname, err := profile.NormalizeNickname(request.Body.Nickname)
+	if err != nil {
+		return gen.SetNickname400JSONResponse(errInvalidNickname), nil
+	}
+
+	user, err := s.scanUser(s.db.QueryRow(ctx, `
+		UPDATE users SET nickname = $2, nickname_chosen = true
+		WHERE id = $1
+		RETURNING `+userColumns, current.user.Id, nickname))
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.ConstraintName == "users_nickname_lower_idx" {
+		return gen.SetNickname409JSONResponse(errNicknameTaken), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return gen.SetNickname200JSONResponse(user), nil
 }
 
 // SetAvatar принимает картинку, уменьшает её и делает аватаром.
@@ -173,7 +206,7 @@ func (s *Server) scanUser(row pgx.Row) (gen.CurrentUser, error) {
 	)
 	if err := row.Scan(
 		&user.Id, &user.Phone, &user.CreatedAt,
-		&user.Name, &user.About, &avatarKey,
+		&user.Nickname, &user.NicknameChosen, &user.Name, &user.About, &avatarKey,
 	); err != nil {
 		return gen.CurrentUser{}, err
 	}
@@ -224,7 +257,15 @@ func readUpload(form *multipart.Reader, field string, limit int) ([]byte, error)
 var (
 	errInvalidName = gen.Error{
 		Code:    "invalid_name",
-		Message: "Имя должно быть от 1 до 50 символов и в одну строку",
+		Message: "Имя — до 50 символов и в одну строку",
+	}
+	errInvalidNickname = gen.Error{
+		Code:    "invalid_nickname",
+		Message: "Никнейм — от 3 до 20 символов: латиница, цифры и _",
+	}
+	errNicknameTaken = gen.Error{
+		Code:    "nickname_taken",
+		Message: "Этот никнейм уже занят",
 	}
 	errInvalidAbout = gen.Error{
 		Code:    "invalid_about",

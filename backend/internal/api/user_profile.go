@@ -27,10 +27,10 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 		avatarKey *string
 	)
 	err := s.db.QueryRow(ctx, `
-		SELECT u.id, u.name, u.about, u.avatar_key, u.created_at,
+		SELECT u.id, u.nickname, u.name, u.about, u.avatar_key, u.created_at,
 			(SELECT count(*) FROM posts p WHERE p.author_id = u.id)
 		FROM users u WHERE u.id = $1`, request.UserId,
-	).Scan(&user.Id, &user.Name, &user.About, &avatarKey, &user.CreatedAt, &user.Posts)
+	).Scan(&user.Id, &user.Nickname, &user.Name, &user.About, &avatarKey, &user.CreatedAt, &user.Posts)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.GetUser404JSONResponse(errUserNotFound), nil
 	}

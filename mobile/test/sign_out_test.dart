@@ -26,6 +26,8 @@ void main() {
     id: '00000000-0000-0000-0000-000000000001',
     phone: '+79000000001',
     createdAt: DateTime(2026, 4, 1),
+    nickname: 'petya_kamaz',
+    nicknameChosen: true,
     name: 'Пётр',
     about: 'Три сотки под картошку',
   );

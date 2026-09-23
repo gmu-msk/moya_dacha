@@ -39,6 +39,7 @@ type mediaPayload struct {
 // Номера телефона в нём нет и быть не может (CONTEXT.md).
 type authorPayload struct {
 	ID        string  `json:"id"`
+	Nickname  string  `json:"nickname"`
 	Name      string  `json:"name"`
 	AvatarURL *string `json:"avatar_url"`
 }
