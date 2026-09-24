@@ -4,9 +4,12 @@
 // Всё, что до ленты, экран делает ради неё: узнаёт, кто вошёл, и, если
 // человек ещё не знакомился, показывает знакомство (specs/002-profile.md).
 // Дальше внизу встаёт панель: «Лента», «Новый пост» и «Профиль». Лента и
-// профиль — разделы, оба живут здесь и помнят, где их оставили; новый
-// пост и чужой профиль открываются поверх.
+// профиль — разделы. У каждого своя стопка экранов (Navigator): пост,
+// чужой профиль, правка профиля открываются внутри раздела, и панель
+// остаётся под ними. Поверх всего, без панели, — только новый пост
+// (specs/011-bottom-bar.md, требование 1).
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
@@ -35,6 +38,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<FeedViewState> _feed = GlobalKey<FeedViewState>();
   final GlobalKey<UserScreenState> _profile = GlobalKey<UserScreenState>();
+
+  /// Стопки экранов разделов.
+  final Map<HomeTab, GlobalKey<NavigatorState>> _stacks = {
+    for (final tab in HomeTab.values) tab: GlobalKey<NavigatorState>(),
+  };
 
   CurrentUser? _user;
   String? _error;
@@ -76,22 +84,44 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// Касание раздела в нижней панели. Касание уже открытого возвращает
-  /// его к самому верху (specs/011-bottom-bar.md, требование 4).
+  /// Касание раздела в нижней панели. Касание уже открытого закрывает
+  /// открытое в нём поверх, а если закрывать нечего — возвращает раздел
+  /// к самому верху (specs/011-bottom-bar.md, требование 4).
   void _select(HomeTab tab) {
-    if (tab == _tab) {
-      switch (tab) {
-        case HomeTab.feed:
-          _feed.currentState?.scrollToTop();
-        case HomeTab.profile:
-          _profile.currentState?.scrollToTop();
-      }
+    if (tab != _tab) {
+      setState(() {
+        _tab = tab;
+        _profileOpened = _profileOpened || tab == HomeTab.profile;
+      });
       return;
     }
-    setState(() {
-      _tab = tab;
-      _profileOpened = _profileOpened || tab == HomeTab.profile;
-    });
+    final stack = _stacks[tab]!.currentState;
+    if (stack != null && stack.canPop()) {
+      stack.popUntil((route) => route.isFirst);
+      return;
+    }
+    switch (tab) {
+      case HomeTab.feed:
+        _feed.currentState?.scrollToTop();
+      case HomeTab.profile:
+        _profile.currentState?.scrollToTop();
+    }
+  }
+
+  /// «Назад» телефона: закрывает открытое в разделе поверх, из профиля
+  /// возвращает в ленту, из ленты — закрывает приложение
+  /// (specs/011-bottom-bar.md, требование 9).
+  Future<void> _back() async {
+    final stack = _stacks[_tab]!.currentState;
+    // maybePop, а не pop: экран правки профиля сам решает, что вернуть.
+    if (stack != null && await stack.maybePop()) {
+      return;
+    }
+    if (_tab == HomeTab.profile) {
+      setState(() => _tab = HomeTab.feed);
+      return;
+    }
+    await SystemNavigator.pop();
   }
 
   /// Свой пост выложен или удалён: он должен появиться или исчезнуть
@@ -102,8 +132,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _profile.currentState?.refresh();
   }
 
-  /// Свой никнейм или аватар поправили: они в панели и в каждом своём
-  /// посте ленты, поэтому лента перечитывается.
+  /// Свой никнейм или аватар поправили: они в каждом своём посте ленты,
+  /// поэтому лента перечитывается.
   void _profileEdited(CurrentUser updated) {
     if (!mounted) {
       return;
@@ -111,6 +141,10 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _user = updated);
     _feed.currentState?.refresh();
   }
+
+  /// Стопка экранов ленты: пост и чужой профиль открываются в ней, под
+  /// панелью.
+  NavigatorState get _feedStack => _stacks[HomeTab.feed]!.currentState!;
 
   /// Профиль человека по автору поста. Свой — раздел «Профиль», а не
   /// второй экран поверх ленты (specs/011-bottom-bar.md, требование 7).
@@ -124,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     await openUserProfile(
-      context,
+      _feedStack.context,
       token: widget.token,
       viewerId: user.id,
       userId: userId,
@@ -134,30 +168,32 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// «Новый пост» в панели или в пустой ленте. Опубликовав, человек видит
-  /// свой пост, а закрыв его — ленту с самого верха, где его пост первый
+  /// «Новый пост» в панели или в пустой ленте. Экран создания — поверх
+  /// всего, без панели. Опубликовав, человек видит свой пост в ленте,
+  /// а закрыв его — ленту с самого верха, где его пост первый
   /// (specs/011-bottom-bar.md, требование 5; specs/004-feed.md,
   /// требование 8).
   Future<void> _newPost() async {
     final user = _user;
-    final post = await Navigator.of(context).push<Post>(
+    final post = await Navigator.of(context, rootNavigator: true).push<Post>(
       MaterialPageRoute(builder: (_) => NewPostScreen(token: widget.token)),
     );
     if (post == null || user == null || !mounted) {
       return;
     }
-    await Navigator.of(context).push(
+    setState(() => _tab = HomeTab.feed);
+    _feedStack.popUntil((route) => route.isFirst);
+    _feed.currentState?.scrollToTop();
+    _ownPostsChanged();
+    final deleted = await _feedStack.push<bool>(
       MaterialPageRoute(
         builder: (_) =>
             PostScreen(post: post, token: widget.token, viewerId: user.id),
       ),
     );
-    if (!mounted) {
-      return;
+    if (deleted == true) {
+      _ownPostsChanged();
     }
-    setState(() => _tab = HomeTab.feed);
-    _feed.currentState?.scrollToTop();
-    _ownPostsChanged();
   }
 
   Future<void> _openPost(Post post) async {
@@ -166,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final deleted = await Navigator.of(context).push<bool>(
+    final deleted = await _feedStack.push<bool>(
       MaterialPageRoute(
         builder: (_) => PostScreen(
           post: post,
@@ -182,6 +218,16 @@ class _HomeScreenState extends State<HomeScreen> {
       _ownPostsChanged();
     }
   }
+
+  /// Раздел — своя стопка экранов с первым экраном [root].
+  Widget _stack(HomeTab tab, Widget Function() root) => Navigator(
+    key: _stacks[tab],
+    // Первый экран строится заново при каждой перестройке главного:
+    // так в него доходят свежие сведения о том, кто вошёл.
+    onGenerateInitialRoutes: (_, _) => [
+      MaterialPageRoute<void>(builder: (_) => root()),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -210,42 +256,45 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    final feed = AppScreen(
-      // Заголовка нет: на главном экране в заголовке стоит логотип
-      // (specs/000-ui.md, правило 14).
-      padded: false,
-      child: FeedView(
-        key: _feed,
-        token: widget.token,
-        onOpenPost: _openPost,
-        onNewPost: _newPost,
-        onOpenAuthor: (author) => _openProfile(author.id),
-      ),
-    );
-
     return PopScope(
-      // «Назад» в профиле возвращает в ленту, а не закрывает приложение
-      // (specs/011-bottom-bar.md, требование 9).
-      canPop: _tab == HomeTab.feed,
+      // «Назад» решает главный экран: стопки разделов системе не видны.
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
-          setState(() => _tab = HomeTab.feed);
+          _back();
         }
       },
       child: Scaffold(
         body: IndexedStack(
           index: _tab.index,
           children: [
-            feed,
+            _stack(
+              HomeTab.feed,
+              () => AppScreen(
+                // Заголовка нет: на главном экране в заголовке стоит
+                // логотип (specs/000-ui.md, правило 14).
+                padded: false,
+                child: FeedView(
+                  key: _feed,
+                  token: widget.token,
+                  onOpenPost: _openPost,
+                  onNewPost: _newPost,
+                  onOpenAuthor: (author) => _openProfile(author.id),
+                ),
+              ),
+            ),
             if (_profileOpened)
-              UserScreen(
-                key: _profile,
-                token: widget.token,
-                viewerId: user.id,
-                userId: user.id,
-                onPostChanged: (post) => _feed.currentState?.replace(post),
-                onPostDeleted: () => _feed.currentState?.refresh(),
-                onProfileEdited: _profileEdited,
+              _stack(
+                HomeTab.profile,
+                () => UserScreen(
+                  key: _profile,
+                  token: widget.token,
+                  viewerId: user.id,
+                  userId: user.id,
+                  onPostChanged: (post) => _feed.currentState?.replace(post),
+                  onPostDeleted: () => _feed.currentState?.refresh(),
+                  onProfileEdited: _profileEdited,
+                ),
               )
             else
               const SizedBox.shrink(),
@@ -253,7 +302,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         bottomNavigationBar: AppBottomBar(
           tab: _tab,
-          user: user,
           onSelect: _select,
           onNewPost: _newPost,
         ),
