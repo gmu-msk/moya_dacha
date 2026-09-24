@@ -13,9 +13,13 @@ part of openapi.api;
 class AuthCodeAccepted {
   /// Returns a new [AuthCodeAccepted] instance.
   AuthCodeAccepted({
+    required this.delivery,
     required this.resendAfter,
     required this.codeTtl,
   });
+
+  /// Как человек получит код. `sent` — сервис отправил код на номер. `invite` — сервис в режиме приглашений, код у человека уже есть в приглашении, и сроки ниже равны нулю (specs/015-invites.md). 
+  AuthCodeAcceptedDeliveryEnum delivery;
 
   /// Через сколько секунд можно запросить код снова
   int resendAfter;
@@ -25,20 +29,23 @@ class AuthCodeAccepted {
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is AuthCodeAccepted &&
+    other.delivery == delivery &&
     other.resendAfter == resendAfter &&
     other.codeTtl == codeTtl;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
+    (delivery.hashCode) +
     (resendAfter.hashCode) +
     (codeTtl.hashCode);
 
   @override
-  String toString() => 'AuthCodeAccepted[resendAfter=$resendAfter, codeTtl=$codeTtl]';
+  String toString() => 'AuthCodeAccepted[delivery=$delivery, resendAfter=$resendAfter, codeTtl=$codeTtl]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+      json[r'delivery'] = this.delivery;
       json[r'resend_after'] = this.resendAfter;
       json[r'code_ttl'] = this.codeTtl;
     return json;
@@ -55,6 +62,8 @@ class AuthCodeAccepted {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
+        assert(json.containsKey(r'delivery'), 'Required key "AuthCodeAccepted[delivery]" is missing from JSON.');
+        assert(json[r'delivery'] != null, 'Required key "AuthCodeAccepted[delivery]" has a null value in JSON.');
         assert(json.containsKey(r'resend_after'), 'Required key "AuthCodeAccepted[resend_after]" is missing from JSON.');
         assert(json[r'resend_after'] != null, 'Required key "AuthCodeAccepted[resend_after]" has a null value in JSON.');
         assert(json.containsKey(r'code_ttl'), 'Required key "AuthCodeAccepted[code_ttl]" is missing from JSON.');
@@ -63,6 +72,7 @@ class AuthCodeAccepted {
       }());
 
       return AuthCodeAccepted(
+        delivery: AuthCodeAcceptedDeliveryEnum.fromJson(json[r'delivery'])!,
         resendAfter: mapValueOfType<int>(json, r'resend_after')!,
         codeTtl: mapValueOfType<int>(json, r'code_ttl')!,
       );
@@ -112,8 +122,87 @@ class AuthCodeAccepted {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
+    'delivery',
     'resend_after',
     'code_ttl',
   };
 }
+
+/// Как человек получит код. `sent` — сервис отправил код на номер. `invite` — сервис в режиме приглашений, код у человека уже есть в приглашении, и сроки ниже равны нулю (specs/015-invites.md). 
+enum AuthCodeAcceptedDeliveryEnum {
+  sent._(r'sent'),
+  invite._(r'invite'),
+  ;
+
+  /// Instantiate a new enum with the provided value.
+  const AuthCodeAcceptedDeliveryEnum._(this._value);
+
+  /// The underlying value of this enum member.
+  final String _value;
+
+  @override
+  String toString() => _value;
+
+  /// Encodes this enum as a value suitable for JSON.
+  String toJson() => _value;
+
+  /// Returns the instance of [AuthCodeAcceptedDeliveryEnum] that was successfully decoded
+  /// from the passed [value] on success, null otherwise.
+  static AuthCodeAcceptedDeliveryEnum? fromJson(dynamic value) => AuthCodeAcceptedDeliveryEnumTypeTransformer().decode(value);
+
+  /// Returns a [List] containing instances of [AuthCodeAcceptedDeliveryEnum]
+  /// that were successfully decoded from the passed [JSON][json].
+  static List<AuthCodeAcceptedDeliveryEnum> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <AuthCodeAcceptedDeliveryEnum>[];
+    if (json is List && json.isNotEmpty) {
+      for (final row in json) {
+        final value = AuthCodeAcceptedDeliveryEnum.fromJson(row);
+        if (value != null) {
+          result.add(value);
+        }
+      }
+    }
+    return result.toList(growable: growable);
+  }
+}
+
+/// Transformation class that can [encode] an instance of [AuthCodeAcceptedDeliveryEnum] to String,
+/// and [decode] dynamic data back to [AuthCodeAcceptedDeliveryEnum].
+class AuthCodeAcceptedDeliveryEnumTypeTransformer {
+  factory AuthCodeAcceptedDeliveryEnumTypeTransformer() => _instance ??= const AuthCodeAcceptedDeliveryEnumTypeTransformer._();
+
+  const AuthCodeAcceptedDeliveryEnumTypeTransformer._();
+
+  String encode(AuthCodeAcceptedDeliveryEnum data) => data._value;
+
+  /// Returns the instance of [AuthCodeAcceptedDeliveryEnum] that was successfully decoded
+  /// from the passed [data] value on success, null otherwise.
+  ///
+  /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
+  /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
+  /// cannot be decoded successfully, then an [UnimplementedError] is thrown.
+  ///
+  /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
+  /// and users are still using an old app with the old code.
+  AuthCodeAcceptedDeliveryEnum? decode(dynamic data, {bool allowNull = true}) {
+    if (data is AuthCodeAcceptedDeliveryEnum) {
+      return data;
+    }
+    if (data != null) {
+      switch (data) {
+        case r'sent': return AuthCodeAcceptedDeliveryEnum.sent;
+        case r'invite': return AuthCodeAcceptedDeliveryEnum.invite;
+        default:
+          if (!allowNull) {
+            throw ArgumentError('Unknown enum value to decode: $data');
+          }
+      }
+    }
+    return null;
+  }
+
+  /// The singleton instance of this transformer.
+  static AuthCodeAcceptedDeliveryEnumTypeTransformer? _instance;
+}
+
 

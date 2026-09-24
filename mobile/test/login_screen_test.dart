@@ -119,7 +119,12 @@ void main() {
     tester,
   ) async {
     final auth = _Auth()
-      ..codeError = _refusal(429, 'too_many_requests', 'На этот номер код уже отправлен', retryAfter: 3);
+      ..codeError = _refusal(
+        429,
+        'too_many_requests',
+        'На этот номер код уже отправлен',
+        retryAfter: 3,
+      );
     await _pump(tester, auth);
 
     await _typePhone(tester, '9152345678');
@@ -145,7 +150,12 @@ void main() {
     tester,
   ) async {
     final auth = _Auth()
-      ..codeError = _refusal(429, 'too_many_requests', 'На этот номер код уже отправлен', retryAfter: 30);
+      ..codeError = _refusal(
+        429,
+        'too_many_requests',
+        'На этот номер код уже отправлен',
+        retryAfter: 30,
+      );
     await _pump(tester, auth);
 
     await _typePhone(tester, '9152345678');
@@ -182,13 +192,49 @@ void main() {
     expect(find.text('Вход в аккаунт'), findsOneWidget);
     expect(_fieldText(tester), '+7(000)000-00-00');
   });
+
+  testWidgets(
+    'по приглашению: подсказка про приглашение, отправлять ещё раз нечего',
+    (tester) async {
+      await _pump(tester, _Auth(byInvite: true));
+
+      await _reachCode(tester);
+
+      expect(find.textContaining('из приглашения'), findsOneWidget);
+      expect(find.textContaining('СМС'), findsNothing);
+      expect(find.textContaining('Отправить код ещё раз'), findsNothing);
+      expect(find.text('Другой номер'), findsOneWidget);
+    },
+  );
+
+  testWidgets('номера нет в приглашениях: отказ под полем номера', (
+    tester,
+  ) async {
+    final auth = _Auth()
+      ..codeError = _refusal(
+        403,
+        'not_invited',
+        'Для входа нужен код приглашения. Попросите его у владельца МоейДачи',
+      );
+    await _pump(tester, auth);
+
+    await _typePhone(tester, '9152345678');
+    await tester.tap(find.text('Получить код'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Вход в аккаунт'), findsOneWidget);
+    expect(find.textContaining('нужен код приглашения'), findsOneWidget);
+  });
 }
 
 /// Сервис, который отвечает так, как нужно проверке.
 class _Auth implements AuthGateway {
-  _Auth({this.resendAfter = 60});
+  _Auth({this.resendAfter = 60, this.byInvite = false});
 
   final int resendAfter;
+
+  /// Сервис в режиме приглашений (specs/015-invites.md).
+  final bool byInvite;
 
   /// Чем сервис отвечает на запрос кода и на вход, если не успехом.
   Exception? codeError;
@@ -204,7 +250,18 @@ class _Auth implements AuthGateway {
     if (error != null) {
       throw error;
     }
-    return AuthCodeAccepted(resendAfter: resendAfter, codeTtl: 300);
+    if (byInvite) {
+      return AuthCodeAccepted(
+        delivery: AuthCodeAcceptedDeliveryEnum.invite,
+        resendAfter: 0,
+        codeTtl: 0,
+      );
+    }
+    return AuthCodeAccepted(
+      delivery: AuthCodeAcceptedDeliveryEnum.sent,
+      resendAfter: resendAfter,
+      codeTtl: 300,
+    );
   }
 
   @override
@@ -239,11 +296,7 @@ ApiException _refusal(
   int? retryAfter,
 }) => ApiException(
   status,
-  jsonEncode({
-    'code': code,
-    'message': message,
-    'retry_after': ?retryAfter,
-  }),
+  jsonEncode({'code': code, 'message': message, 'retry_after': ?retryAfter}),
 );
 
 Future<void> _pump(
@@ -290,7 +343,8 @@ String _fieldText(WidgetTester tester) =>
 bool _requestEnabled(WidgetTester tester) =>
     tester.widget<FilledButton>(find.byType(FilledButton)).onPressed != null;
 
-bool _resendEnabled(WidgetTester tester) => tester
+bool _resendEnabled(WidgetTester tester) =>
+    tester
         .widget<TextButton>(
           find.ancestor(
             of: find.textContaining('Отправить код ещё раз'),
@@ -306,6 +360,5 @@ bool _borderIsAlarming(WidgetTester tester) {
   final field = tester.widget<TextField>(find.byType(TextField));
   final border = field.decoration?.focusedBorder;
   return border != null &&
-      border.borderSide.color ==
-          appTheme(Brightness.light).colorScheme.error;
+      border.borderSide.color == appTheme(Brightness.light).colorScheme.error;
 }

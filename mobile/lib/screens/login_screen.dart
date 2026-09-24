@@ -1,4 +1,5 @@
-// Экран входа: номер телефона, затем код из СМС (specs/001-auth.md).
+// Экран входа: номер телефона, затем код из СМС (specs/001-auth.md)
+// или из приглашения (specs/015-invites.md).
 //
 // Регистрация и вход — одно действие, поэтому экран один: новый человек
 // и вернувшийся проходят одинаковый путь.
@@ -30,9 +31,8 @@ class ApiAuthGateway implements AuthGateway {
 
   @override
   Future<AuthCodeAccepted> requestCode(String phone) async {
-    final accepted = await AuthApi(
-      apiClient(),
-    ).requestAuthCode(AuthCodeRequest(phone: phone));
+    final accepted = await AuthApi(apiClient())
+        .requestAuthCode(AuthCodeRequest(phone: phone));
     if (accepted == null) {
       throw const FormatException('сервис ответил пустым телом');
     }
@@ -41,9 +41,8 @@ class ApiAuthGateway implements AuthGateway {
 
   @override
   Future<SessionCreated> signIn(String phone, String code) async {
-    final session = await AuthApi(
-      apiClient(),
-    ).createSession(SessionRequest(phone: phone, code: code));
+    final session = await AuthApi(apiClient())
+        .createSession(SessionRequest(phone: phone, code: code));
     if (session == null) {
       throw const FormatException('сервис ответил пустым телом');
     }
@@ -77,6 +76,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _codeSent = false;
   bool _busy = false;
+
+  /// Код у человека в приглашении: сервис ничего не отправлял, и
+  /// отправить ещё раз тоже нечего (specs/015-invites.md, требование 13).
+  bool _byInvite = false;
 
   /// Что не так с введённым: стоит под полем, как и все ошибки поля
   /// (specs/000-ui.md, правило 16).
@@ -161,6 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       setState(() {
         _codeSent = true;
+        _byInvite = accepted.delivery == AuthCodeAcceptedDeliveryEnum.invite;
         _waitOnPhone = false;
         _code.clear();
         _countDown(accepted.resendAfter);
@@ -215,7 +219,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Разбор отказа: сервис сказал, что не так, или до него не дошли.
   void _failed(Exception error, {required bool onPhone}) {
-    final message = serviceErrorCode(error) == null ? null : errorMessage(error);
+    final message = serviceErrorCode(error) == null
+        ? null
+        : errorMessage(error);
     if (message == null) {
       _offline = errorMessage(error);
       return;
@@ -261,7 +267,9 @@ class _LoginScreenState extends State<LoginScreen> {
             if (_codeSent) ...[
               const SizedBox(height: AppGap.small),
               Text(
-                'Мы отправили СМС-код на ${_phone.text}',
+                _byInvite
+                    ? 'Введите код из приглашения для ${_phone.text}'
+                    : 'Мы отправили СМС-код на ${_phone.text}',
                 style: theme.textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),
@@ -342,14 +350,15 @@ class _LoginScreenState extends State<LoginScreen> {
       const SizedBox(height: AppGap.medium),
       // Второстепенность видна видом, а не размером: цели касания мельче
       // кнопки из темы не бывают (specs/000-ui.md, правило 8).
-      TextButton(
-        onPressed: _busy || _wait > 0 ? null : _requestCode,
-        child: Text(
-          _wait > 0
-              ? 'Отправить код ещё раз через $_wait сек'
-              : 'Отправить код ещё раз',
+      if (!_byInvite)
+        TextButton(
+          onPressed: _busy || _wait > 0 ? null : _requestCode,
+          child: Text(
+            _wait > 0
+                ? 'Отправить код ещё раз через $_wait сек'
+                : 'Отправить код ещё раз',
+          ),
         ),
-      ),
       TextButton(onPressed: _changePhone, child: const Text('Другой номер')),
     ];
   }
