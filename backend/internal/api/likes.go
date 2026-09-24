@@ -67,13 +67,19 @@ func (s *Server) UnlikePost(ctx context.Context, request gen.UnlikePostRequestOb
 	}
 
 	if _, err := s.db.Exec(ctx, `
-		DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2`,
+		DELETE FROM post_likes l
+		WHERE l.post_id = $1 AND l.user_id = $2
+		  AND EXISTS (
+		      SELECT 1 FROM posts p WHERE p.id = l.post_id AND `+postVisibleTo("$2")+`
+		  )`,
 		request.PostId, current.user.Id,
 	); err != nil {
 		return nil, err
 	}
 
-	// Пост читается после удаления, и он же отвечает на вопрос, есть ли
+	// Невидимому посту лайк не снимается: для смотрящего такого поста
+	// нет (specs/013-post-visibility.md, требования 4 и 6), и его прежний
+	// лайк остаётся на месте. Пост читается после удаления, и он же отвечает на вопрос, есть ли
 	// такой пост вообще: снять лайк у несуществующего — это 404, а не
 	// «ничего не произошло».
 	post, err := s.post(ctx, request.PostId, current.user.Id)
