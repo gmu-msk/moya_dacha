@@ -23,7 +23,7 @@ func (s *Server) DeletePost(ctx context.Context, request gen.DeletePostRequestOb
 	// Порядок проверок: сначала есть ли пост, потом чей он. Иначе
 	// «такого поста нет» и «пост чужой» поменялись бы местами
 	// (specs/007-deletion.md, требование 8).
-	author, err := s.postAuthor(ctx, request.PostId)
+	author, err := s.postAuthor(ctx, request.PostId, current.user.Id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.DeletePost404JSONResponse(errPostNotFound), nil
 	}
@@ -61,7 +61,7 @@ func (s *Server) DeleteComment(ctx context.Context, request gen.DeleteCommentReq
 		return gen.DeleteComment401JSONResponse(errUnauthorized), nil
 	}
 
-	found, err := s.postExists(ctx, request.PostId)
+	found, err := s.postExists(ctx, request.PostId, current.user.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -91,16 +91,19 @@ func (s *Server) DeleteComment(ctx context.Context, request gen.DeleteCommentReq
 	return gen.DeleteComment204Response{}, nil
 }
 
-// postAuthor отвечает, кто выложил пост. Идентификатор, не похожий на
-// UUID, — это «такого поста нет», а не ошибка разбора в базе.
-func (s *Server) postAuthor(ctx context.Context, id string) (string, error) {
+// postAuthor отвечает, кто выложил пост, видимый смотрящему. Невидимый —
+// то же, что несуществующий (specs/013-post-visibility.md, требование 4).
+// Идентификатор, не похожий на UUID, — это «такого поста нет», а не
+// ошибка разбора в базе.
+func (s *Server) postAuthor(ctx context.Context, id, viewerID string) (string, error) {
 	if !isUUID(id) {
 		return "", pgx.ErrNoRows
 	}
 
 	var author string
 	if err := s.db.QueryRow(ctx,
-		`SELECT author_id FROM posts WHERE id = $1`, id,
+		`SELECT p.author_id FROM posts p WHERE p.id = $1 AND `+postVisibleTo("$2"),
+		id, viewerID,
 	).Scan(&author); err != nil {
 		return "", err
 	}

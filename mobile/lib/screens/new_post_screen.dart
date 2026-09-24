@@ -14,6 +14,7 @@ import '../api.dart';
 import '../theme.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
+import '../widgets/visibility_picker.dart';
 
 /// Сторона квадратного превью выбранной фотографии.
 const _thumbnailSize = 104.0;
@@ -34,9 +35,13 @@ class _Photo {
 }
 
 class NewPostScreen extends StatefulWidget {
-  const NewPostScreen({super.key, required this.token});
+  const NewPostScreen({super.key, required this.token, this.closed = false});
 
   final String token;
+
+  /// Закрыт ли профиль автора: у закрытого «Всем» называется
+  /// «Подписчикам» (specs/013-post-visibility.md, требование 3).
+  final bool closed;
 
   @override
   State<NewPostScreen> createState() => _NewPostScreenState();
@@ -48,6 +53,10 @@ class _NewPostScreenState extends State<NewPostScreen> {
 
   String? _error;
   bool _publishing = false;
+
+  /// Кто увидит пост; по умолчанию все (specs/013-post-visibility.md,
+  /// требование 1).
+  PostVisibility _visibility = PostVisibility.all;
 
   PostsApi get _api => PostsApi(apiClient(token: widget.token));
 
@@ -141,6 +150,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
         PostDraft(
           mediaIds: [for (final photo in _photos) photo.uploaded!.id],
           caption: _caption.text,
+          visibility: _visibility,
         ),
       );
       debugPrint('$logMarker post=published id=${post?.id}');
@@ -207,6 +217,13 @@ class _NewPostScreenState extends State<NewPostScreen> {
               labelText: 'Подпись (необязательно)',
               alignLabelWithHint: true,
             ),
+          ),
+          const SizedBox(height: AppGap.small),
+          VisibilityPicker(
+            value: _visibility,
+            closed: widget.closed,
+            enabled: !_publishing,
+            onChanged: (picked) => setState(() => _visibility = picked),
           ),
           if (error != null) ...[
             const SizedBox(height: AppGap.small),

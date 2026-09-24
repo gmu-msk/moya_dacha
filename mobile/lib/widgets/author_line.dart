@@ -7,12 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import 'user_avatar.dart';
+import 'visibility_picker.dart';
 
 class AuthorLine extends StatelessWidget {
   const AuthorLine({
     super.key,
     required this.author,
     required this.when,
+    this.visibility,
     this.onTap,
   });
 
@@ -20,6 +22,10 @@ class AuthorLine extends StatelessWidget {
 
   /// Когда пост выложен.
   final DateTime when;
+
+  /// Кто видит пост: у «друзьям» и «только мне» рядом со временем
+  /// отметка (specs/013-post-visibility.md, требование 7).
+  final PostVisibility? visibility;
 
   /// Открыть профиль автора: имя и аватар ведут к нему
   /// (specs/009-user-profile.md, требование 9).
@@ -41,7 +47,48 @@ class AuthorLine extends StatelessWidget {
           color: theme.colorScheme.secondary,
         ),
       ),
-      subtitle: Text(whenPosted(when)),
+      subtitle: PostedLine(when: when, visibility: visibility),
+    );
+  }
+}
+
+/// Когда выложен пост и, если он не для всех, кому: «вчера · 👥 друзьям».
+class PostedLine extends StatelessWidget {
+  const PostedLine({
+    super.key,
+    required this.when,
+    this.visibility,
+    this.style,
+  });
+
+  final DateTime when;
+  final PostVisibility? visibility;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibility = this.visibility;
+    final mark = visibility == null ? null : visibilityMark(visibility);
+    if (visibility == null || mark == null) {
+      return Text(whenPosted(when), style: style);
+    }
+    final base = style ?? DefaultTextStyle.of(context).style;
+    return Text.rich(
+      TextSpan(
+        text: '${whenPosted(when)} · ',
+        children: [
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Icon(
+              visibilityIcon(visibility),
+              size: base.fontSize,
+              color: base.color,
+            ),
+          ),
+          TextSpan(text: ' $mark'),
+        ],
+      ),
+      style: style,
     );
   }
 }

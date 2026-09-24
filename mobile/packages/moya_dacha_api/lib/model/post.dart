@@ -21,6 +21,7 @@ class Post {
     required this.likes,
     required this.liked,
     required this.comments,
+    required this.visibility,
   });
 
   /// Идентификатор поста (UUID)
@@ -46,6 +47,8 @@ class Post {
   /// Сколько комментариев под постом
   int comments;
 
+  PostVisibility visibility;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Post &&
     other.id == id &&
@@ -55,7 +58,8 @@ class Post {
     _deepEquality.equals(other.media, media) &&
     other.likes == likes &&
     other.liked == liked &&
-    other.comments == comments;
+    other.comments == comments &&
+    other.visibility == visibility;
 
   @override
   int get hashCode =>
@@ -67,10 +71,11 @@ class Post {
     (media.hashCode) +
     (likes.hashCode) +
     (liked.hashCode) +
-    (comments.hashCode);
+    (comments.hashCode) +
+    (visibility.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -82,6 +87,7 @@ class Post {
       json[r'likes'] = this.likes;
       json[r'liked'] = this.liked;
       json[r'comments'] = this.comments;
+      json[r'visibility'] = this.visibility;
     return json;
   }
 
@@ -112,6 +118,8 @@ class Post {
         assert(json[r'liked'] != null, 'Required key "Post[liked]" has a null value in JSON.');
         assert(json.containsKey(r'comments'), 'Required key "Post[comments]" is missing from JSON.');
         assert(json[r'comments'] != null, 'Required key "Post[comments]" has a null value in JSON.');
+        assert(json.containsKey(r'visibility'), 'Required key "Post[visibility]" is missing from JSON.');
+        assert(json[r'visibility'] != null, 'Required key "Post[visibility]" has a null value in JSON.');
         return true;
       }());
 
@@ -124,6 +132,7 @@ class Post {
         likes: mapValueOfType<int>(json, r'likes')!,
         liked: mapValueOfType<bool>(json, r'liked')!,
         comments: mapValueOfType<int>(json, r'comments')!,
+        visibility: PostVisibility.fromJson(json[r'visibility'])!,
       );
     }
     return null;
@@ -179,6 +188,7 @@ class Post {
     'likes',
     'liked',
     'comments',
+    'visibility',
   };
 }
 

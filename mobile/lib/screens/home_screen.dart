@@ -181,7 +181,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _newPost() async {
     final user = _user;
     final post = await Navigator.of(context, rootNavigator: true).push<Post>(
-      MaterialPageRoute(builder: (_) => NewPostScreen(token: widget.token)),
+      MaterialPageRoute(
+        builder: (_) =>
+            NewPostScreen(token: widget.token, closed: user?.closed ?? false),
+      ),
     );
     if (post == null || user == null || !mounted) {
       return;

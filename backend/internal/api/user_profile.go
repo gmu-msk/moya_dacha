@@ -31,10 +31,13 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 		following string
 		relation  gen.Relation
 	)
-	// Заявки в числа не входят (требование 12).
+	// Заявки в числа не входят (требование 12). Посты — только видимые
+	// смотрящему, а у закрытого профиля без подписки — те, что он увидит,
+	// когда подпишется: «Подписчикам» (требование 13).
 	err := s.db.QueryRow(ctx, `
 		SELECT u.id, u.nickname, u.name, u.about, u.avatar_key, u.created_at, u.closed,
-			(SELECT count(*) FROM posts p WHERE p.author_id = u.id),
+			(SELECT count(*) FROM posts p WHERE p.author_id = u.id
+				AND (p.visibility = 'all' OR `+postVisibleTo("$2")+`)),
 			(SELECT count(*) FROM follows f WHERE f.followee_id = u.id AND f.accepted),
 			(SELECT count(*) FROM follows f WHERE f.follower_id = u.id AND f.accepted),
 			`+relationColumns+`

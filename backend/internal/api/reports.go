@@ -28,7 +28,7 @@ func (s *Server) ReportPost(ctx context.Context, request gen.ReportPostRequestOb
 
 	// Порядок тот же, что при удалении: сначала есть ли пост, потом чей
 	// он (specs/008-reports.md, требование 7).
-	author, err := s.postAuthor(ctx, request.PostId)
+	author, err := s.postAuthor(ctx, request.PostId, current.user.Id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.ReportPost404JSONResponse(errPostNotFound), nil
 	}
@@ -63,7 +63,7 @@ func (s *Server) ReportComment(ctx context.Context, request gen.ReportCommentReq
 		return gen.ReportComment401JSONResponse(errUnauthorized), nil
 	}
 
-	found, err := s.postExists(ctx, request.PostId)
+	found, err := s.postExists(ctx, request.PostId, current.user.Id)
 	if err != nil {
 		return nil, err
 	}

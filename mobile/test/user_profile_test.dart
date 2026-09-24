@@ -43,6 +43,7 @@ void main() {
     likes: 0,
     liked: false,
     comments: 0,
+    visibility: PostVisibility.all,
   );
 
   testWidgets('в постах одного человека строки автора нет', (tester) async {

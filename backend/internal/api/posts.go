@@ -103,7 +103,17 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		return gen.CreatePost400JSONResponse(errInvalidCaption), nil
 	}
 
-	id, err := s.insertPost(ctx, current.user.Id, caption, request.Body.MediaIds)
+	// Без видимости пост виден всем (specs/013-post-visibility.md,
+	// требование 1).
+	visibility := gen.PostVisibility("all")
+	if request.Body.Visibility != nil {
+		visibility = *request.Body.Visibility
+	}
+	if !validVisibility(visibility) {
+		return gen.CreatePost400JSONResponse(errInvalidVisibility), nil
+	}
+
+	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, request.Body.MediaIds)
 	if errors.Is(err, errMediaUnusable) {
 		return gen.CreatePost400JSONResponse(errInvalidMedia), nil
 	}
@@ -120,7 +130,8 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 	return gen.CreatePost201JSONResponse(post), nil
 }
 
-// GetPost отдаёт пост любому вошедшему: лента одна на всех.
+// GetPost отдаёт пост тому, кому он виден (specs/013-post-visibility.md).
+// Невидимый — 404, как несуществующий: не выдаём, что пост есть.
 func (s *Server) GetPost(ctx context.Context, request gen.GetPostRequestObject) (gen.GetPostResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -149,7 +160,7 @@ var errMediaUnusable = errors.New("фотография не годится дл
 // фотографии — это перевод строки из «загружено» в «опубликовано», и
 // если хоть один перевод не удался, транзакция откатывается целиком
 // (specs/003-posts.md).
-func (s *Server) insertPost(ctx context.Context, authorID, caption string, mediaIDs []string) (string, error) {
+func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, mediaIDs []string) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -158,8 +169,8 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, media
 
 	var id string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO posts (author_id, caption) VALUES ($1, $2)
-		RETURNING id`, authorID, caption,
+		INSERT INTO posts (author_id, caption, visibility) VALUES ($1, $2, $3)
+		RETURNING id`, authorID, caption, string(visibility),
 	).Scan(&id); err != nil {
 		return "", err
 	}
@@ -229,13 +240,14 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		avatarKey *string
 	)
 	if err := s.db.QueryRow(ctx, `
-		SELECT p.id, p.created_at, p.caption, u.id, u.nickname, u.name, u.avatar_key,
+		SELECT p.id, p.created_at, p.caption, p.visibility,
+			u.id, u.nickname, u.name, u.avatar_key,
 			`+likeColumns+`,
 			`+commentColumn+`
 		FROM posts p JOIN users u ON u.id = p.author_id
-		WHERE p.id = $1`, id, viewerID,
+		WHERE p.id = $1 AND `+postVisibleTo("$2"), id, viewerID,
 	).Scan(
-		&post.Id, &post.CreatedAt, &post.Caption,
+		&post.Id, &post.CreatedAt, &post.Caption, &post.Visibility,
 		&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 		&post.Likes, &post.Liked, &post.Comments,
 	); err != nil {

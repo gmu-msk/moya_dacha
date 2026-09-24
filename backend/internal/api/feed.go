@@ -71,8 +71,8 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 // отдаются посты в профиле (specs/009-user-profile.md). Пустой — лента
 // всех.
 //
-// Посты закрытого профиля видят только сам автор и его подписчики —
-// в любой ленте (specs/012-follows.md, требование 16). followingOnly
+// Каждый пост проходит проверку видимости (specs/013-post-visibility.md):
+// закрытый профиль, «друзьям», «только мне». followingOnly
 // оставляет только своих и тех, на кого смотрящий подписан: вкладка
 // «Подписки» (требование 17). Заявка — не подписка.
 func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, followingOnly bool, after *feedCursor, limit int) (gen.Feed, error) {
@@ -91,7 +91,8 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
 	// только отвечает на вопрос «есть ли что-то дальше».
 	rows, err := s.db.Query(ctx, `
-		SELECT p.id, p.created_at, p.caption, u.id, u.nickname, u.name, u.avatar_key,
+		SELECT p.id, p.created_at, p.caption, p.visibility,
+			u.id, u.nickname, u.name, u.avatar_key,
 			(SELECT count(*) FROM post_likes l WHERE l.post_id = p.id),
 			EXISTS (
 				SELECT 1 FROM post_likes l
@@ -100,8 +101,9 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 			(SELECT count(*) FROM comments c WHERE c.post_id = p.id)
 		FROM posts p JOIN users u ON u.id = p.author_id
 		WHERE ($5::uuid IS NULL OR p.author_id = $5::uuid)
-		  AND (p.author_id = $4::uuid
-		       OR (NOT $6::boolean AND NOT u.closed)
+		  AND `+postVisibleTo("$4")+`
+		  AND (NOT $6::boolean
+		       OR p.author_id = $4::uuid
 		       OR EXISTS (
 		           SELECT 1 FROM follows f
 		           WHERE f.follower_id = $4::uuid AND f.followee_id = p.author_id
@@ -123,7 +125,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 			avatarKey *string
 		)
 		if err := rows.Scan(
-			&post.Id, &post.CreatedAt, &post.Caption,
+			&post.Id, &post.CreatedAt, &post.Caption, &post.Visibility,
 			&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 			&post.Likes, &post.Liked, &post.Comments,
 		); err != nil {

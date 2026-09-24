@@ -13,6 +13,7 @@ import '../widgets/comments_view.dart';
 import '../widgets/confirm.dart';
 import '../widgets/like_button.dart';
 import '../widgets/report_dialog.dart';
+import '../widgets/visibility_picker.dart';
 import 'user_screen.dart';
 
 class PostScreen extends StatefulWidget {
@@ -100,6 +101,43 @@ class _PostScreenState extends State<PostScreen> {
     }
   }
 
+  /// Кто увидит свой пост — из меню поста (specs/013-post-visibility.md,
+  /// требование 6). Слова первого пункта зависят от того, закрыт ли
+  /// профиль, поэтому сначала спрашиваем сервис о себе.
+  Future<void> _changeVisibility() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final me = await ProfileApi(apiClient(token: widget.token)).getMe();
+      if (!mounted) {
+        return;
+      }
+      final closed = me?.closed ?? false;
+      final picked = await pickVisibility(
+        context,
+        current: post.visibility,
+        closed: closed,
+      );
+      if (picked == null || picked == post.visibility) {
+        return;
+      }
+      final updated = await PostsApi(
+        apiClient(token: widget.token),
+      ).setPostVisibility(post.id, PostVisibilityUpdate(visibility: picked));
+      debugPrint('$logMarker post=visibility id=${post.id} value=$picked');
+      if (!mounted || updated == null) {
+        return;
+      }
+      setState(() => post = updated);
+      widget.onChanged?.call(updated);
+      messenger.showSnackBar(
+        SnackBar(content: Text(visibilityChanged(picked, closed: closed))),
+      );
+    } on Exception catch (error) {
+      debugPrint('$logMarker post=visibility_failed error=$error');
+      messenger.showSnackBar(SnackBar(content: Text(errorMessage(error))));
+    }
+  }
+
   /// Пожаловаться на чужой пост. На экране от этого не меняется ничего:
   /// жалоба — сигнал владельцу сервиса, а не действие над постом
   /// (specs/008-reports.md, требование 12).
@@ -142,6 +180,12 @@ class _PostScreenState extends State<PostScreen> {
       actions: [
         if (_mine)
           IconButton(
+            tooltip: 'Кто увидит',
+            onPressed: _deleting ? null : _changeVisibility,
+            icon: Icon(visibilityIcon(post.visibility)),
+          ),
+        if (_mine)
+          IconButton(
             tooltip: 'Удалить пост',
             onPressed: _deleting ? null : _delete,
             icon: const Icon(Icons.delete_outline),
@@ -158,6 +202,7 @@ class _PostScreenState extends State<PostScreen> {
           AuthorLine(
             author: post.author,
             when: post.createdAt,
+            visibility: post.visibility,
             onTap: () => _openAuthor(post.author),
           ),
           for (final media in post.media)

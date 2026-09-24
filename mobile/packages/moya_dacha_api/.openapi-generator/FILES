@@ -32,6 +32,8 @@ lib/model/media.dart
 lib/model/nickname_update.dart
 lib/model/post.dart
 lib/model/post_draft.dart
+lib/model/post_visibility.dart
+lib/model/post_visibility_update.dart
 lib/model/privacy_update.dart
 lib/model/profile_update.dart
 lib/model/relation.dart

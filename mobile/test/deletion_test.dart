@@ -69,6 +69,7 @@ Future<void> _pumpPost(
     likes: 0,
     liked: false,
     comments: 0,
+    visibility: PostVisibility.all,
   );
 
   await tester.pumpWidget(
