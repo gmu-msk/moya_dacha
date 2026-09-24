@@ -28,6 +28,10 @@ func (s *Server) RequestAuthCode(ctx context.Context, request gen.RequestAuthCod
 		return gen.RequestAuthCode400JSONResponse(errInvalidPhone), nil
 	}
 
+	if s.cfg.Invites {
+		return s.requestInviteCode(ctx, phone)
+	}
+
 	code := s.cfg.FixedCode
 	if code == "" {
 		code, err = auth.GenerateCode()
@@ -86,6 +90,7 @@ func (s *Server) RequestAuthCode(ctx context.Context, request gen.RequestAuthCod
 	}
 
 	return gen.RequestAuthCode202JSONResponse{
+		Delivery:    gen.Sent,
 		ResendAfter: int32(s.cfg.ResendAfter.Seconds()),
 		CodeTtl:     int32(s.cfg.CodeTTL.Seconds()),
 	}, nil
@@ -112,46 +117,22 @@ func (s *Server) CreateSession(ctx context.Context, request gen.CreateSessionReq
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var (
-		codeHash     string
-		attemptsLeft int
-		expired      bool
-	)
-	err = tx.QueryRow(ctx, `
-		SELECT code_hash, attempts_left, expires_at <= now()
-		FROM auth_codes
-		WHERE phone = $1
-		FOR UPDATE`, phone).Scan(&codeHash, &attemptsLeft, &expired)
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		// Кода по этому номеру не запрашивали. Говорить об этом отдельно
-		// незачем: ответ тот же, что и на неверный код.
-		return gen.CreateSession401JSONResponse(errInvalidCode), nil
-	case err != nil:
+	// В режиме приглашений код сверяется с приглашением, иначе — с кодом
+	// подтверждения (specs/015-invites.md, требование 9).
+	check := s.consumeCode
+	if s.cfg.Invites {
+		check = s.consumeInvite
+	}
+	rejected, err := check(ctx, tx, phone, request.Body.Code)
+	if err != nil {
 		return nil, err
 	}
-
-	// Порядок проверок зафиксирован спекой: срок, попытки, совпадение.
-	switch {
-	case expired:
-		return gen.CreateSession401JSONResponse(errCodeExpired), nil
-	case attemptsLeft <= 0:
-		return gen.CreateSession401JSONResponse(errTooManyAttempts), nil
-	case auth.Hash(request.Body.Code) != codeHash:
-		if _, err := tx.Exec(ctx, `
-			UPDATE auth_codes SET attempts_left = attempts_left - 1
-			WHERE phone = $1`, phone); err != nil {
-			return nil, err
-		}
+	if rejected != nil {
+		// Отказ тоже фиксируется: неверная попытка уже списана.
 		if err := tx.Commit(ctx); err != nil {
 			return nil, err
 		}
-		return gen.CreateSession401JSONResponse(errInvalidCode), nil
-	}
-
-	// Код подошёл и на этом сгорает: второй раз им не войти.
-	if _, err := tx.Exec(ctx, `DELETE FROM auth_codes WHERE phone = $1`, phone); err != nil {
-		return nil, err
+		return gen.CreateSession401JSONResponse(*rejected), nil
 	}
 
 	user, isNew, err := s.upsertUser(ctx, tx, phone)
@@ -179,6 +160,51 @@ func (s *Server) CreateSession(ctx context.Context, request gen.CreateSessionReq
 		IsNewUser: isNew,
 		User:      user,
 	}, nil
+}
+
+// consumeCode сверяет код подтверждения с выданным на номер. Верный код
+// сгорает, неверный списывает попытку; отказ возвращается ошибкой
+// контракта, а не error.
+func (s *Server) consumeCode(ctx context.Context, tx pgx.Tx, phone, code string) (*gen.Error, error) {
+	var (
+		codeHash     string
+		attemptsLeft int
+		expired      bool
+	)
+	err := tx.QueryRow(ctx, `
+		SELECT code_hash, attempts_left, expires_at <= now()
+		FROM auth_codes
+		WHERE phone = $1
+		FOR UPDATE`, phone).Scan(&codeHash, &attemptsLeft, &expired)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		// Кода по этому номеру не запрашивали. Говорить об этом отдельно
+		// незачем: ответ тот же, что и на неверный код.
+		return &errInvalidCode, nil
+	case err != nil:
+		return nil, err
+	}
+
+	// Порядок проверок зафиксирован спекой: срок, попытки, совпадение.
+	switch {
+	case expired:
+		return &errCodeExpired, nil
+	case attemptsLeft <= 0:
+		return &errTooManyAttempts, nil
+	case auth.Hash(code) != codeHash:
+		if _, err := tx.Exec(ctx, `
+			UPDATE auth_codes SET attempts_left = attempts_left - 1
+			WHERE phone = $1`, phone); err != nil {
+			return nil, err
+		}
+		return &errInvalidCode, nil
+	}
+
+	// Код подошёл и на этом сгорает: второй раз им не войти.
+	if _, err := tx.Exec(ctx, `DELETE FROM auth_codes WHERE phone = $1`, phone); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 // GetSession отвечает, чья это сессия.

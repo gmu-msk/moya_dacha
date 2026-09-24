@@ -54,6 +54,9 @@ paths:
 
         Доставка кода спрятана за интерфейсом: пока SMS-провайдер не выбран,
         код пишется в лог сервиса (specs/001-auth.md).
+
+        В режиме приглашений код не отправляется: сервис только проверяет,
+        что на номер есть приглашение (specs/015-invites.md).
       tags: [auth]
       requestBody:
         required: true
@@ -70,6 +73,12 @@ paths:
                 $ref: "#/components/schemas/AuthCodeAccepted"
         "400":
           description: Номер не разбирается или не российский мобильный
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Режим приглашений, а на номер нет действующего приглашения (`not_invited`)
           content:
             application/json:
               schema:
@@ -1529,8 +1538,16 @@ components:
 
     AuthCodeAccepted:
       type: object
-      required: [resend_after, code_ttl]
+      required: [delivery, resend_after, code_ttl]
       properties:
+        delivery:
+          type: string
+          enum: [sent, invite]
+          description: |
+            Как человек получит код. `sent` — сервис отправил код на номер.
+            `invite` — сервис в режиме приглашений, код у человека уже есть
+            в приглашении, и сроки ниже равны нулю (specs/015-invites.md).
+          example: sent
         resend_after:
           type: integer
           format: int32

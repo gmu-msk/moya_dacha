@@ -34,6 +34,11 @@ type Config struct {
 	// (переменная окружения AUTH_FIXED_CODE, см. specs/001-auth.md).
 	FixedCode string
 
+	// Invites включает вход по коду приглашения вместо кода из SMS
+	// (переменная окружения AUTH_INVITES, specs/015-invites.md). В этом
+	// режиме коды подтверждения не выдаются, и FixedCode не действует.
+	Invites bool
+
 	// CodeSender доставляет код подтверждения на номер. Пока
 	// SMS-провайдер не выбран, это запись в лог.
 	CodeSender auth.Sender

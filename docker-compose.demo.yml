@@ -73,6 +73,9 @@ services:
       # а фичу надо показывать (specs/001-auth.md). В проде переменная
       # не задаётся, и код случайный.
       AUTH_FIXED_CODE: "0000"
+      # Вход по кодам приглашения вместо 0000 — только у сценария, который
+      # это просит (demo/stories/015-invites/story.env, specs/015-invites.md).
+      AUTH_INVITES: "${AUTH_INVITES:-}"
       # Аватары лежат в томе рядом с базой и переживают `make demo-down`
       # (specs/002-profile.md, ADR-0011). `make demo-reset` стирает и их.
       MEDIA_DIR: /var/lib/moya-dacha/media

@@ -1,10 +1,15 @@
 // Команда server — единственный бинарник проекта.
 // Миграции он не накатывает: это отдельный шаг деплоя (ADR-0005).
+//
+// Без аргументов бинарник запускает сервис. С аргументом — выполняет
+// команду владельца и выходит: invite, uninvite, invites
+// (specs/015-invites.md, требование 11).
 package main
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,6 +24,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		if err := runCommand(os.Args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("сервис остановлен с ошибкой", "err", err)
 		os.Exit(1)
@@ -48,8 +60,16 @@ func run() error {
 	// AUTH_FIXED_CODE задан только на демо-стенде и в тестах: он делает код
 	// подтверждения предсказуемым, чтобы фичу можно было показать без SMS
 	// (specs/001-auth.md). В проде переменная пуста, и код случайный.
-	cfg := api.Config{FixedCode: os.Getenv("AUTH_FIXED_CODE")}
-	if cfg.FixedCode != "" {
+	cfg := api.Config{
+		FixedCode: os.Getenv("AUTH_FIXED_CODE"),
+		// AUTH_INVITES включает вход по коду приглашения: так идёт закрытый
+		// тест, пока нет SMS-провайдера (specs/015-invites.md).
+		Invites: os.Getenv("AUTH_INVITES") != "",
+	}
+	switch {
+	case cfg.Invites:
+		slog.Info("вход по кодам приглашения: коды выдаёт команда invite")
+	case cfg.FixedCode != "":
 		slog.Warn("включён фиксированный код подтверждения: войти может кто угодно, в проде так быть не должно")
 	}
 

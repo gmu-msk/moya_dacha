@@ -11,6 +11,10 @@ OPENAPI_GENERATOR_JAR     := .cache/openapi-generator-cli-$(OPENAPI_GENERATOR_VE
 APP_DART_DEFINE ?=
 TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha_test?sslmode=disable
 DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
+# Режим приглашений на стенде включает сценарий, у которого в story.env
+# стоит AUTH_INVITES (specs/015-invites.md). Так он работает и для
+# `make story`, и для `/стенд`: обоим хватает DEMO_STORY.
+DEMO_INVITES = $(shell sed -n 's/^AUTH_INVITES=//p' demo/stories/$(DEMO_STORY)/story.env 2>/dev/null)
 TEST_LOG       := .cache/test.log
 
 .PHONY: help generate generate-server generate-client check-generated build test test-up test-down \
@@ -126,11 +130,11 @@ apk-phone-install: ## То же и сразу поставить на телеф
 	./demo/apk-phone.sh --install
 
 demo: ## Поднять демо-стенд одной командой (Postgres + миграции + сервис)
-	$(DEMO_COMPOSE) up -d --build
+	AUTH_INVITES="$(DEMO_INVITES)" $(DEMO_COMPOSE) up -d --build
 	./demo/smoke.sh
 
 demo-lan: ## Поднять стенд видимым в локальной сети (чтобы дошёл телефон)
-	DEMO_BIND_ADDR=0.0.0.0 $(DEMO_COMPOSE) up -d --build
+	DEMO_BIND_ADDR=0.0.0.0 AUTH_INVITES="$(DEMO_INVITES)" $(DEMO_COMPOSE) up -d --build
 	DEMO_BIND_ADDR=0.0.0.0 ./demo/smoke.sh
 
 demo-down: ## Остановить демо-стенд (данные в базе остаются)

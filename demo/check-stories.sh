@@ -10,7 +10,7 @@ set -euo pipefail
 STORIES_DIR="demo/stories"
 SPECS_DIR="specs"
 SECTIONS=("## Что показываем" "## Данные" "## Что проверить руками" "## Спецификация")
-KNOWN_KEYS="MARKER EXPECT DART_DEFINE"
+KNOWN_KEYS="MARKER EXPECT DART_DEFINE AUTH_INVITES"
 
 failed=0
 
