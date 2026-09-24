@@ -1,6 +1,10 @@
-// Профиль пользователя: specs/009-user-profile.md.
+// Профиль пользователя: specs/009-user-profile.md, подписки —
+// specs/012-follows.md.
 //
-// Кто этот человек и все его посты сеткой по три, как в Инстаграме.
+// Кто этот человек, сколько у него постов, подписчиков и подписок,
+// кнопка подписки и все его посты сеткой по три, как в Инстаграме.
+// Посты закрытого профиля видят только подписчики: остальным вместо
+// сетки — замок.
 // Касание клетки открывает посты этого человека подряд
 // (user_posts_screen.dart). Свой профиль — тот же экран с одной лишней
 // кнопкой: человек видит себя так, как его видят соседи.
@@ -15,8 +19,11 @@ import '../widgets/author_line.dart';
 import '../widgets/bottom_bar.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
+import '../widgets/follow_button.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/user_avatar.dart';
+import 'follow_list_screen.dart';
+import 'follow_requests_screen.dart';
 import 'profile_screen.dart';
 import 'user_posts_screen.dart';
 
@@ -37,6 +44,7 @@ Future<void> openUserProfile(
   void Function(Post post)? onPostChanged,
   VoidCallback? onPostDeleted,
   void Function(CurrentUser user)? onProfileEdited,
+  VoidCallback? onFollowChanged,
 }) => Navigator.of(context).push<void>(
   MaterialPageRoute(
     builder: (_) => UserScreen(
@@ -46,6 +54,7 @@ Future<void> openUserProfile(
       onPostChanged: onPostChanged,
       onPostDeleted: onPostDeleted,
       onProfileEdited: onProfileEdited,
+      onFollowChanged: onFollowChanged,
     ),
   ),
 );
@@ -59,6 +68,7 @@ class UserScreen extends StatefulWidget {
     this.onPostChanged,
     this.onPostDeleted,
     this.onProfileEdited,
+    this.onFollowChanged,
   });
 
   final String token;
@@ -79,6 +89,10 @@ class UserScreen extends StatefulWidget {
   /// Свой профиль поправили: имя и аватар в шапке ленты теперь другие.
   final void Function(CurrentUser user)? onProfileEdited;
 
+  /// Смотрящий на кого-то подписался или отписался — здесь или в списке:
+  /// вкладка «Подписки» ленты теперь другая.
+  final VoidCallback? onFollowChanged;
+
   @override
   State<UserScreen> createState() => UserScreenState();
 }
@@ -94,7 +108,18 @@ class UserScreenState extends State<UserScreen> {
   String? _error;
   bool _editing = false;
 
+  /// Сколько заявок ждёт ответа — только у своего закрытого профиля.
+  /// `null` — неизвестно или заявок нет.
+  String? _requests;
+
   bool get _mine => widget.userId == widget.viewerId;
+
+  /// Видны ли смотрящему посты и списки: профиль открыт, свой или
+  /// смотрящий подписан (specs/012-follows.md, требование 7).
+  static bool canSeeInside(UserProfile profile, {required bool mine}) =>
+      mine ||
+      !profile.closed ||
+      profile.relation?.following == RelationFollowingEnum.yes;
 
   @override
   void initState() {
@@ -133,29 +158,101 @@ class UserScreenState extends State<UserScreen> {
   }
 
   /// Кто это и первая страница постов. Потянуть профиль вниз — то же
-  /// самое заново (specs/009-user-profile.md, требование 14).
+  /// самое заново (specs/009-user-profile.md, требование 14). Посты
+  /// закрытого профиля без подписки не запрашиваются: сервис ответит
+  /// отказом, а показать вместо них нужно замок.
   Future<void> _load() async {
     setState(() => _error = null);
     try {
-      final results = await Future.wait<Object?>([
-        UsersApi(apiClient(token: widget.token)).getUser(widget.userId),
-        _posts.refresh(),
+      final profile = await UsersApi(apiClient(token: widget.token))
+          .getUser(widget.userId);
+      if (profile == null) {
+        throw ApiException(200, 'Сервис не вернул профиль');
+      }
+      final inside = canSeeInside(profile, mine: _mine);
+      await Future.wait([
+        if (inside) _posts.refresh() else Future(_posts.clear),
+        if (_mine && profile.closed) _loadRequests(),
       ]);
-      final profile = results.first as UserProfile?;
       debugPrint(
         '$logMarker screen=user id=${widget.userId} '
-        'posts=${profile?.posts} mine=$_mine',
+        'posts=${profile.posts} followers=${profile.followers} '
+        'following=${profile.following} closed=${profile.closed} '
+        'relation=${profile.relation?.following} mine=$_mine',
       );
       if (!mounted) {
         return;
       }
-      setState(() => _profile = profile);
+      setState(() {
+        _profile = profile;
+        if (!(_mine && profile.closed)) {
+          _requests = null;
+        }
+      });
     } on Exception catch (error) {
       debugPrint('$logMarker screen=user error=$error');
       if (!mounted) {
         return;
       }
       setState(() => _error = errorMessage(error));
+    }
+  }
+
+  /// Заявки к своему закрытому профилю. Раздела «Уведомления» пока нет
+  /// (specs/014-notifications.md), поэтому они открываются из профиля.
+  Future<void> _loadRequests() async {
+    try {
+      final page = await FollowsApi(apiClient(token: widget.token))
+          .getFollowRequests(limit: 50);
+      final count = page?.items.length ?? 0;
+      _requests = count == 0
+          ? null
+          : '$count${page?.nextCursor == null ? '' : '+'}';
+    } on Exception catch (error) {
+      // Профиль и без числа заявок профиль.
+      debugPrint('$logMarker screen=user requests_failed error=$error');
+      _requests = null;
+    }
+  }
+
+  /// Подписались, отписались или подали заявку: у человека другое число
+  /// подписчиков, а посты закрытого профиля могли открыться или закрыться.
+  void _relationChanged(Relation relation) {
+    widget.onFollowChanged?.call();
+    _load();
+  }
+
+  /// Подписчики или подписки человека (specs/012-follows.md,
+  /// требование 14). Вернувшись, профиль перечитывается: в списке могли
+  /// подписаться на него самого.
+  Future<void> _openList(UserProfile profile, FollowListTab tab) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => FollowListScreen(
+          token: widget.token,
+          viewerId: widget.viewerId,
+          user: profile,
+          tab: tab,
+          onFollowChanged: widget.onFollowChanged,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _load();
+    }
+  }
+
+  Future<void> _openRequests() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => FollowRequestsScreen(
+          token: widget.token,
+          viewerId: widget.viewerId,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _load();
     }
   }
 
@@ -257,6 +354,9 @@ class UserScreenState extends State<UserScreen> {
   Widget _content(UserProfile profile) {
     final posts = _posts.posts;
     final nextPageError = _posts.nextPageError;
+    final inside = canSeeInside(profile, mine: _mine);
+    final relation = profile.relation;
+    final requests = _requests;
 
     return CustomScrollView(
       controller: _scroll,
@@ -269,6 +369,50 @@ class UserScreenState extends State<UserScreen> {
             child: _Header(profile: profile, mine: _mine),
           ),
         ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppGap.medium,
+              AppGap.medium,
+              AppGap.medium,
+              0,
+            ),
+            child: FollowCounts(
+              profile: profile,
+              onOpen: inside ? (tab) => _openList(profile, tab) : null,
+            ),
+          ),
+        ),
+        if (!_mine && relation != null)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: AppGap.medium),
+            sliver: SliverToBoxAdapter(
+              child: FollowButton(
+                token: widget.token,
+                userId: profile.id,
+                relation: relation,
+                onChanged: _relationChanged,
+              ),
+            ),
+          ),
+        if (_mine && requests != null)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppGap.medium,
+              AppGap.small,
+              AppGap.medium,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.person_add_alt_outlined),
+                title: const Text('Заявки на подписку'),
+                trailing: Badge(label: Text(requests), largeSize: AppGap.large),
+                onTap: _openRequests,
+              ),
+            ),
+          ),
         if (_mine)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
@@ -285,7 +429,15 @@ class UserScreenState extends State<UserScreen> {
               ),
             ),
           ),
-        if (posts.isEmpty)
+        if (!inside)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: const EdgeInsets.all(AppGap.large),
+              child: ClosedProfileView(nickname: profile.nickname),
+            ),
+          )
+        else if (posts.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
             child: Padding(
@@ -338,8 +490,9 @@ class UserScreenState extends State<UserScreen> {
   }
 }
 
-/// Кто это: аватар, никнейм и полное имя, сколько постов, с какого времени здесь
-/// и «о себе» (specs/009-user-profile.md, требование 1).
+/// Кто это: аватар, никнейм и полное имя, с какого времени здесь и «о себе»
+/// (specs/009-user-profile.md, требование 1). Сколько постов — в строке
+/// чисел под шапкой (specs/012-follows.md, требование 23).
 class _Header extends StatelessWidget {
   const _Header({required this.profile, required this.mine});
 
@@ -372,15 +525,32 @@ class _Header extends StatelessWidget {
                   // Никнейм — вторая краска темы, как у автора в ленте,
                   // полное имя под ним, если человек его указал
                   // (specs/010-nicknames.md, требование 9).
-                  Text(
-                    profile.nickname,
+                  // Замок справа от ника — профиль закрыт
+                  // (specs/012-follows.md, требование 22).
+                  Text.rich(
+                    TextSpan(
+                      text: profile.nickname,
+                      children: [
+                        if (profile.closed)
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: AppGap.tiny),
+                              child: Icon(
+                                Icons.lock_outline,
+                                semanticLabel: 'Закрытый профиль',
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                     style: theme.textTheme.titleLarge?.copyWith(
                       color: theme.colorScheme.secondary,
                     ),
                   ),
                   if (profile.name.isNotEmpty)
                     Text(profile.name, style: theme.textTheme.titleMedium),
-                  Text(postsCount(profile.posts), style: quiet),
                   Text(hereSince(profile.createdAt), style: quiet),
                 ],
               ),
@@ -392,6 +562,138 @@ class _Header extends StatelessWidget {
           Text(profile.about, style: theme.textTheme.bodyLarge),
         ],
       ],
+    );
+  }
+}
+
+/// Три числа между двумя кантами: посты, подписчики, подписки
+/// (specs/012-follows.md, требование 23). Подписчики и подписки касаемы,
+/// когда список можно открыть; [onOpen] — `null`, когда нельзя.
+class FollowCounts extends StatelessWidget {
+  const FollowCounts({super.key, required this.profile, this.onOpen});
+
+  final UserProfile profile;
+  final void Function(FollowListTab tab)? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final line = BorderSide(
+      color: theme.colorScheme.outlineVariant,
+      width: AppShape.hairline,
+    );
+    final open = onOpen;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(top: line, bottom: line),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppGap.tiny),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _count(context, profile.posts, postsWord(profile.posts), null),
+            _count(
+              context,
+              profile.followers,
+              followersWord(profile.followers),
+              open == null ? null : () => open(FollowListTab.followers),
+            ),
+            _count(
+              context,
+              profile.following,
+              followingWord(profile.following),
+              open == null ? null : () => open(FollowListTab.following),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _count(
+    BuildContext context,
+    int number,
+    String word,
+    VoidCallback? onTap,
+  ) {
+    final theme = Theme.of(context);
+
+    return Expanded(
+      child: Semantics(
+        button: onTap != null,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppGap.small),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppGap.small),
+            child: Column(
+              children: [
+                Text('$number', style: theme.textTheme.titleLarge),
+                Text(
+                  word,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Слово под числом: «пост», «поста», «постов».
+String postsWord(int count) => _word(count, 'пост', 'поста', 'постов');
+
+/// «подписчик», «подписчика», «подписчиков».
+String followersWord(int count) =>
+    _word(count, 'подписчик', 'подписчика', 'подписчиков');
+
+/// «подписка», «подписки», «подписок».
+String followingWord(int count) =>
+    _word(count, 'подписка', 'подписки', 'подписок');
+
+/// Слово к числу — без самого числа: число над ним крупно.
+String _word(int count, String one, String few, String many) =>
+    countWord(count, one, few, many).substring('$count '.length);
+
+/// Вместо сетки постов у закрытого профиля без подписки
+/// (specs/012-follows.md, требование 22).
+class ClosedProfileView extends StatelessWidget {
+  const ClosedProfileView({super.key, required this.nickname});
+
+  final String nickname;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return EmptyView(
+      icon: Icons.lock_outline,
+      art: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant,
+            width: AppShape.hairline,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppGap.medium),
+          child: Icon(
+            Icons.lock_outline,
+            size: AppGap.large + AppGap.small,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+      ),
+      title: 'Закрытый профиль',
+      hint: 'Посты $nickname видят только его подписчики',
     );
   }
 }
@@ -526,6 +828,15 @@ class UserPostsPager extends ChangeNotifier {
       return;
     }
     posts[at] = post;
+    notifyListeners();
+  }
+
+  /// Постов не видно: профиль закрыт, а смотрящий не подписан или
+  /// отписался (specs/012-follows.md, требование 7).
+  void clear() {
+    posts.clear();
+    _cursor = null;
+    nextPageError = null;
     notifyListeners();
   }
 

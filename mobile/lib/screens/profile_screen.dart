@@ -1,5 +1,6 @@
-// Правка своего профиля: никнейм, полное имя, «о себе» и аватар
-// (specs/002-profile.md, specs/010-nicknames.md).
+// Правка своего профиля: никнейм, полное имя, «о себе», аватар
+// и закрытый профиль (specs/002-profile.md, specs/010-nicknames.md,
+// specs/012-follows.md).
 //
 // Всё, что здесь видно, принадлежит владельцу токена, и номер телефона
 // показывается только здесь. Открывается кнопкой «Изменить профиль» из
@@ -138,6 +139,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _removeAvatar() =>
       _change(() => _api.deleteAvatar(), 'Фотография убрана');
 
+  /// Переключатель срабатывает сразу, без «Сохранить»: это не поле
+  /// формы, а решение (specs/012-follows.md, требование 6).
+  Future<void> _setClosed(bool closed) => _change(
+    () =>
+        FollowsApi(apiClient(token: widget.token))
+            .setPrivacy(PrivacyUpdate(closed: closed)),
+    closed ? 'Профиль закрыт' : 'Профиль открыт',
+  );
+
   Future<void> _signOut() async {
     setState(() => _busy = true);
     try {
@@ -238,6 +248,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text(saved, style: theme.textTheme.bodyMedium),
             ],
             const SizedBox(height: AppGap.large),
+            const Divider(),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _user.closed,
+              onChanged: _busy ? null : _setClosed,
+              title: const Text('Закрытый профиль'),
+              subtitle: const Text(
+                'Посты и списки подписок видят только ваши подписчики. '
+                'Новых подписчиков вы одобряете сами.',
+              ),
+            ),
             const Divider(),
             const SizedBox(height: AppGap.medium),
             Text('Номер телефона', style: theme.textTheme.labelMedium),

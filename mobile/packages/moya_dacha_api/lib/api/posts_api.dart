@@ -310,18 +310,21 @@ class PostsApi {
 
   /// Страница ленты
   ///
-  /// Все посты всех пользователей, новые сверху: лента одна на всех (CONTEXT.md). Отдаётся страницами — посты и курсор на продолжение.  Курсор непрозрачен: клиент возвращает его как получил и сам не строит. Он указывает на место в порядке ленты, поэтому посты, выложенные между запросами страниц, не сдвигают и не задваивают уже пролистанное (specs/004-feed.md). 
+  /// Посты новые сверху. Во вкладке «Все» — посты всех пользователей, кроме закрытых профилей, на которые смотрящий не подписан; во вкладке «Подписки» — только тех, на кого он подписан, и его собственные (specs/012-follows.md). Отдаётся страницами — посты и курсор на продолжение.  Курсор непрозрачен: клиент возвращает его как получил и сам не строит. Он указывает на место в порядке ленты, поэтому посты, выложенные между запросами страниц, не сдвигают и не задваивают уже пролистанное (specs/004-feed.md). 
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
+  ///
+  /// * [String] scope:
+  ///   Вкладка ленты: `all` — «Все» (по умолчанию), `following` — «Подписки»: посты тех, на кого смотрящий подписан, и его собственные (specs/012-follows.md, требования 15–18). 
   ///
   /// * [int] limit:
   ///   Сколько постов вернуть, от 1 до 50
   ///
   /// * [String] cursor:
   ///   Курсор из предыдущего ответа; без него — первая страница
-  Future<Response> getFeedWithHttpInfo({ int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+  Future<Response> getFeedWithHttpInfo({ String? scope, int? limit, String? cursor, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/feed';
 
@@ -332,6 +335,9 @@ class PostsApi {
     final headerParams = <String, String>{};
     final formParams = <String, String>{};
 
+    if (scope != null) {
+      queryParams.addAll(_queryParams('', 'scope', scope));
+    }
     if (limit != null) {
       queryParams.addAll(_queryParams('', 'limit', limit));
     }
@@ -356,17 +362,20 @@ class PostsApi {
 
   /// Страница ленты
   ///
-  /// Все посты всех пользователей, новые сверху: лента одна на всех (CONTEXT.md). Отдаётся страницами — посты и курсор на продолжение.  Курсор непрозрачен: клиент возвращает его как получил и сам не строит. Он указывает на место в порядке ленты, поэтому посты, выложенные между запросами страниц, не сдвигают и не задваивают уже пролистанное (specs/004-feed.md). 
+  /// Посты новые сверху. Во вкладке «Все» — посты всех пользователей, кроме закрытых профилей, на которые смотрящий не подписан; во вкладке «Подписки» — только тех, на кого он подписан, и его собственные (specs/012-follows.md). Отдаётся страницами — посты и курсор на продолжение.  Курсор непрозрачен: клиент возвращает его как получил и сам не строит. Он указывает на место в порядке ленты, поэтому посты, выложенные между запросами страниц, не сдвигают и не задваивают уже пролистанное (specs/004-feed.md). 
   ///
   /// Parameters:
+  ///
+  /// * [String] scope:
+  ///   Вкладка ленты: `all` — «Все» (по умолчанию), `following` — «Подписки»: посты тех, на кого смотрящий подписан, и его собственные (specs/012-follows.md, требования 15–18). 
   ///
   /// * [int] limit:
   ///   Сколько постов вернуть, от 1 до 50
   ///
   /// * [String] cursor:
   ///   Курсор из предыдущего ответа; без него — первая страница
-  Future<Feed?> getFeed({ int? limit, String? cursor, Future<void>? abortTrigger, }) async {
-    final response = await getFeedWithHttpInfo(limit: limit, cursor: cursor, abortTrigger: abortTrigger,);
+  Future<Feed?> getFeed({ String? scope, int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+    final response = await getFeedWithHttpInfo(scope: scope, limit: limit, cursor: cursor, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

@@ -1,4 +1,4 @@
-// Лента: specs/004-feed.md.
+// Лента: specs/004-feed.md, вкладки «Все» и «Подписки» — specs/012-follows.md.
 //
 // Страницы подгружаются по мере прокрутки, жест вниз обновляет ленту
 // целиком. Ошибка следующей страницы не стирает то, что уже показано:
@@ -16,6 +16,7 @@ import 'error_view.dart';
 import 'like_button.dart';
 import 'post_action.dart';
 import 'loading_view.dart';
+import 'segment_tabs.dart';
 
 /// Сколько постов запрашивается за раз. Столько же сервис отдаёт
 /// по умолчанию (specs/004-feed.md, требование 4).
@@ -25,8 +26,15 @@ const feedPageSize = 20;
 /// примерно экран, чтобы к моменту, когда человек долистает, она уже была.
 const _loadAheadPixels = 600.0;
 
-class FeedView extends StatefulWidget {
-  const FeedView({
+/// Вкладки ленты. Имя — значение параметра `scope` в запросе.
+enum FeedScope { all, following }
+
+/// Лента с вкладками «Все» (слева, открывается первой) и «Подписки»
+/// (specs/012-follows.md, требования 15 и 19). Обе вкладки живут, пока
+/// открыт главный экран: переключение не теряет пролистанное, а вкладка
+/// «Подписки» строится при первом касании.
+class FeedTabs extends StatefulWidget {
+  const FeedTabs({
     super.key,
     required this.token,
     required this.onOpenPost,
@@ -35,6 +43,109 @@ class FeedView extends StatefulWidget {
   });
 
   final String token;
+  final void Function(Post post) onOpenPost;
+  final void Function(Author author)? onOpenAuthor;
+  final VoidCallback onNewPost;
+
+  @override
+  State<FeedTabs> createState() => FeedTabsState();
+}
+
+class FeedTabsState extends State<FeedTabs> {
+  final Map<FeedScope, GlobalKey<FeedViewState>> _views = {
+    for (final scope in FeedScope.values) scope: GlobalKey<FeedViewState>(),
+  };
+
+  FeedScope _scope = FeedScope.all;
+  bool _followingOpened = false;
+
+  Iterable<FeedViewState> get _opened =>
+      _views.values.map((key) => key.currentState).whereType<FeedViewState>();
+
+  /// Обе вкладки заново: свой пост выложен или удалён, на кого-то
+  /// подписались или отписались.
+  Future<void> refresh() async {
+    await Future.wait(_opened.map((view) => view.refresh()));
+  }
+
+  /// Открытую вкладку — наверх (требование 19).
+  Future<void> scrollToTop() async =>
+      _views[_scope]!.currentState?.scrollToTop();
+
+  /// Пост изменился — в обеих вкладках, где он есть.
+  void replace(Post post) {
+    for (final view in _opened) {
+      view.replace(post);
+    }
+  }
+
+  void _select(FeedScope scope) {
+    if (scope == _scope) {
+      scrollToTop();
+      return;
+    }
+    debugPrint('$logMarker feed=tab scope=${scope.name}');
+    setState(() {
+      _scope = scope;
+      _followingOpened = _followingOpened || scope == FeedScope.following;
+    });
+  }
+
+  FeedView _view(FeedScope scope) => FeedView(
+    key: _views[scope],
+    token: widget.token,
+    scope: scope,
+    onOpenPost: widget.onOpenPost,
+    onNewPost: widget.onNewPost,
+    onOpenAuthor: widget.onOpenAuthor,
+    onShowAll: () => _select(FeedScope.all),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SegmentTabs(
+          labels: const ['Все', 'Подписки'],
+          selected: _scope.index,
+          onSelect: (index) => _select(FeedScope.values[index]),
+        ),
+        Expanded(
+          child: IndexedStack(
+            index: _scope.index,
+            children: [
+              _view(FeedScope.all),
+              if (_followingOpened)
+                _view(FeedScope.following)
+              else
+                const SizedBox.shrink(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class FeedView extends StatefulWidget {
+  const FeedView({
+    super.key,
+    required this.token,
+    required this.onOpenPost,
+    required this.onNewPost,
+    this.onOpenAuthor,
+    this.scope = FeedScope.all,
+    this.onShowAll,
+  });
+
+  final String token;
+
+  /// Какая это вкладка ленты.
+  final FeedScope scope;
+
+  /// Из пустых «Подписок» — во «Все» (specs/012-follows.md, требование 2
+  /// сценария).
+  final VoidCallback? onShowAll;
 
   /// Открыть пост целиком: все фотографии и подпись.
   final void Function(Post post) onOpenPost;
@@ -110,8 +221,14 @@ class FeedViewState extends State<FeedView> {
     });
 
     try {
-      final page = await _api.getFeed(limit: feedPageSize);
-      debugPrint('$logMarker feed=loaded posts=${page?.items.length}');
+      final page = await _api.getFeed(
+        scope: widget.scope.name,
+        limit: feedPageSize,
+      );
+      debugPrint(
+        '$logMarker feed=loaded scope=${widget.scope.name} '
+        'posts=${page?.items.length}',
+      );
       if (!mounted) {
         return;
       }
@@ -145,7 +262,11 @@ class FeedViewState extends State<FeedView> {
     });
 
     try {
-      final page = await _api.getFeed(limit: feedPageSize, cursor: cursor);
+      final page = await _api.getFeed(
+        scope: widget.scope.name,
+        limit: feedPageSize,
+        cursor: cursor,
+      );
       debugPrint('$logMarker feed=page posts=${page?.items.length}');
       if (!mounted) {
         return;
@@ -186,16 +307,31 @@ class FeedViewState extends State<FeedView> {
           children: [
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.6,
-              child: EmptyView(
-                icon: Icons.eco_outlined,
-                title: 'Постов пока нет',
-                hint: 'Будьте первым: покажите, что у вас выросло.',
-                action: FilledButton.icon(
-                  onPressed: widget.onNewPost,
-                  icon: const Icon(Icons.add_a_photo_outlined),
-                  label: const Text('Новый пост'),
-                ),
-              ),
+              child: widget.scope == FeedScope.following
+                  // Новичок ни на кого не подписан (specs/012-follows.md,
+                  // «Тексты»).
+                  ? EmptyView(
+                      icon: Icons.people_outline,
+                      title: 'Вы пока ни на кого не подписаны',
+                      hint:
+                          'Во вкладке «Все» посты всех дачников. Понравится '
+                          'чей-то огород, подпишитесь в профиле, и его посты '
+                          'будут здесь.',
+                      action: FilledButton(
+                        onPressed: widget.onShowAll,
+                        child: const Text('Смотреть все посты'),
+                      ),
+                    )
+                  : EmptyView(
+                      icon: Icons.eco_outlined,
+                      title: 'Постов пока нет',
+                      hint: 'Будьте первым: покажите, что у вас выросло.',
+                      action: FilledButton.icon(
+                        onPressed: widget.onNewPost,
+                        icon: const Icon(Icons.add_a_photo_outlined),
+                        label: const Text('Новый пост'),
+                      ),
+                    ),
             ),
           ],
         ),

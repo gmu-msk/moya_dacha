@@ -573,3 +573,18 @@ FROM (VALUES
 ) AS c(post, author, after, text)
 JOIN posts p ON p.id = pg_temp.dacha_post(c.post)
 JOIN dacha_users u ON u.n = c.author;
+
+-- Подписки (specs/012-follows.md): каждый подписан примерно на треть
+-- соседей, часть подписок взаимна — эти двое друзья. Николай, которым
+-- входят на показе, подписан на пятерых: Валентину, Галину Сергеевну,
+-- Михалыча, Людмилу и председателя, поэтому его вкладка «Подписки»
+-- не пуста. Закрытых профилей и заявок здесь нет: их показывает
+-- сценарий 012-follows.
+INSERT INTO follows (follower_id, followee_id, accepted, created_at)
+SELECT a.id, b.id, true, now() - make_interval(days => (a.n * 13 + b.n * 7) % 90, hours => a.n)
+FROM dacha_users a
+JOIN dacha_users b ON b.n <> a.n
+WHERE CASE
+	WHEN a.n = 1 THEN b.n IN (2, 4, 7, 12, 15)
+	ELSE (a.n * 7 + b.n * 11) % 10 < 3
+END;
