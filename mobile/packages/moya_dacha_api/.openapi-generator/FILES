@@ -2,6 +2,7 @@ analysis_options.yaml
 lib/api.dart
 lib/api/auth_api.dart
 lib/api/follows_api.dart
+lib/api/notifications_api.dart
 lib/api/operations_api.dart
 lib/api/posts_api.dart
 lib/api/profile_api.dart
@@ -30,6 +31,9 @@ lib/model/follow_user.dart
 lib/model/health.dart
 lib/model/media.dart
 lib/model/nickname_update.dart
+lib/model/notification.dart
+lib/model/notification_list.dart
+lib/model/notification_post.dart
 lib/model/post.dart
 lib/model/post_draft.dart
 lib/model/post_visibility.dart
@@ -41,5 +45,6 @@ lib/model/report_draft.dart
 lib/model/session_created.dart
 lib/model/session_info.dart
 lib/model/session_request.dart
+lib/model/unread_notifications.dart
 lib/model/user_profile.dart
 pubspec.yaml

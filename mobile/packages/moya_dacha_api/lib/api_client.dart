@@ -215,6 +215,12 @@ class ApiClient {
           return Media.fromJson(value);
         case 'NicknameUpdate':
           return NicknameUpdate.fromJson(value);
+        case 'Notification':
+          return Notification.fromJson(value);
+        case 'NotificationList':
+          return NotificationList.fromJson(value);
+        case 'NotificationPost':
+          return NotificationPost.fromJson(value);
         case 'Post':
           return Post.fromJson(value);
         case 'PostDraft':
@@ -237,6 +243,8 @@ class ApiClient {
           return SessionInfo.fromJson(value);
         case 'SessionRequest':
           return SessionRequest.fromJson(value);
+        case 'UnreadNotifications':
+          return UnreadNotifications.fromJson(value);
         case 'UserProfile':
           return UserProfile.fromJson(value);
         default:

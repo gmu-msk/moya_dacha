@@ -1,8 +1,10 @@
 // Нижняя панель: specs/011-bottom-bar.md.
 //
-// Три кнопки без подписей — «Лента», «Новый пост», «Профиль». Лента и
-// профиль — разделы, новый пост — действие. Значки одного цвета, нарисованы
-// кодом: штакетник, плюс в квадрате, человечек. Открытый раздел стоит на
+// Четыре кнопки без подписей — «Лента», «Новый пост», «Уведомления»,
+// «Профиль» (specs/014-notifications.md, требование 9). Лента, уведомления
+// и профиль — разделы, новый пост — действие. Значки одного цвета,
+// нарисованы кодом: штакетник, плюс в квадрате, колокольчик, человечек.
+// Непрочитанное — маковая точка на колокольчике. Открытый раздел стоит на
 // тёплой подложке и залит — вариант «Подложка» с холста макетов
 // (требование 10).
 import 'package:flutter/material.dart';
@@ -10,7 +12,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 
 /// Разделы главного экрана.
-enum HomeTab { feed, profile }
+enum HomeTab { feed, notifications, profile }
 
 /// Высота панели без системного отступа снизу. Материаловая с подписями —
 /// 80; без подписей хватает цели касания из темы (specs/000-ui.md,
@@ -31,6 +33,7 @@ class AppBottomBar extends StatelessWidget {
     required this.tab,
     required this.onSelect,
     required this.onNewPost,
+    this.unread = false,
   });
 
   /// Открытый раздел.
@@ -42,6 +45,10 @@ class AppBottomBar extends StatelessWidget {
 
   /// «Новый пост» — не раздел, а действие (требование 5).
   final VoidCallback onNewPost;
+
+  /// Есть ли непрочитанное: точка на колокольчике
+  /// (specs/014-notifications.md, требование 5).
+  final bool unread;
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +82,17 @@ class AppBottomBar extends StatelessWidget {
                 label: 'Новый пост',
                 onTap: onNewPost,
                 painter: (color, _) => NewPostIconPainter(color: color),
+              ),
+              _BarButton(
+                label: unread ? 'Уведомления, есть новые' : 'Уведомления',
+                selected: tab == HomeTab.notifications,
+                onTap: () => onSelect(HomeTab.notifications),
+                painter: (color, filled) => BellIconPainter(
+                  color: color,
+                  filled: filled,
+                  dot: unread ? colors.primary : null,
+                  dotBorder: colors.surface,
+                ),
               ),
               _BarButton(
                 label: 'Профиль',
@@ -269,6 +287,62 @@ class NewPostIconPainter extends _BarIconPainter {
         stroke,
       );
   }
+}
+
+/// Уведомления — колокольчик. Точка непрочитанного — маковый кружок
+/// в правом верхнем углу с каймой цвета полотна (требование 9).
+class BellIconPainter extends _BarIconPainter {
+  const BellIconPainter({
+    required super.color,
+    super.filled,
+    this.dot,
+    this.dotBorder,
+  });
+
+  /// Цвет точки или null, если непрочитанного нет.
+  final Color? dot;
+  final Color? dotBorder;
+
+  @override
+  void paintIcon(Canvas canvas) {
+    final bell = Path()
+      ..moveTo(6, 16.5)
+      ..lineTo(6, 11)
+      ..arcToPoint(const Offset(18, 11), radius: const Radius.circular(6))
+      ..lineTo(18, 16.5)
+      ..lineTo(19.5, 18.5)
+      ..lineTo(4.5, 18.5)
+      ..close();
+    if (filled) {
+      canvas.drawPath(bell, fill);
+    }
+    canvas
+      ..drawPath(bell, stroke)
+      ..drawPath(
+        Path()
+          ..moveTo(10, 20.5)
+          ..arcToPoint(
+            const Offset(14, 20.5),
+            radius: const Radius.circular(2.2),
+            clockwise: false,
+          ),
+        stroke,
+      );
+
+    final dot = this.dot;
+    if (dot != null) {
+      const center = Offset(18.5, 5.5);
+      canvas
+        ..drawCircle(center, 4.2, Paint()..color = dotBorder ?? Colors.white)
+        ..drawCircle(center, 3, Paint()..color = dot);
+    }
+  }
+
+  @override
+  bool shouldRepaint(BellIconPainter oldDelegate) =>
+      super.shouldRepaint(oldDelegate) ||
+      oldDelegate.dot != dot ||
+      oldDelegate.dotBorder != dotBorder;
 }
 
 /// Профиль — человечек: голова и плечи.

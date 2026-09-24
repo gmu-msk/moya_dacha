@@ -14,8 +14,8 @@ info:
     загрузка фотографий и создание поста (specs/003-posts.md),
     профиль пользователя для соседей (specs/009-user-profile.md),
     подписки и закрытые профили (specs/012-follows.md), видимость
-    постов (specs/013-post-visibility.md)
-    и операционная проверка живости.
+    постов (specs/013-post-visibility.md), уведомления
+    (specs/014-notifications.md) и операционная проверка живости.
 
 servers:
   - url: /api
@@ -965,6 +965,89 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /me/notifications:
+    get:
+      operationId: getNotifications
+      summary: Мои уведомления
+      description: |
+        События страницами, новые сверху; лайки одного поста слиты в одну
+        строку (specs/014-notifications.md). Заявки на подписку сюда
+        не входят — они в `GET /me/follow-requests`. Чтение списка ничего
+        не отмечает прочитанным: для этого `PUT /me/notifications/seen`.
+      tags: [notifications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Страница событий
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationList"
+        "400":
+          description: |
+            `limit` вне диапазона или не число (`invalid_request`), курсор
+            не разбирается (`invalid_cursor`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/notifications/unread:
+    get:
+      operationId: getUnreadNotifications
+      summary: Есть ли новое
+      description: |
+        Сколько строк раздела новее последнего открытия и сколько ждущих
+        заявок: по ним горит точка на колокольчике
+        (specs/014-notifications.md, требование 5).
+      tags: [notifications]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Счётчики непрочитанного
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadNotifications"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/notifications/seen:
+    put:
+      operationId: markNotificationsSeen
+      summary: Отметить всё прочитанным
+      description: |
+        Всё, что пришло до этой минуты, становится прочитанным
+        (specs/014-notifications.md, требование 7). Заявки остаются
+        непрочитанными, пока ждут ответа.
+      tags: [notifications]
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Отмечено
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /posts/{postId}/visibility:
     put:
       operationId: setPostVisibility
@@ -1870,6 +1953,85 @@ components:
         next_cursor:
           type: string
           description: Курсор на следующую страницу; нет, когда дальше ничего нет
+
+    Notification:
+      type: object
+      description: |
+        Строка раздела «Уведомления» (specs/014-notifications.md,
+        требование 1). У `like` это все лайки одного поста: `actor` —
+        последний отметивший, `created_at` — время его лайка, `others` —
+        сколько отметили кроме него.
+      required: [id, kind, created_at, actor, unread]
+      properties:
+        id:
+          type: string
+          description: Идентификатор строки (UUID)
+        kind:
+          type: string
+          enum: [follow, follow_accepted, like, comment]
+          description: |
+            `follow` — подписался на вас, `follow_accepted` — принял вашу
+            заявку, `like` — отметил ваш пост, `comment` — ответил на ваш пост.
+        created_at:
+          type: string
+          format: date-time
+          description: Когда это случилось
+        actor:
+          $ref: "#/components/schemas/FollowUser"
+        others:
+          type: integer
+          format: int32
+          description: Только у `like` — сколько ещё людей отметили пост
+          example: 2
+        post:
+          $ref: "#/components/schemas/NotificationPost"
+        comment:
+          type: string
+          description: Только у `comment` — начало комментария, до 100 символов
+          example: "Какие огурцы! Сорт какой?"
+        unread:
+          type: boolean
+          description: Новее ли строка последнего открытия раздела
+
+    NotificationPost:
+      type: object
+      description: Пост в строке уведомления — у `like` и `comment`
+      required: [id, thumbnail]
+      properties:
+        id:
+          type: string
+          description: Идентификатор поста (UUID)
+        thumbnail:
+          $ref: "#/components/schemas/Media"
+
+    NotificationList:
+      type: object
+      description: Страница уведомлений. Конец — отсутствие `next_cursor`.
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Строки страницы, новые сверху
+          items:
+            $ref: "#/components/schemas/Notification"
+        next_cursor:
+          type: string
+          description: Курсор на следующую страницу; нет, когда дальше ничего нет
+
+    UnreadNotifications:
+      type: object
+      required: [unread, requests]
+      properties:
+        unread:
+          type: integer
+          format: int32
+          description: Сколько строк раздела новее последнего открытия
+          example: 4
+        requests:
+          type: integer
+          format: int32
+          description: Сколько заявок на подписку ждут ответа
+          example: 1
 
     PrivacyUpdate:
       type: object

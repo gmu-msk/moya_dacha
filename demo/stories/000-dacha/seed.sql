@@ -588,3 +588,10 @@ WHERE CASE
 	WHEN a.n = 1 THEN b.n IN (2, 4, 7, 12, 15)
 	ELSE (a.n * 7 + b.n * 11) % 10 < 3
 END;
+
+-- Уведомления (specs/014-notifications.md) база пишет сама — по лайкам,
+-- комментариям и подпискам выше. Николай последний раз открывал раздел
+-- полдня назад: всё, что пришло к его малине, у него «Новое», и на
+-- колокольчике горит точка.
+UPDATE users SET notifications_seen_at = now() - interval '12 hours'
+WHERE id = (SELECT id FROM dacha_users WHERE n = 1);
