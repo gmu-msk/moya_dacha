@@ -64,20 +64,12 @@ class FenceMarkPainter extends CustomPainter {
     required this.poppy,
     required this.poppyHeart,
     required this.stem,
-    this.outline = false,
   });
 
   final Color fence;
   final Color poppy;
   final Color poppyHeart;
   final Color stem;
-
-  /// Один контур штакетника, без мака: значок ленты в нижней панели,
-  /// пока лента не открыта (specs/011-bottom-bar.md, требование 10).
-  final bool outline;
-
-  /// Толщина контура в квадрате 100×100.
-  static const _outlineWidth = 8.0;
 
   /// Левый край и верхушка каждой штакетины; средняя выше соседних.
   static const _pickets = [(12.0, 34.0), (41.0, 20.0), (70.0, 34.0)];
@@ -95,36 +87,6 @@ class FenceMarkPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.scale(size.width / 100, size.height / 100);
 
-    // Штакетины и перекладина — одна фигура: контуром она обводится
-    // снаружи, без линий перекладины поперёк штакетин.
-    var fencePath = Path()
-      ..addRRect(RRect.fromLTRBR(6, 60, 94, 67, const Radius.circular(2)));
-    for (final (x, top) in _pickets) {
-      fencePath = Path.combine(
-        PathOperation.union,
-        fencePath,
-        Path()
-          ..moveTo(x, top + _picketTip)
-          ..lineTo(x + _picketWidth / 2, top)
-          ..lineTo(x + _picketWidth, top + _picketTip)
-          ..lineTo(x + _picketWidth, _ground)
-          ..lineTo(x, _ground)
-          ..close(),
-      );
-    }
-
-    if (outline) {
-      canvas.drawPath(
-        fencePath,
-        Paint()
-          ..color = fence
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _outlineWidth
-          ..strokeJoin = StrokeJoin.round,
-      );
-      return;
-    }
-
     canvas.drawPath(
       Path()
         ..moveTo(84, 44)
@@ -136,7 +98,23 @@ class FenceMarkPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    canvas.drawPath(fencePath, Paint()..color = fence);
+    final fencePaint = Paint()..color = fence;
+    for (final (x, top) in _pickets) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(x, top + _picketTip)
+          ..lineTo(x + _picketWidth / 2, top)
+          ..lineTo(x + _picketWidth, top + _picketTip)
+          ..lineTo(x + _picketWidth, _ground)
+          ..lineTo(x, _ground)
+          ..close(),
+        fencePaint,
+      );
+    }
+    canvas.drawRRect(
+      RRect.fromLTRBR(6, 60, 94, 67, const Radius.circular(2)),
+      fencePaint,
+    );
 
     final petalPaint = Paint()..color = poppy;
     for (final (dx, dy) in const [
@@ -159,6 +137,5 @@ class FenceMarkPainter extends CustomPainter {
       oldDelegate.fence != fence ||
       oldDelegate.poppy != poppy ||
       oldDelegate.poppyHeart != poppyHeart ||
-      oldDelegate.stem != stem ||
-      oldDelegate.outline != outline;
+      oldDelegate.stem != stem;
 }
