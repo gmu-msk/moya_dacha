@@ -23,11 +23,12 @@ const commentColumn = `
 // GetComments отдаёт разговор под постом целиком, от старого к новому:
 // страниц у него нет (specs/006-comments.md, требование 6).
 func (s *Server) GetComments(ctx context.Context, request gen.GetCommentsRequestObject) (gen.GetCommentsResponseObject, error) {
-	if _, ok := sessionFrom(ctx); !ok {
+	current, ok := sessionFrom(ctx)
+	if !ok {
 		return gen.GetComments401JSONResponse(errUnauthorized), nil
 	}
 
-	found, err := s.postExists(ctx, request.PostId)
+	found, err := s.postExists(ctx, request.PostId, current.user.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +52,7 @@ func (s *Server) AddComment(ctx context.Context, request gen.AddCommentRequestOb
 
 	// Пост проверяется раньше текста: сервис сначала отвечает, есть ли
 	// куда писать (specs/006-comments.md, «API / контракт данных»).
-	found, err := s.postExists(ctx, request.PostId)
+	found, err := s.postExists(ctx, request.PostId, current.user.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -93,16 +94,19 @@ func (s *Server) AddComment(ctx context.Context, request gen.AddCommentRequestOb
 	return gen.AddComment201JSONResponse(comment), nil
 }
 
-// postExists отвечает, есть ли такой пост. Идентификатор, не похожий на
-// UUID, — это «такого поста нет», а не ошибка разбора в базе.
-func (s *Server) postExists(ctx context.Context, id string) (bool, error) {
+// postExists отвечает, есть ли такой пост для смотрящего: невидимого ему
+// поста для него нет (specs/013-post-visibility.md, требование 4).
+// Идентификатор, не похожий на UUID, — это «такого поста нет», а не
+// ошибка разбора в базе.
+func (s *Server) postExists(ctx context.Context, id, viewerID string) (bool, error) {
 	if !isUUID(id) {
 		return false, nil
 	}
 
 	var found bool
 	if err := s.db.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM posts WHERE id = $1)`, id,
+		`SELECT EXISTS (SELECT 1 FROM posts p WHERE p.id = $1 AND `+postVisibleTo("$2")+`)`,
+		id, viewerID,
 	).Scan(&found); err != nil {
 		return false, err
 	}

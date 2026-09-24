@@ -108,6 +108,7 @@ Post _post({
   likes: likes,
   liked: liked,
   comments: 0,
+  visibility: PostVisibility.all,
 );
 
 /// Показать пост в ленте. Повторный вызов с тем же деревом обновляет уже

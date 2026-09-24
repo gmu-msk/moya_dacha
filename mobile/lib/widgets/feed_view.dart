@@ -436,6 +436,7 @@ class FeedPostCard extends StatelessWidget {
                 AuthorLine(
                   author: post.author,
                   when: post.createdAt,
+                  visibility: post.visibility,
                   onTap: onOpenAuthor == null
                       ? null
                       : () => onOpenAuthor!(post.author),
@@ -443,8 +444,9 @@ class FeedPostCard extends StatelessWidget {
               else
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppGap.small),
-                  child: Text(
-                    whenPosted(post.createdAt),
+                  child: PostedLine(
+                    when: post.createdAt,
+                    visibility: post.visibility,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

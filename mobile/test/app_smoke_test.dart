@@ -55,6 +55,7 @@ void main() {
     likes: 2,
     liked: true,
     comments: 1,
+    visibility: PostVisibility.all,
   );
 
   for (final brightness in Brightness.values) {

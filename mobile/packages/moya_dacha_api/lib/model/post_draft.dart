@@ -15,6 +15,7 @@ class PostDraft {
   PostDraft({
     this.mediaIds = const [],
     this.caption,
+    this.visibility,
   });
 
   /// Идентификаторы уже загруженных фотографий, в том порядке, в котором они должны стоять в посте. 
@@ -29,19 +30,29 @@ class PostDraft {
   ///
   String? caption;
 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  PostVisibility? visibility;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is PostDraft &&
     _deepEquality.equals(other.mediaIds, mediaIds) &&
-    other.caption == caption;
+    other.caption == caption &&
+    other.visibility == visibility;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (mediaIds.hashCode) +
-    (caption == null ? 0 : caption!.hashCode);
+    (caption == null ? 0 : caption!.hashCode) +
+    (visibility == null ? 0 : visibility!.hashCode);
 
   @override
-  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption]';
+  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -50,6 +61,11 @@ class PostDraft {
       json[r'caption'] = this.caption;
     } else {
       json[r'caption'] = null;
+    }
+    if (this.visibility != null) {
+      json[r'visibility'] = this.visibility;
+    } else {
+      json[r'visibility'] = null;
     }
     return json;
   }
@@ -75,6 +91,7 @@ class PostDraft {
             ? (json[r'media_ids'] as Iterable).cast<String>().toList(growable: false)
             : const [],
         caption: mapValueOfType<String>(json, r'caption'),
+        visibility: PostVisibility.fromJson(json[r'visibility']),
       );
     }
     return null;

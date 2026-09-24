@@ -13,7 +13,8 @@ info:
     (specs/001-auth.md), профиль пользователя (specs/002-profile.md),
     загрузка фотографий и создание поста (specs/003-posts.md),
     профиль пользователя для соседей (specs/009-user-profile.md),
-    подписки и закрытые профили (specs/012-follows.md)
+    подписки и закрытые профили (specs/012-follows.md), видимость
+    постов (specs/013-post-visibility.md)
     и операционная проверка живости.
 
 servers:
@@ -456,7 +457,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Поста с таким идентификатором нет
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
           content:
             application/json:
               schema:
@@ -496,7 +497,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Поста с таким идентификатором нет
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
           content:
             application/json:
               schema:
@@ -964,6 +965,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /posts/{postId}/visibility:
+    put:
+      operationId: setPostVisibility
+      summary: Сменить видимость своего поста
+      description: |
+        Лайки и комментарии остаются; кто перестал видеть пост, их тоже
+        не видит (specs/013-post-visibility.md, требование 6). Чужой
+        видимый пост — `403 not_your_post`, невидимый — `404`.
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostVisibilityUpdate"
+      responses:
+        "200":
+          description: Пост с новой видимостью
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          description: Неизвестная видимость или её нет (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Пост чужой (`not_your_post`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста нет или он смотрящему не виден (`post_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /posts/{postId}/like:
     put:
       operationId: likePost
@@ -998,7 +1055,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Поста с таким идентификатором нет
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
           content:
             application/json:
               schema:
@@ -1033,7 +1090,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Поста с таким идентификатором нет
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
           content:
             application/json:
               schema:
@@ -1071,7 +1128,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Поста с таким идентификатором нет
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
           content:
             application/json:
               schema:
@@ -1123,7 +1180,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Поста с таким идентификатором нет
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
           content:
             application/json:
               schema:
@@ -1232,7 +1289,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Поста с таким идентификатором нет
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
           content:
             application/json:
               schema:
@@ -1518,7 +1575,7 @@ components:
     Post:
       type: object
       description: Пост — от одной до четырёх фотографий и необязательная подпись.
-      required: [id, created_at, caption, author, media, likes, liked, comments]
+      required: [id, created_at, caption, author, media, likes, liked, comments, visibility]
       properties:
         id:
           type: string
@@ -1555,6 +1612,24 @@ components:
           format: int32
           description: Сколько комментариев под постом
           example: 2
+        visibility:
+          $ref: "#/components/schemas/PostVisibility"
+
+    PostVisibility:
+      type: string
+      enum: [all, friends, me]
+      description: |
+        Кто видит пост (specs/013-post-visibility.md): `all` — все, а у
+        закрытого профиля — подписчики; `friends` — те, с кем автор
+        подписан друг на друга; `me` — только автор.
+      example: friends
+
+    PostVisibilityUpdate:
+      type: object
+      required: [visibility]
+      properties:
+        visibility:
+          $ref: "#/components/schemas/PostVisibility"
 
     Feed:
       type: object
@@ -1827,6 +1902,8 @@ components:
           type: string
           description: Подпись, до 1000 символов, может быть пустой
           example: "Первая клубника в этом году"
+        visibility:
+          $ref: "#/components/schemas/PostVisibility"
 
     Media:
       type: object

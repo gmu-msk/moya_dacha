@@ -40,7 +40,7 @@ func (s *Server) LikePost(ctx context.Context, request gen.LikePostRequestObject
 	// и на этом всё: «такого поста нет» скажет чтение ниже.
 	if _, err := s.db.Exec(ctx, `
 		INSERT INTO post_likes (post_id, user_id)
-		SELECT p.id, $2 FROM posts p WHERE p.id = $1
+		SELECT p.id, $2 FROM posts p WHERE p.id = $1 AND `+postVisibleTo("$2")+`
 		ON CONFLICT DO NOTHING`, request.PostId, current.user.Id,
 	); err != nil {
 		return nil, err

@@ -219,6 +219,10 @@ class ApiClient {
           return Post.fromJson(value);
         case 'PostDraft':
           return PostDraft.fromJson(value);
+        case 'PostVisibility':
+          return PostVisibilityTypeTransformer().decode(value);
+        case 'PostVisibilityUpdate':
+          return PostVisibilityUpdate.fromJson(value);
         case 'PrivacyUpdate':
           return PrivacyUpdate.fromJson(value);
         case 'ProfileUpdate':
