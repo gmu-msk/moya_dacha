@@ -19,7 +19,32 @@ if [ ! -f "$APK" ]; then
 	exit 1
 fi
 
-adb wait-for-device
+if ! command -v adb >/dev/null 2>&1; then
+	echo "Не найден adb: поставьте Android SDK platform-tools и добавьте их в PATH." >&2
+	exit 1
+fi
+
+# `adb wait-for-device` без эмулятора ждёт молча и вечно, поэтому ждём
+# сами, с пределом и подсказкой: сначала устройство, потом конец загрузки
+# системы — до него установка APK тоже висит.
+printf 'Жду эмулятор'
+deadline=$((SECONDS + 120))
+until [ "$(adb get-state 2>/dev/null || true)" = "device" ] &&
+	[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+	if ((SECONDS > deadline)); then
+		echo
+		echo "Эмулятор не найден или не загрузился за 2 минуты." >&2
+		echo "Запустите его (Android Studio → Device Manager → ▶ или" >&2
+		echo "  emulator -avd <имя>; список имён — emulator -list-avds)" >&2
+		echo "и повторите команду. Сейчас adb видит:" >&2
+		adb devices >&2 || true
+		exit 1
+	fi
+	printf '.'
+	sleep 2
+done
+echo
+
 adb install -r "$APK"
 adb logcat -c
 adb shell am start -n "$PACKAGE/.MainActivity"
