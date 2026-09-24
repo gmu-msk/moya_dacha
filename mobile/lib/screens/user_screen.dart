@@ -23,7 +23,6 @@ import '../widgets/follow_button.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/user_avatar.dart';
 import 'follow_list_screen.dart';
-import 'follow_requests_screen.dart';
 import 'profile_screen.dart';
 import 'user_posts_screen.dart';
 
@@ -108,10 +107,6 @@ class UserScreenState extends State<UserScreen> {
   String? _error;
   bool _editing = false;
 
-  /// Сколько заявок ждёт ответа — только у своего закрытого профиля.
-  /// `null` — неизвестно или заявок нет.
-  String? _requests;
-
   bool get _mine => widget.userId == widget.viewerId;
 
   /// Видны ли смотрящему посты и списки: профиль открыт, свой или
@@ -170,10 +165,11 @@ class UserScreenState extends State<UserScreen> {
         throw ApiException(200, 'Сервис не вернул профиль');
       }
       final inside = canSeeInside(profile, mine: _mine);
-      await Future.wait([
-        if (inside) _posts.refresh() else Future(_posts.clear),
-        if (_mine && profile.closed) _loadRequests(),
-      ]);
+      if (inside) {
+        await _posts.refresh();
+      } else {
+        _posts.clear();
+      }
       debugPrint(
         '$logMarker screen=user id=${widget.userId} '
         'posts=${profile.posts} followers=${profile.followers} '
@@ -183,35 +179,13 @@ class UserScreenState extends State<UserScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _profile = profile;
-        if (!(_mine && profile.closed)) {
-          _requests = null;
-        }
-      });
+      setState(() => _profile = profile);
     } on Exception catch (error) {
       debugPrint('$logMarker screen=user error=$error');
       if (!mounted) {
         return;
       }
       setState(() => _error = errorMessage(error));
-    }
-  }
-
-  /// Заявки к своему закрытому профилю. Раздела «Уведомления» пока нет
-  /// (specs/014-notifications.md), поэтому они открываются из профиля.
-  Future<void> _loadRequests() async {
-    try {
-      final page = await FollowsApi(apiClient(token: widget.token))
-          .getFollowRequests(limit: 50);
-      final count = page?.items.length ?? 0;
-      _requests = count == 0
-          ? null
-          : '$count${page?.nextCursor == null ? '' : '+'}';
-    } on Exception catch (error) {
-      // Профиль и без числа заявок профиль.
-      debugPrint('$logMarker screen=user requests_failed error=$error');
-      _requests = null;
     }
   }
 
@@ -234,20 +208,6 @@ class UserScreenState extends State<UserScreen> {
           user: profile,
           tab: tab,
           onFollowChanged: widget.onFollowChanged,
-        ),
-      ),
-    );
-    if (mounted) {
-      await _load();
-    }
-  }
-
-  Future<void> _openRequests() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => FollowRequestsScreen(
-          token: widget.token,
-          viewerId: widget.viewerId,
         ),
       ),
     );
@@ -356,7 +316,6 @@ class UserScreenState extends State<UserScreen> {
     final nextPageError = _posts.nextPageError;
     final inside = canSeeInside(profile, mine: _mine);
     final relation = profile.relation;
-    final requests = _requests;
 
     return CustomScrollView(
       controller: _scroll,
@@ -392,24 +351,6 @@ class UserScreenState extends State<UserScreen> {
                 userId: profile.id,
                 relation: relation,
                 onChanged: _relationChanged,
-              ),
-            ),
-          ),
-        if (_mine && requests != null)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              AppGap.medium,
-              AppGap.small,
-              AppGap.medium,
-              0,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.person_add_alt_outlined),
-                title: const Text('Заявки на подписку'),
-                trailing: Badge(label: Text(requests), largeSize: AppGap.large),
-                onTap: _openRequests,
               ),
             ),
           ),

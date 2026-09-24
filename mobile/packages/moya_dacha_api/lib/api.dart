@@ -30,6 +30,7 @@ part 'auth/http_bearer_auth.dart';
 
 part 'api/auth_api.dart';
 part 'api/follows_api.dart';
+part 'api/notifications_api.dart';
 part 'api/operations_api.dart';
 part 'api/posts_api.dart';
 part 'api/profile_api.dart';
@@ -51,6 +52,9 @@ part 'model/follow_user.dart';
 part 'model/health.dart';
 part 'model/media.dart';
 part 'model/nickname_update.dart';
+part 'model/notification.dart';
+part 'model/notification_list.dart';
+part 'model/notification_post.dart';
 part 'model/post.dart';
 part 'model/post_draft.dart';
 part 'model/post_visibility.dart';
@@ -62,6 +66,7 @@ part 'model/report_draft.dart';
 part 'model/session_created.dart';
 part 'model/session_info.dart';
 part 'model/session_request.dart';
+part 'model/unread_notifications.dart';
 part 'model/user_profile.dart';
 
 

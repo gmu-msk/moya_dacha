@@ -40,12 +40,17 @@ class FeedTabs extends StatefulWidget {
     required this.onOpenPost,
     required this.onNewPost,
     this.onOpenAuthor,
+    this.onRefreshed,
   });
 
   final String token;
   final void Function(Post post) onOpenPost;
   final void Function(Author author)? onOpenAuthor;
   final VoidCallback onNewPost;
+
+  /// Ленту потянули вниз: заодно узнать, нет ли нового в уведомлениях
+  /// (specs/014-notifications.md, требование 6).
+  final VoidCallback? onRefreshed;
 
   @override
   State<FeedTabs> createState() => FeedTabsState();
@@ -99,6 +104,7 @@ class FeedTabsState extends State<FeedTabs> {
     onNewPost: widget.onNewPost,
     onOpenAuthor: widget.onOpenAuthor,
     onShowAll: () => _select(FeedScope.all),
+    onRefreshed: widget.onRefreshed,
   );
 
   @override
@@ -136,6 +142,7 @@ class FeedView extends StatefulWidget {
     this.onOpenAuthor,
     this.scope = FeedScope.all,
     this.onShowAll,
+    this.onRefreshed,
   });
 
   final String token;
@@ -146,6 +153,9 @@ class FeedView extends StatefulWidget {
   /// Из пустых «Подписок» — во «Все» (specs/012-follows.md, требование 2
   /// сценария).
   final VoidCallback? onShowAll;
+
+  /// Ленту потянули вниз.
+  final VoidCallback? onRefreshed;
 
   /// Открыть пост целиком: все фотографии и подпись.
   final void Function(Post post) onOpenPost;
@@ -211,6 +221,12 @@ class FeedViewState extends State<FeedView> {
       return;
     }
     setState(() => _posts[at] = post);
+  }
+
+  /// Потянули вниз — лента заново, и заодно проверка уведомлений.
+  Future<void> _pulled() {
+    widget.onRefreshed?.call();
+    return _refresh();
   }
 
   Future<void> _refresh() async {
@@ -300,7 +316,7 @@ class FeedViewState extends State<FeedView> {
     }
     if (_posts.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _refresh,
+        onRefresh: _pulled,
         // Пустое состояние тоже должно тянуться вниз, иначе обновить
         // ленту, пока в ней пусто, нечем.
         child: ListView(
@@ -339,7 +355,7 @@ class FeedViewState extends State<FeedView> {
     }
 
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: _pulled,
       child: ListView.separated(
         controller: _scroll,
         padding: const EdgeInsets.symmetric(horizontal: AppGap.medium),

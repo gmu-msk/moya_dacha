@@ -3,8 +3,9 @@
 //
 // Всё, что до ленты, экран делает ради неё: узнаёт, кто вошёл, и, если
 // человек ещё не знакомился, показывает знакомство (specs/002-profile.md).
-// Дальше внизу встаёт панель: «Лента», «Новый пост» и «Профиль». Лента и
-// профиль — разделы. У каждого своя стопка экранов (Navigator): пост,
+// Дальше внизу встаёт панель: «Лента», «Новый пост», «Уведомления»
+// и «Профиль». Лента, уведомления и профиль — разделы
+// (specs/014-notifications.md, требование 9). У каждого своя стопка экранов (Navigator): пост,
 // чужой профиль, правка профиля открываются внутри раздела, и панель
 // остаётся под ними. Поверх всего, без панели, — только новый пост
 // (specs/011-bottom-bar.md, требование 1).
@@ -19,6 +20,7 @@ import '../widgets/error_view.dart';
 import '../widgets/feed_view.dart';
 import '../widgets/loading_view.dart';
 import 'intro_screen.dart';
+import 'notifications_screen.dart';
 import 'new_post_screen.dart';
 import 'post_screen.dart';
 import 'user_screen.dart';
@@ -38,6 +40,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<FeedTabsState> _feed = GlobalKey<FeedTabsState>();
   final GlobalKey<UserScreenState> _profile = GlobalKey<UserScreenState>();
+  final GlobalKey<NotificationsScreenState> _notifications =
+      GlobalKey<NotificationsScreenState>();
 
   /// Стопки экранов разделов.
   final Map<HomeTab, GlobalKey<NavigatorState>> _stacks = {
@@ -51,6 +55,13 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Профиль строится при первом касании «Профиля», а не при входе:
   /// кто туда не заходил, не ждёт лишнего запроса.
   bool _profileOpened = false;
+
+  /// Уведомления тоже: их открытие отмечает всё прочитанным, и строить
+  /// раздел заранее значило бы погасить точку, которую ещё не видели.
+  bool _notificationsOpened = false;
+
+  /// Есть ли непрочитанное — точка на колокольчике.
+  bool _unread = false;
 
   @override
   void initState() {
@@ -69,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       setState(() => _user = user);
+      _checkUnread();
     } on Exception catch (error) {
       debugPrint('$logMarker screen=home error=$error');
       // Сессии больше нет — значит, человек не вошёл, что бы ни лежало
@@ -84,15 +96,46 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Есть ли новое: при запуске, при каждом переключении раздела и при
+  /// обновлении ленты — без фонового опроса (specs/014-notifications.md,
+  /// требование 6). Не узнали — точка остаётся какой была.
+  Future<void> _checkUnread() async {
+    try {
+      final counts = await NotificationsApi(apiClient(token: widget.token))
+          .getUnreadNotifications();
+      if (counts == null || !mounted) {
+        return;
+      }
+      final unread = counts.unread > 0 || counts.requests > 0;
+      debugPrint(
+        '$logMarker notifications unread=${counts.unread} '
+        'requests=${counts.requests}',
+      );
+      setState(() => _unread = unread);
+    } on Exception catch (error) {
+      debugPrint('$logMarker notifications unread_failed error=$error');
+    }
+  }
+
   /// Касание раздела в нижней панели. Касание уже открытого закрывает
   /// открытое в нём поверх, а если закрывать нечего — возвращает раздел
   /// к самому верху (specs/011-bottom-bar.md, требование 4).
   void _select(HomeTab tab) {
     if (tab != _tab) {
+      final reopened = tab == HomeTab.notifications && _notificationsOpened;
       setState(() {
         _tab = tab;
         _profileOpened = _profileOpened || tab == HomeTab.profile;
+        _notificationsOpened =
+            _notificationsOpened || tab == HomeTab.notifications;
       });
+      // Раздел уведомлений при каждом открытии читается заново и гасит
+      // точку (требование 5); в первый раз он сделает это сам.
+      if (reopened) {
+        _notifications.currentState?.refresh();
+      } else {
+        _checkUnread();
+      }
       return;
     }
     final stack = _stacks[tab]!.currentState;
@@ -103,6 +146,8 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (tab) {
       case HomeTab.feed:
         _feed.currentState?.scrollToTop();
+      case HomeTab.notifications:
+        _notifications.currentState?.scrollToTop();
       case HomeTab.profile:
         _profile.currentState?.scrollToTop();
     }
@@ -117,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (stack != null && await stack.maybePop()) {
       return;
     }
-    if (_tab == HomeTab.profile) {
+    if (_tab != HomeTab.feed) {
       setState(() => _tab = HomeTab.feed);
       return;
     }
@@ -145,6 +190,71 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Стопка экранов ленты: пост и чужой профиль открываются в ней, под
   /// панелью.
   NavigatorState get _feedStack => _stacks[HomeTab.feed]!.currentState!;
+
+  /// Стопка раздела уведомлений: пост и профиль из строки открываются
+  /// в ней, под панелью.
+  NavigatorState get _notificationsStack =>
+      _stacks[HomeTab.notifications]!.currentState!;
+
+  /// Пост из строки уведомления. Строка знает только его номер, поэтому
+  /// сначала пост читается; удалённого поста строки уже нет, но раздел
+  /// мог открыться раньше удаления.
+  Future<void> _openNotificationPost(String postId) async {
+    final user = _user;
+    if (user == null) {
+      return;
+    }
+    final Post? post;
+    try {
+      post = await PostsApi(apiClient(token: widget.token)).getPost(postId);
+    } on Exception catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      }
+      _notifications.currentState?.refresh();
+      return;
+    }
+    if (post == null || !mounted) {
+      return;
+    }
+    final deleted = await _notificationsStack.push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PostScreen(
+          post: post!,
+          token: widget.token,
+          viewerId: user.id,
+          onChanged: (updated) => _feed.currentState?.replace(updated),
+        ),
+      ),
+    );
+    if (deleted == true) {
+      _ownPostsChanged();
+      _notifications.currentState?.refresh();
+    }
+  }
+
+  /// Профиль из строки уведомления: свой — раздел «Профиль».
+  Future<void> _openNotificationProfile(String userId) async {
+    final user = _user;
+    if (user == null) {
+      return;
+    }
+    if (userId == user.id) {
+      _select(HomeTab.profile);
+      return;
+    }
+    await openUserProfile(
+      _notificationsStack.context,
+      token: widget.token,
+      viewerId: user.id,
+      userId: userId,
+      onPostChanged: (post) => _feed.currentState?.replace(post),
+      onPostDeleted: _ownPostsChanged,
+      onProfileEdited: _profileEdited,
+      onFollowChanged: _followChanged,
+    );
+  }
 
   /// Профиль человека по автору поста. Свой — раздел «Профиль», а не
   /// второй экран поверх ленты (specs/011-bottom-bar.md, требование 7).
@@ -285,12 +395,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: FeedTabs(
                   key: _feed,
                   token: widget.token,
+                  onRefreshed: _checkUnread,
                   onOpenPost: _openPost,
                   onNewPost: _newPost,
                   onOpenAuthor: (author) => _openProfile(author.id),
                 ),
               ),
             ),
+            if (_notificationsOpened)
+              _stack(
+                HomeTab.notifications,
+                () => NotificationsScreen(
+                  key: _notifications,
+                  token: widget.token,
+                  viewerId: user.id,
+                  onOpenPost: _openNotificationPost,
+                  onOpenProfile: _openNotificationProfile,
+                  onSeen: _checkUnread,
+                ),
+              )
+            else
+              const SizedBox.shrink(),
             if (_profileOpened)
               _stack(
                 HomeTab.profile,
@@ -313,6 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
           tab: _tab,
           onSelect: _select,
           onNewPost: _newPost,
+          unread: _unread,
         ),
       ),
     );
