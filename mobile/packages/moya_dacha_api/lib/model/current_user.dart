@@ -21,6 +21,7 @@ class CurrentUser {
     required this.name,
     required this.about,
     this.avatarUrl,
+    required this.closed,
   });
 
   /// Идентификатор пользователя (UUID)
@@ -47,6 +48,9 @@ class CurrentUser {
   /// Ссылка на аватар или `null`, если аватара нет. Может быть относительной — клиент достраивает её до адреса сервиса. 
   String? avatarUrl;
 
+  /// Закрыт ли профиль: посты и списки подписок видят только подписчики, новые подписываются по заявке (specs/012-follows.md) 
+  bool closed;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is CurrentUser &&
     other.id == id &&
@@ -56,7 +60,8 @@ class CurrentUser {
     other.createdAt == createdAt &&
     other.name == name &&
     other.about == about &&
-    other.avatarUrl == avatarUrl;
+    other.avatarUrl == avatarUrl &&
+    other.closed == closed;
 
   @override
   int get hashCode =>
@@ -68,10 +73,11 @@ class CurrentUser {
     (createdAt.hashCode) +
     (name.hashCode) +
     (about.hashCode) +
-    (avatarUrl == null ? 0 : avatarUrl!.hashCode);
+    (avatarUrl == null ? 0 : avatarUrl!.hashCode) +
+    (closed.hashCode);
 
   @override
-  String toString() => 'CurrentUser[id=$id, nickname=$nickname, nicknameChosen=$nicknameChosen, phone=$phone, createdAt=$createdAt, name=$name, about=$about, avatarUrl=$avatarUrl]';
+  String toString() => 'CurrentUser[id=$id, nickname=$nickname, nicknameChosen=$nicknameChosen, phone=$phone, createdAt=$createdAt, name=$name, about=$about, avatarUrl=$avatarUrl, closed=$closed]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -87,6 +93,7 @@ class CurrentUser {
     } else {
       json[r'avatar_url'] = null;
     }
+      json[r'closed'] = this.closed;
     return json;
   }
 
@@ -115,6 +122,8 @@ class CurrentUser {
         assert(json[r'name'] != null, 'Required key "CurrentUser[name]" has a null value in JSON.');
         assert(json.containsKey(r'about'), 'Required key "CurrentUser[about]" is missing from JSON.');
         assert(json[r'about'] != null, 'Required key "CurrentUser[about]" has a null value in JSON.');
+        assert(json.containsKey(r'closed'), 'Required key "CurrentUser[closed]" is missing from JSON.');
+        assert(json[r'closed'] != null, 'Required key "CurrentUser[closed]" has a null value in JSON.');
         return true;
       }());
 
@@ -127,6 +136,7 @@ class CurrentUser {
         name: mapValueOfType<String>(json, r'name')!,
         about: mapValueOfType<String>(json, r'about')!,
         avatarUrl: mapValueOfType<String>(json, r'avatar_url'),
+        closed: mapValueOfType<bool>(json, r'closed')!,
       );
     }
     return null;
@@ -181,6 +191,7 @@ class CurrentUser {
     'created_at',
     'name',
     'about',
+    'closed',
   };
 }
 

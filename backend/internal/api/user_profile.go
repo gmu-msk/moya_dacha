@@ -10,11 +10,14 @@ import (
 	"github.com/gmu-msk/moya_dacha/backend/api/gen"
 )
 
-// GetUser отдаёт профиль любого пользователя любому вошедшему: кто это
-// и сколько у него постов. Номера телефона здесь нет — ни в чужом
-// профиле, ни в своём (CONTEXT.md).
+// GetUser отдаёт профиль любого пользователя любому вошедшему: кто это,
+// сколько у него постов, подписчиков и подписок и как к нему относится
+// смотрящий. Номера телефона здесь нет — ни в чужом профиле, ни в своём
+// (CONTEXT.md). Шапку закрытого профиля видят все (specs/012-follows.md,
+// требование 7).
 func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) (gen.GetUserResponseObject, error) {
-	if _, ok := sessionFrom(ctx); !ok {
+	current, ok := sessionFrom(ctx)
+	if !ok {
 		return gen.GetUser401JSONResponse(errUnauthorized), nil
 	}
 	// Идентификатор не UUID — для клиента то же, что пользователя нет.
@@ -25,12 +28,20 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 	var (
 		user      gen.UserProfile
 		avatarKey *string
+		following string
+		relation  gen.Relation
 	)
+	// Заявки в числа не входят (требование 12).
 	err := s.db.QueryRow(ctx, `
-		SELECT u.id, u.nickname, u.name, u.about, u.avatar_key, u.created_at,
-			(SELECT count(*) FROM posts p WHERE p.author_id = u.id)
-		FROM users u WHERE u.id = $1`, request.UserId,
-	).Scan(&user.Id, &user.Nickname, &user.Name, &user.About, &avatarKey, &user.CreatedAt, &user.Posts)
+		SELECT u.id, u.nickname, u.name, u.about, u.avatar_key, u.created_at, u.closed,
+			(SELECT count(*) FROM posts p WHERE p.author_id = u.id),
+			(SELECT count(*) FROM follows f WHERE f.followee_id = u.id AND f.accepted),
+			(SELECT count(*) FROM follows f WHERE f.follower_id = u.id AND f.accepted),
+			`+relationColumns+`
+		FROM users u WHERE u.id = $1`, request.UserId, current.user.Id,
+	).Scan(&user.Id, &user.Nickname, &user.Name, &user.About, &avatarKey, &user.CreatedAt,
+		&user.Closed, &user.Posts, &user.Followers, &user.Following,
+		&following, &relation.FollowedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.GetUser404JSONResponse(errUserNotFound), nil
 	}
@@ -40,6 +51,11 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 	if avatarKey != nil {
 		url := s.cfg.Media.URL(*avatarKey)
 		user.AvatarUrl = &url
+	}
+	// К себе отношения нет: в своём профиле нет и кнопки.
+	if user.Id != current.user.Id {
+		relation.Following = gen.RelationFollowing(following)
+		user.Relation = &relation
 	}
 	return gen.GetUser200JSONResponse(user), nil
 }
@@ -73,19 +89,21 @@ func (s *Server) GetUserPosts(ctx context.Context, request gen.GetUserPostsReque
 		after = &parsed
 	}
 
-	// Пустая страница не отличает «постов нет» от «человека нет», а
-	// клиенту это разные экраны: сначала проверяем, что человек есть.
-	var exists bool
-	if err := s.db.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM users WHERE id = $1)`, request.UserId,
-	).Scan(&exists); err != nil {
+	// Пустая страница не отличает «постов нет» от «человека нет» и от
+	// «профиль закрыт», а клиенту это разные экраны: сначала проверяем,
+	// что человек есть и его посты смотрящему открыты.
+	access, err := s.profileAccess(ctx, current.user.Id, request.UserId)
+	if err != nil {
 		return nil, err
 	}
-	if !exists {
+	switch access {
+	case profileMissing:
 		return gen.GetUserPosts404JSONResponse(errUserNotFound), nil
+	case profileClosed:
+		return gen.GetUserPosts403JSONResponse(errProfileClosed), nil
 	}
 
-	page, err := s.feedPage(ctx, current.user.Id, request.UserId, after, limit)
+	page, err := s.feedPage(ctx, current.user.Id, request.UserId, false, after, limit)
 	if err != nil {
 		return nil, err
 	}

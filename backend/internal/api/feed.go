@@ -19,12 +19,23 @@ const (
 	MaxFeedLimit     = 50
 )
 
-// GetFeed отдаёт страницу ленты: все посты всех пользователей, новые
-// сверху. Лента одна на всех (CONTEXT.md).
+// GetFeed отдаёт страницу ленты, новые сверху: вкладку «Все» или
+// «Подписки» (specs/012-follows.md, требования 15–18).
 func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) (gen.GetFeedResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
 		return gen.GetFeed401JSONResponse(errUnauthorized), nil
+	}
+
+	followingOnly := false
+	if request.Params.Scope != nil {
+		switch string(*request.Params.Scope) {
+		case "all":
+		case "following":
+			followingOnly = true
+		default:
+			return gen.GetFeed400JSONResponse(errInvalidScope), nil
+		}
 	}
 
 	limit := DefaultFeedLimit
@@ -44,7 +55,7 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 		after = &parsed
 	}
 
-	page, err := s.feedPage(ctx, current.user.Id, "", after, limit)
+	page, err := s.feedPage(ctx, current.user.Id, "", followingOnly, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +70,12 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 // authorID сужает ленту до постов одного человека — так страницами
 // отдаются посты в профиле (specs/009-user-profile.md). Пустой — лента
 // всех.
-func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, after *feedCursor, limit int) (gen.Feed, error) {
+//
+// Посты закрытого профиля видят только сам автор и его подписчики —
+// в любой ленте (specs/012-follows.md, требование 16). followingOnly
+// оставляет только своих и тех, на кого смотрящий подписан: вкладка
+// «Подписки» (требование 17). Заявка — не подписка.
+func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, followingOnly bool, after *feedCursor, limit int) (gen.Feed, error) {
 	var (
 		afterTime *time.Time
 		afterID   *string
@@ -84,10 +100,17 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, after 
 			(SELECT count(*) FROM comments c WHERE c.post_id = p.id)
 		FROM posts p JOIN users u ON u.id = p.author_id
 		WHERE ($5::uuid IS NULL OR p.author_id = $5::uuid)
+		  AND (p.author_id = $4::uuid
+		       OR (NOT $6::boolean AND NOT u.closed)
+		       OR EXISTS (
+		           SELECT 1 FROM follows f
+		           WHERE f.follower_id = $4::uuid AND f.followee_id = p.author_id
+		             AND f.accepted
+		       ))
 		  AND ($1::timestamptz IS NULL
 		       OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid))
 		ORDER BY p.created_at DESC, p.id DESC
-		LIMIT $3`, afterTime, afterID, limit+1, viewerID, author)
+		LIMIT $3`, afterTime, afterID, limit+1, viewerID, author, followingOnly)
 	if err != nil {
 		return gen.Feed{}, err
 	}
@@ -225,6 +248,10 @@ var (
 	errInvalidLimit = gen.Error{
 		Code:    "invalid_request",
 		Message: "За раз отдаётся от 1 до 50 постов",
+	}
+	errInvalidScope = gen.Error{
+		Code:    "invalid_request",
+		Message: "Такой вкладки ленты нет",
 	}
 	errInvalidCursor = gen.Error{
 		Code:    "invalid_cursor",

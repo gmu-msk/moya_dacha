@@ -28,6 +28,7 @@ void main() {
     createdAt: DateTime(2026, 4, 1),
     nickname: 'petya_kamaz',
     nicknameChosen: true,
+    closed: false,
     name: 'Пётр',
     about: 'Три сотки под картошку',
   );

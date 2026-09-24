@@ -12,7 +12,8 @@ info:
     в specs/00X-*.md. Сейчас описаны: вход по номеру телефона
     (specs/001-auth.md), профиль пользователя (specs/002-profile.md),
     загрузка фотографий и создание поста (specs/003-posts.md),
-    профиль пользователя для соседей (specs/009-user-profile.md)
+    профиль пользователя для соседей (specs/009-user-profile.md),
+    подписки и закрытые профили (specs/012-follows.md)
     и операционная проверка живости.
 
 servers:
@@ -506,8 +507,11 @@ paths:
       operationId: getFeed
       summary: Страница ленты
       description: |
-        Все посты всех пользователей, новые сверху: лента одна на всех
-        (CONTEXT.md). Отдаётся страницами — посты и курсор на продолжение.
+        Посты новые сверху. Во вкладке «Все» — посты всех пользователей,
+        кроме закрытых профилей, на которые смотрящий не подписан; во
+        вкладке «Подписки» — только тех, на кого он подписан, и его
+        собственные (specs/012-follows.md). Отдаётся страницами — посты
+        и курсор на продолжение.
 
         Курсор непрозрачен: клиент возвращает его как получил и сам
         не строит. Он указывает на место в порядке ленты, поэтому посты,
@@ -517,6 +521,17 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: scope
+          in: query
+          required: false
+          description: |
+            Вкладка ленты: `all` — «Все» (по умолчанию), `following` —
+            «Подписки»: посты тех, на кого смотрящий подписан, и его
+            собственные (specs/012-follows.md, требования 15–18).
+          schema:
+            type: string
+            enum: [all, following]
+            default: all
         - name: limit
           in: query
           required: false
@@ -542,8 +557,8 @@ paths:
                 $ref: "#/components/schemas/Feed"
         "400":
           description: |
-            `limit` вне диапазона или не число (`invalid_request`), курсор
-            не разбирается (`invalid_cursor`)
+            `limit` вне диапазона или не число, неизвестный `scope`
+            (`invalid_request`), курсор не разбирается (`invalid_cursor`)
           content:
             application/json:
               schema:
@@ -648,8 +663,302 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: Профиль закрыт, а смотрящий не подписан (`profile_closed`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Пользователя нет или идентификатор не UUID (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /users/{userId}/follow:
+    put:
+      operationId: followUser
+      summary: Подписаться или подать заявку
+      description: |
+        На открытый профиль подписка оформляется сразу, на закрытый —
+        подаётся заявка (specs/012-follows.md, требование 2). Идемпотентно:
+        повторная подписка или заявка ничего не меняет и не ошибка.
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Отношение смотрящего к пользователю после запроса
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Relation"
+        "400":
+          description: Подписка на самого себя (`cannot_follow_self`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Пользователя нет или идентификатор не UUID (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: unfollowUser
+      summary: Отписаться или отменить заявку
+      description: |
+        Идемпотентно: отписка без подписки — не ошибка
+        (specs/012-follows.md, требование 3).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Отношение смотрящего к пользователю после запроса
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Relation"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Пользователя нет или идентификатор не UUID (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /users/{userId}/followers:
+    get:
+      operationId: getFollowers
+      summary: Подписчики пользователя страницами
+      description: |
+        Кто подписан на пользователя, новые связи сверху. Заявки сюда
+        не входят. У закрытого профиля список видят только хозяин
+        и подписчики (specs/012-follows.md, требования 7 и 14).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Страница подписчиков
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowList"
+        "400":
+          description: |
+            `limit` вне диапазона или не число (`invalid_request`), курсор
+            не разбирается (`invalid_cursor`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Профиль закрыт, а смотрящий не подписан (`profile_closed`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Пользователя нет или идентификатор не UUID (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /users/{userId}/following:
+    get:
+      operationId: getFollowing
+      summary: Подписки пользователя страницами
+      description: |
+        На кого подписан пользователь, новые связи сверху. Заявки сюда
+        не входят. У закрытого профиля список видят только хозяин
+        и подписчики (specs/012-follows.md, требования 7 и 14).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Страница подписок
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowList"
+        "400":
+          description: |
+            `limit` вне диапазона или не число (`invalid_request`), курсор
+            не разбирается (`invalid_cursor`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Профиль закрыт, а смотрящий не подписан (`profile_closed`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Пользователя нет или идентификатор не UUID (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/privacy:
+    put:
+      operationId: setPrivacy
+      summary: Закрыть или открыть свой профиль
+      description: |
+        Закрытие не трогает тех, кто уже подписан. Открытие принимает
+        все ждущие заявки (specs/012-follows.md, требования 8 и 9).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrivacyUpdate"
+      responses:
+        "200":
+          description: Профиль с новым признаком `closed`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "400":
+          description: Нет поля `closed` или оно не булево (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/follow-requests:
+    get:
+      operationId: getFollowRequests
+      summary: Заявки на подписку ко мне
+      description: Ждущие заявки, новые сверху (specs/012-follows.md).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Страница заявок
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorList"
+        "400":
+          description: |
+            `limit` вне диапазона или не число (`invalid_request`), курсор
+            не разбирается (`invalid_cursor`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/follow-requests/{userId}:
+    put:
+      operationId: acceptFollowRequest
+      summary: Принять заявку
+      description: Заявитель становится подписчиком (specs/012-follows.md, требование 10).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Заявка принята
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Заявки от этого человека нет (`request_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: declineFollowRequest
+      summary: Отклонить заявку
+      description: |
+        Заявка исчезает молча: заявитель снова видит «Подписаться»
+        (specs/012-follows.md, требование 10).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Заявка отклонена
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Заявки от этого человека нет (`request_not_found`)
           content:
             application/json:
               schema:
@@ -999,6 +1308,33 @@ components:
       scheme: bearer
       description: Токен сессии, выданный `POST /auth/session`
 
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: Идентификатор пользователя (UUID)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Сколько записей вернуть, от 1 до 50
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 50
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Курсор из предыдущего ответа; без него — первая страница
+      schema:
+        type: string
+
   schemas:
     Health:
       type: object
@@ -1107,7 +1443,7 @@ components:
         Пользователь, каким его видит он сам. Номер телефона возвращается
         только владельцу сессии и не входит в публичное представление
         автора — см. CONTEXT.md.
-      required: [id, phone, created_at, nickname, nickname_chosen, name, about]
+      required: [id, phone, created_at, nickname, nickname_chosen, name, about, closed]
       properties:
         id:
           type: string
@@ -1148,6 +1484,12 @@ components:
             Ссылка на аватар или `null`, если аватара нет. Может быть
             относительной — клиент достраивает её до адреса сервиса.
           example: "/media/avatars/6f1c8a2b4d5e6f70.jpg"
+        closed:
+          type: boolean
+          description: |
+            Закрыт ли профиль: посты и списки подписок видят только
+            подписчики, новые подписываются по заявке (specs/012-follows.md)
+          example: false
 
     NicknameUpdate:
       type: object
@@ -1329,7 +1671,7 @@ components:
       description: |
         Пользователь, каким его видят соседи: публичное представление автора
         и то, что о себе рассказал он сам. Номера телефона нет — см. CONTEXT.md.
-      required: [id, nickname, name, about, created_at, posts]
+      required: [id, nickname, name, about, created_at, posts, followers, following, closed]
       properties:
         id:
           type: string
@@ -1363,6 +1705,108 @@ components:
           format: int32
           description: Сколько у пользователя постов сейчас
           example: 14
+        followers:
+          type: integer
+          format: int32
+          description: Сколько у пользователя подписчиков; заявки не в счёт
+          example: 12
+        following:
+          type: integer
+          format: int32
+          description: На сколько человек подписан пользователь; заявки не в счёт
+          example: 7
+        closed:
+          type: boolean
+          description: Закрыт ли профиль (specs/012-follows.md)
+          example: false
+        relation:
+          $ref: "#/components/schemas/Relation"
+
+    Relation:
+      type: object
+      description: |
+        Отношение смотрящего к пользователю: по нему строится кнопка
+        «Подписаться» / «Вы подписаны» / «Заявка отправлена»
+        (specs/012-follows.md).
+      required: [following, followed_by]
+      properties:
+        following:
+          type: string
+          enum: [none, requested, "yes"]
+          description: |
+            Смотрящий → пользователь: `none` — не подписан, `requested` —
+            заявка ждёт ответа, `yes` — подписан.
+          example: "yes"
+        followed_by:
+          type: boolean
+          description: Подписан ли пользователь на смотрящего (заявка не в счёт)
+          example: false
+
+    FollowUser:
+      type: object
+      description: |
+        Человек в списке подписчиков или подписок: публичное представление
+        автора и отношение к нему смотрящего. У самого смотрящего
+        `relation` нет — кнопки в его строке не бывает.
+      required: [id, nickname, name]
+      properties:
+        id:
+          type: string
+          description: Идентификатор пользователя (UUID)
+        nickname:
+          type: string
+          description: Никнейм
+          example: "Valya_dacha"
+        name:
+          type: string
+          description: Полное имя, может быть пустым
+          example: "Валентина"
+        avatar_url:
+          type: string
+          nullable: true
+          description: Ссылка на аватар или `null`
+        relation:
+          $ref: "#/components/schemas/Relation"
+
+    FollowList:
+      type: object
+      description: Страница подписчиков или подписок. Конец — отсутствие `next_cursor`.
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Люди страницы, новые связи сверху
+          items:
+            $ref: "#/components/schemas/FollowUser"
+        next_cursor:
+          type: string
+          description: Курсор на следующую страницу; нет, когда дальше ничего нет
+
+    AuthorList:
+      type: object
+      description: Страница людей — заявки на подписку. Конец — отсутствие `next_cursor`.
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Заявители, новые заявки сверху
+          items:
+            $ref: "#/components/schemas/Author"
+        next_cursor:
+          type: string
+          description: Курсор на следующую страницу; нет, когда дальше ничего нет
+
+    PrivacyUpdate:
+      type: object
+      required: [closed]
+      properties:
+        closed:
+          type: boolean
+          nullable: true
+          description: |
+            `true` — профиль закрыт, `false` — открыт. `null` — не ответ,
+            а ошибка `invalid_request`.
+          example: true
 
     PostDraft:
       type: object

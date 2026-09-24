@@ -191,6 +191,8 @@ class ApiClient {
           return AuthCodeTooSoon.fromJson(value);
         case 'Author':
           return Author.fromJson(value);
+        case 'AuthorList':
+          return AuthorList.fromJson(value);
         case 'Comment':
           return Comment.fromJson(value);
         case 'CommentDraft':
@@ -203,6 +205,10 @@ class ApiClient {
           return Error.fromJson(value);
         case 'Feed':
           return Feed.fromJson(value);
+        case 'FollowList':
+          return FollowList.fromJson(value);
+        case 'FollowUser':
+          return FollowUser.fromJson(value);
         case 'Health':
           return Health.fromJson(value);
         case 'Media':
@@ -213,8 +219,12 @@ class ApiClient {
           return Post.fromJson(value);
         case 'PostDraft':
           return PostDraft.fromJson(value);
+        case 'PrivacyUpdate':
+          return PrivacyUpdate.fromJson(value);
         case 'ProfileUpdate':
           return ProfileUpdate.fromJson(value);
+        case 'Relation':
+          return Relation.fromJson(value);
         case 'ReportDraft':
           return ReportDraft.fromJson(value);
         case 'SessionCreated':

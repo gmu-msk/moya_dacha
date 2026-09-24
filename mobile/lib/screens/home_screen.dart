@@ -36,7 +36,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final GlobalKey<FeedViewState> _feed = GlobalKey<FeedViewState>();
+  final GlobalKey<FeedTabsState> _feed = GlobalKey<FeedTabsState>();
   final GlobalKey<UserScreenState> _profile = GlobalKey<UserScreenState>();
 
   /// Стопки экранов разделов.
@@ -165,8 +165,13 @@ class _HomeScreenState extends State<HomeScreen> {
       onPostChanged: (post) => _feed.currentState?.replace(post),
       onPostDeleted: _ownPostsChanged,
       onProfileEdited: _profileEdited,
+      onFollowChanged: _followChanged,
     );
   }
+
+  /// На кого-то подписались или отписались: вкладка «Подписки» теперь
+  /// другая (specs/012-follows.md, сценарий, шаги 4 и 5).
+  void _followChanged() => _feed.currentState?.refresh();
 
   /// «Новый пост» в панели или в пустой ленте. Экран создания — поверх
   /// всего, без панели. Опубликовав, человек видит свой пост в ленте,
@@ -274,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Заголовка нет: на главном экране в заголовке стоит
                 // логотип (specs/000-ui.md, правило 14).
                 padded: false,
-                child: FeedView(
+                child: FeedTabs(
                   key: _feed,
                   token: widget.token,
                   onOpenPost: _openPost,
@@ -294,6 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPostChanged: (post) => _feed.currentState?.replace(post),
                   onPostDeleted: () => _feed.currentState?.refresh(),
                   onProfileEdited: _profileEdited,
+                  onFollowChanged: _followChanged,
                 ),
               )
             else

@@ -316,6 +316,10 @@ func TestUserProfileOfOneselfIsTheSameAsNeighboursSeeIt(t *testing.T) {
 		t.Fatalf("свой профиль не разобрался как JSON: %v", err)
 	}
 	seenByNeighbour := userProfileFields(t, baseURL, otherToken, userID)
+	// Отношение смотрящего к человеку в своём профиле не приходит —
+	// кнопки подписки на себя нет (specs/012-follows.md, «Изменения
+	// в существующих»). Всё остальное должно совпадать.
+	delete(seenByNeighbour, "relation")
 
 	if !reflect.DeepEqual(mine, seenByNeighbour) {
 		t.Errorf("свой профиль отличается от того, что видит сосед:\nсвой: %v\nу соседа: %v", mine, seenByNeighbour)

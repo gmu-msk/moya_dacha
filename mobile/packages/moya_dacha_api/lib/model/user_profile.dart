@@ -20,6 +20,10 @@ class UserProfile {
     this.avatarUrl,
     required this.createdAt,
     required this.posts,
+    required this.followers,
+    required this.following,
+    required this.closed,
+    this.relation,
   });
 
   /// Идентификатор пользователя (UUID)
@@ -43,6 +47,23 @@ class UserProfile {
   /// Сколько у пользователя постов сейчас
   int posts;
 
+  /// Сколько у пользователя подписчиков; заявки не в счёт
+  int followers;
+
+  /// На сколько человек подписан пользователь; заявки не в счёт
+  int following;
+
+  /// Закрыт ли профиль (specs/012-follows.md)
+  bool closed;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  Relation? relation;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is UserProfile &&
     other.id == id &&
@@ -51,7 +72,11 @@ class UserProfile {
     other.about == about &&
     other.avatarUrl == avatarUrl &&
     other.createdAt == createdAt &&
-    other.posts == posts;
+    other.posts == posts &&
+    other.followers == followers &&
+    other.following == following &&
+    other.closed == closed &&
+    other.relation == relation;
 
   @override
   int get hashCode =>
@@ -62,10 +87,14 @@ class UserProfile {
     (about.hashCode) +
     (avatarUrl == null ? 0 : avatarUrl!.hashCode) +
     (createdAt.hashCode) +
-    (posts.hashCode);
+    (posts.hashCode) +
+    (followers.hashCode) +
+    (following.hashCode) +
+    (closed.hashCode) +
+    (relation == null ? 0 : relation!.hashCode);
 
   @override
-  String toString() => 'UserProfile[id=$id, nickname=$nickname, name=$name, about=$about, avatarUrl=$avatarUrl, createdAt=$createdAt, posts=$posts]';
+  String toString() => 'UserProfile[id=$id, nickname=$nickname, name=$name, about=$about, avatarUrl=$avatarUrl, createdAt=$createdAt, posts=$posts, followers=$followers, following=$following, closed=$closed, relation=$relation]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -80,6 +109,14 @@ class UserProfile {
     }
       json[r'created_at'] = this.createdAt.toUtc().toIso8601String();
       json[r'posts'] = this.posts;
+      json[r'followers'] = this.followers;
+      json[r'following'] = this.following;
+      json[r'closed'] = this.closed;
+    if (this.relation != null) {
+      json[r'relation'] = this.relation;
+    } else {
+      json[r'relation'] = null;
+    }
     return json;
   }
 
@@ -106,6 +143,12 @@ class UserProfile {
         assert(json[r'created_at'] != null, 'Required key "UserProfile[created_at]" has a null value in JSON.');
         assert(json.containsKey(r'posts'), 'Required key "UserProfile[posts]" is missing from JSON.');
         assert(json[r'posts'] != null, 'Required key "UserProfile[posts]" has a null value in JSON.');
+        assert(json.containsKey(r'followers'), 'Required key "UserProfile[followers]" is missing from JSON.');
+        assert(json[r'followers'] != null, 'Required key "UserProfile[followers]" has a null value in JSON.');
+        assert(json.containsKey(r'following'), 'Required key "UserProfile[following]" is missing from JSON.');
+        assert(json[r'following'] != null, 'Required key "UserProfile[following]" has a null value in JSON.');
+        assert(json.containsKey(r'closed'), 'Required key "UserProfile[closed]" is missing from JSON.');
+        assert(json[r'closed'] != null, 'Required key "UserProfile[closed]" has a null value in JSON.');
         return true;
       }());
 
@@ -117,6 +160,10 @@ class UserProfile {
         avatarUrl: mapValueOfType<String>(json, r'avatar_url'),
         createdAt: mapDateTime(json, r'created_at', r'')!,
         posts: mapValueOfType<int>(json, r'posts')!,
+        followers: mapValueOfType<int>(json, r'followers')!,
+        following: mapValueOfType<int>(json, r'following')!,
+        closed: mapValueOfType<bool>(json, r'closed')!,
+        relation: Relation.fromJson(json[r'relation']),
       );
     }
     return null;
@@ -170,6 +217,9 @@ class UserProfile {
     'about',
     'created_at',
     'posts',
+    'followers',
+    'following',
+    'closed',
   };
 }
 

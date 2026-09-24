@@ -34,6 +34,7 @@ final _someone = CurrentUser(
   createdAt: DateTime(2026),
   nickname: 'petya_kamaz',
   nicknameChosen: true,
+  closed: false,
   name: 'Пётр',
   about: '',
 );

@@ -18,11 +18,11 @@ import (
 
 // userColumns — поля, из которых собирается профиль. Порядок совпадает
 // с scanUser: читать их из базы нужно везде одинаково.
-const userColumns = `id, phone, created_at, nickname, nickname_chosen, name, about, avatar_key`
+const userColumns = `id, phone, created_at, nickname, nickname_chosen, name, about, avatar_key, closed`
 
 // userColumnsPrefixed — те же поля, когда в запросе несколько таблиц
 // и users названа u.
-const userColumnsPrefixed = `u.id, u.phone, u.created_at, u.nickname, u.nickname_chosen, u.name, u.about, u.avatar_key`
+const userColumnsPrefixed = `u.id, u.phone, u.created_at, u.nickname, u.nickname_chosen, u.name, u.about, u.avatar_key, u.closed`
 
 // GetMe отдаёт профиль владельца токена.
 func (s *Server) GetMe(ctx context.Context, _ gen.GetMeRequestObject) (gen.GetMeResponseObject, error) {
@@ -207,6 +207,7 @@ func (s *Server) scanUser(row pgx.Row) (gen.CurrentUser, error) {
 	if err := row.Scan(
 		&user.Id, &user.Phone, &user.CreatedAt,
 		&user.Nickname, &user.NicknameChosen, &user.Name, &user.About, &avatarKey,
+		&user.Closed,
 	); err != nil {
 		return gen.CurrentUser{}, err
 	}
