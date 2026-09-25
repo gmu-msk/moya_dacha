@@ -116,8 +116,9 @@ class _CommentsViewState extends State<CommentsView> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
     } finally {
       if (mounted) {
         setState(() => _sending = false);
@@ -155,8 +156,9 @@ class _CommentsViewState extends State<CommentsView> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
     }
   }
 
@@ -167,8 +169,7 @@ class _CommentsViewState extends State<CommentsView> {
     await askAndReport(
       context,
       title: 'Пожаловаться на комментарий?',
-      question:
-          'Жалобу посмотрит владелец сервиса. Комментарий '
+      question: 'Жалобу посмотрит владелец сервиса. Комментарий '
           'останется на месте, и автор о ней не узнает.',
       send: (reason) => _api.reportComment(
         widget.postId,

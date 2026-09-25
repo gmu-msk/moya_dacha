@@ -57,8 +57,7 @@ const codeMask = InputMask(skeleton: '____', slots: [0, 1, 2, 3]);
 /// `9152345678` — один и тот же номер (specs/001-auth.md, требование 2).
 String phoneDigits(String raw) {
   var digits = raw.replaceAll(_notDigit, '');
-  if (digits.length == 11 &&
-      (digits.startsWith('7') || digits.startsWith('8'))) {
+  if (digits.length == 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
     digits = digits.substring(1);
   }
   if (digits.length > phoneMask.length) {
@@ -171,15 +170,14 @@ class MaskedField extends StatefulWidget {
 
 class _MaskedFieldState extends State<MaskedField>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _shake =
-      AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 400),
-      )..addStatusListener((status) {
-        if (status == AnimationStatus.completed && mounted) {
-          setState(() => _rejected = false);
-        }
-      });
+  late final AnimationController _shake = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 400),
+  )..addStatusListener((status) {
+    if (status == AnimationStatus.completed && mounted) {
+      setState(() => _rejected = false);
+    }
+  });
 
   /// Последний символ не принят: форма подсвечена и качается.
   bool _rejected = false;
@@ -307,9 +305,8 @@ class _MaskedFieldState extends State<MaskedField>
     // Рамка отказа — общая рамка полей из темы, перекрашенная: своего
     // скругления экран не придумывает (specs/000-ui.md, правило 9).
     final shape = theme.inputDecorationTheme.border;
-    final border =
-        (shape is OutlineInputBorder ? shape : const OutlineInputBorder())
-            .copyWith(borderSide: BorderSide(color: scheme.error, width: 2));
+    final border = (shape is OutlineInputBorder ? shape : const OutlineInputBorder())
+        .copyWith(borderSide: BorderSide(color: scheme.error, width: 2));
 
     final field = TextField(
       key: const Key('masked-field'),
@@ -335,9 +332,7 @@ class _MaskedFieldState extends State<MaskedField>
       animation: _shake,
       builder: (context, child) => Transform.translate(
         offset: Offset(
-          math.sin(_shake.value * math.pi * 6) *
-              (1 - _shake.value) *
-              AppGap.small,
+          math.sin(_shake.value * math.pi * 6) * (1 - _shake.value) * AppGap.small,
           0,
         ),
         child: child,
