@@ -51,8 +51,8 @@ jobs:
             echo "Для «$ACTION» нужен номер телефона." >&2
             exit 1
           fi
-          out="$(ssh vps "sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
-            \$sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; exec moya-dacha-server \"\$@\"' _ $cmd ${PHONE:+\"$PHONE\"}")"
+          # sudo здесь нужен и под root: им команда уходит от имени сервиса.
+          out="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; exec moya-dacha-server \"\$@\"' _ $cmd ${PHONE:+\"$PHONE\"}")"
           echo "$out"
           {
             echo '```'
