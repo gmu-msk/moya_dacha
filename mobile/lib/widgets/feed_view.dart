@@ -4,6 +4,8 @@
 // целиком. Ошибка следующей страницы не стирает то, что уже показано:
 // на дачной связи это обычное дело, и терять из-за неё пролистанное
 // нельзя (specs/004-feed.md, требование 13).
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
@@ -360,7 +362,7 @@ class FeedViewState extends State<FeedView> {
         controller: _scroll,
         padding: const EdgeInsets.symmetric(horizontal: AppGap.medium),
         itemCount: _posts.length + 1,
-        separatorBuilder: (_, _) => const SizedBox(height: AppGap.large),
+        separatorBuilder: (_, _) => const SizedBox(height: AppGap.snug),
         itemBuilder: (context, index) {
           if (index == _posts.length) {
             return _footer();
@@ -401,8 +403,9 @@ class FeedViewState extends State<FeedView> {
   }
 }
 
-/// Пост в ленте: автор, первая фотография и начало подписи. Остальное —
-/// на экране поста (specs/004-feed.md, требования 9 и 11).
+/// Пост в ленте: автор, фотографии каруселью и начало подписи. Подпись
+/// целиком и комментарии — на экране поста (specs/004-feed.md,
+/// требования 9 и 11).
 class FeedPostCard extends StatelessWidget {
   const FeedPostCard({
     super.key,
@@ -435,7 +438,6 @@ class FeedPostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final photo = post.media.isEmpty ? null : post.media.first;
 
     // Пост — карточка на полотне: белая подложка, тонкий кант и
     // скругление приходят из темы, экран их не повторяет (ADR-0012).
@@ -444,7 +446,7 @@ class FeedPostCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(AppGap.medium),
+          padding: const EdgeInsets.all(AppGap.snug),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -468,44 +470,9 @@ class FeedPostCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (photo != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppShape.photo),
-                  child: Stack(
-                    children: [
-                      AspectRatio(
-                        // Размеры приходят вместе с постом, поэтому место
-                        // под фотографию занято до её загрузки и лента
-                        // не дёргается (specs/004-feed.md, требование 10).
-                        aspectRatio: photo.height == 0
-                            ? 1
-                            : photo.width / photo.height,
-                        child: Image.network(
-                          mediaUrl(photo.url),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      if (post.media.length > 1) ...[
-                        Positioned(
-                          top: AppGap.small,
-                          right: AppGap.small,
-                          child: _PhotoCount(count: post.media.length),
-                        ),
-                        // Точки по нижнему краю: по ним видно, что
-                        // фотография не одна, ещё до того, как прочитано
-                        // «1/4».
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: AppGap.small,
-                          child: _PhotoDots(count: post.media.length),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+              if (post.media.isNotEmpty) FeedPhotos(media: post.media),
               if (post.caption.isNotEmpty) ...[
-                const SizedBox(height: AppGap.small),
+                const SizedBox(height: AppGap.tiny),
                 Text(
                   post.caption,
                   style: theme.textTheme.bodyLarge,
@@ -539,10 +506,126 @@ class FeedPostCard extends StatelessWidget {
   }
 }
 
-/// Отметка «1/4» на первой фотографии поста.
-class _PhotoCount extends StatelessWidget {
-  const _PhotoCount({required this.count});
+/// Фотографии поста в ленте. Если их несколько, они листаются свайпом
+/// прямо здесь; точки внизу показывают, какая открыта, а отметка «2/7»
+/// появляется после свайпа и плавно гаснет (specs/004-feed.md,
+/// требование 9). Следующая фотография не грузится, пока до неё не
+/// долистали: `PageView` строит страницы только по мере надобности.
+class FeedPhotos extends StatefulWidget {
+  const FeedPhotos({super.key, required this.media});
 
+  final List<Media> media;
+
+  /// Сколько видна отметка «2/7» после свайпа.
+  static const countShown = Duration(milliseconds: 1500);
+
+  /// За сколько она гаснет и появляется.
+  static const countFade = Duration(milliseconds: 400);
+
+  @override
+  State<FeedPhotos> createState() => _FeedPhotosState();
+}
+
+class _FeedPhotosState extends State<FeedPhotos> {
+  final _pages = PageController();
+  Timer? _hide;
+  int _page = 0;
+  bool _countVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleHide();
+  }
+
+  @override
+  void dispose() {
+    _hide?.cancel();
+    _pages.dispose();
+    super.dispose();
+  }
+
+  void _scheduleHide() {
+    _hide?.cancel();
+    _hide = Timer(FeedPhotos.countShown, () {
+      if (mounted) {
+        setState(() => _countVisible = false);
+      }
+    });
+  }
+
+  void _turned(int page) {
+    setState(() {
+      _page = page;
+      _countVisible = true;
+    });
+    _scheduleHide();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = widget.media;
+    final first = media.first;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppShape.photo),
+      child: AspectRatio(
+        // Размеры приходят вместе с постом, поэтому место под фотографию
+        // занято до её загрузки и лента не дёргается (specs/004-feed.md,
+        // требование 10). Рамку задаёт первая фотография, остальные
+        // вписываются в неё обрезкой — иначе карточка прыгала бы по
+        // высоте на каждом свайпе.
+        aspectRatio: first.height == 0 ? 1 : first.width / first.height,
+        child: media.length == 1
+            ? _photo(first)
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  PageView.builder(
+                    controller: _pages,
+                    itemCount: media.length,
+                    onPageChanged: _turned,
+                    itemBuilder: (_, index) => _photo(media[index]),
+                  ),
+                  Positioned(
+                    top: AppGap.small,
+                    right: AppGap.small,
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: _countVisible ? 1 : 0,
+                        duration: FeedPhotos.countFade,
+                        child: _PhotoCount(
+                          current: _page + 1,
+                          count: media.length,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Точки остаются всегда: по ним видно, что фотография
+                  // не одна, и когда отметка погасла.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: AppGap.small,
+                    child: IgnorePointer(
+                      child: _PhotoDots(current: _page, count: media.length),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _photo(Media photo) =>
+      Image.network(mediaUrl(photo.url), fit: BoxFit.cover);
+}
+
+/// Отметка «2/7» на фотографии поста.
+class _PhotoCount extends StatelessWidget {
+  const _PhotoCount({required this.current, required this.count});
+
+  final int current;
   final int count;
 
   @override
@@ -552,15 +635,15 @@ class _PhotoCount extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.black54,
-        borderRadius: BorderRadius.circular(AppGap.small),
+        borderRadius: BorderRadius.circular(AppShape.small),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppGap.small,
-          vertical: 4,
+          vertical: AppGap.tiny,
         ),
         child: Text(
-          '1/$count',
+          '$current/$count',
           style: theme.textTheme.labelLarge?.copyWith(color: Colors.white),
         ),
       ),
@@ -568,11 +651,11 @@ class _PhotoCount extends StatelessWidget {
   }
 }
 
-/// Точки под фотографией: сколько их в посте. Первая — та, что видна;
-/// пролистать их можно на экране поста (specs/004-feed.md, требование 9).
+/// Точки под фотографией: сколько их в посте и какая открыта.
 class _PhotoDots extends StatelessWidget {
-  const _PhotoDots({required this.count});
+  const _PhotoDots({required this.current, required this.count});
 
+  final int current;
   final int count;
 
   @override
@@ -588,7 +671,7 @@ class _PhotoDots extends StatelessWidget {
                 // Точки лежат на фотографии, а какая она — неизвестно,
                 // поэтому цвета темы здесь не годятся: белое на тёмной
                 // подложке видно на любом снимке.
-                color: i == 0 ? Colors.white : Colors.white54,
+                color: i == current ? Colors.white : Colors.white54,
                 shape: BoxShape.circle,
               ),
               child: const SizedBox.square(dimension: AppGap.small),

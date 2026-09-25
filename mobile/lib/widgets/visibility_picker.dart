@@ -100,7 +100,7 @@ class VisibilityPicker extends StatelessWidget {
         color: picked
             ? theme.colorScheme.surfaceContainerHighest
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(AppGap.medium - 2),
+        borderRadius: BorderRadius.circular(AppShape.small),
         clipBehavior: Clip.antiAlias,
         child: RadioListTile<PostVisibility>(
           value: option,

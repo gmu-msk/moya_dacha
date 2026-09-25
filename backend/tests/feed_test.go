@@ -348,7 +348,7 @@ func TestFeedShowsOwnPostsAlongsideOthers(t *testing.T) {
 }
 
 // Пост приходит в ленте в том же виде, что и по своему адресу: отдельного
-// усечённого представления нет (ФТ-5, ФТ-10, «Пост с четырьмя
+// усечённого представления нет (ФТ-5, ФТ-10, «Пост с десятью
 // фотографиями»).
 func TestFeedItemIsTheWholePostJustLikeItsOwnPage(t *testing.T) {
 	baseURL := startAPI(t)
@@ -357,11 +357,18 @@ func TestFeedItemIsTheWholePostJustLikeItsOwnPage(t *testing.T) {
 	introduce(t, baseURL, token, profileName)
 	avatar := avatarOf(t, baseURL, token, imageBytes(t, "png", 300, 300))
 
+	// Десять — наибольшее число фотографий в посте (003-posts, ФТ-1).
 	photos := []mediaPayload{
 		photoOf(t, baseURL, token, 400, 300),
 		photoOf(t, baseURL, token, 300, 400),
 		photoOf(t, baseURL, token, 200, 200),
 		photoOf(t, baseURL, token, 640, 480),
+		photoOf(t, baseURL, token, 480, 640),
+		photoOf(t, baseURL, token, 320, 240),
+		photoOf(t, baseURL, token, 240, 320),
+		photoOf(t, baseURL, token, 500, 500),
+		photoOf(t, baseURL, token, 600, 400),
+		photoOf(t, baseURL, token, 400, 600),
 	}
 	mediaIDs := make([]string, 0, len(photos))
 	for _, photo := range photos {
@@ -402,7 +409,7 @@ func TestFeedItemIsTheWholePostJustLikeItsOwnPage(t *testing.T) {
 		t.Errorf("пост в ленте отличается от поста по своему адресу:\nв ленте: %v\nпо адресу: %v", fromFeed, fromPage)
 	}
 
-	// Все четыре фотографии, по порядку и с размерами: лента занимает
+	// Все десять фотографий, по порядку и с размерами: лента занимает
 	// место под картинку до того, как та загрузится (ФТ-10).
 	var item postPayload
 	if err := json.Unmarshal(raw.Items[0], &item); err != nil {

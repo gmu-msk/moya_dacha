@@ -39,7 +39,7 @@ class SegmentTabs extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppGap.medium),
+          borderRadius: BorderRadius.circular(AppGap.small),
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppGap.tiny),
@@ -67,7 +67,7 @@ class SegmentTabs extends StatelessWidget {
       child: Material(
         color: open ? scheme.surface : Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppGap.medium - AppGap.tiny),
+          borderRadius: BorderRadius.circular(AppShape.small),
           side: open
               ? BorderSide(
                   color: scheme.outlineVariant,

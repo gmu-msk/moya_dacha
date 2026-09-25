@@ -27,11 +27,12 @@ Future<ThemeData> builtTheme(WidgetTester tester, Brightness brightness) async {
 }
 
 void main() {
-  testWidgets('мак — основная краска, василёк — вторая', (tester) async {
+  testWidgets('кнопки васильковые, мак — только акцент', (tester) async {
     final theme = await builtTheme(tester, Brightness.light);
 
-    expect(theme.colorScheme.primary, const Color(0xFFC7323C));
+    expect(theme.colorScheme.primary, const Color(0xFF2F5AA8));
     expect(theme.colorScheme.secondary, const Color(0xFF2F5AA8));
+    expect(theme.colorScheme.tertiary, const Color(0xFFC7323C));
   });
 
   testWidgets('заголовки набраны Rubik, остальной текст — Golos Text', (
@@ -45,7 +46,7 @@ void main() {
     expect(theme.textTheme.labelLarge?.fontFamily, 'Golos Text');
   });
 
-  testWidgets('карточка поста: белая, с кантом и скруглением 16', (
+  testWidgets('карточка поста: белая, с кантом и скруглением 8', (
     tester,
   ) async {
     final theme = await builtTheme(tester, Brightness.light);
@@ -53,7 +54,7 @@ void main() {
 
     expect(theme.cardTheme.color, theme.colorScheme.surfaceContainerLowest);
     expect(theme.cardTheme.elevation, 0);
-    expect(shape.borderRadius, BorderRadius.circular(16));
+    expect(shape.borderRadius, BorderRadius.circular(8));
     expect(shape.side.width, AppShape.hairline);
   });
 

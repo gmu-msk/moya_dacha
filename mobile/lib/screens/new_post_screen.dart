@@ -21,7 +21,7 @@ const _thumbnailSize = 104.0;
 
 /// Сколько фотографий помещается в пост. То же число, что и на сервисе
 /// (docs/adr/0006-post-is-media.md).
-const maxPostPhotos = 4;
+const maxPostPhotos = 10;
 
 /// Фотография в процессе: сначала файл на устройстве, потом ещё и
 /// загруженное медиа. Пока `uploaded` пусто, она в пост не годится.
@@ -188,7 +188,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
           if (_photos.isEmpty)
             Text(
               'Поста без фотографии не бывает: выберите от одной '
-              'до четырёх.',
+              'до десяти.',
               style: theme.textTheme.bodyMedium,
             )
           else
@@ -249,7 +249,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
         fit: StackFit.expand,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(AppGap.small),
+            borderRadius: BorderRadius.circular(AppShape.small),
             child: Image.file(File(photo.file.path), fit: BoxFit.cover),
           ),
           if (photo.busy)

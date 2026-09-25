@@ -15,6 +15,7 @@ class AppScreen extends StatelessWidget {
     this.actions,
     this.padded = true,
     this.showServerStatus = true,
+    this.untitled = false,
   });
 
   /// Содержимое экрана. Занимает всё место под заголовком.
@@ -24,6 +25,11 @@ class AppScreen extends StatelessWidget {
   /// приложения, и в заголовке стоит логотип, а не слово
   /// (specs/000-ui.md, правило 14).
   final String? title;
+
+  /// Заголовок без названия и без логотипа: стрелка назад и кнопки
+  /// справа. Для экранов, где название ничего не добавляет к тому, что
+  /// и так видно, — например, пост.
+  final bool untitled;
 
   /// Кнопки справа в заголовке: например, «пожаловаться» на экране поста.
   final List<Widget>? actions;
@@ -41,7 +47,11 @@ class AppScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: title == null ? const AppLogo() : Text(title),
+        title: untitled
+            ? null
+            : title == null
+            ? const AppLogo()
+            : Text(title),
         // Логотип стоит с краю, слово — по центру, как Material 3 и просит.
         centerTitle: title == null ? false : null,
         actions: [if (showServerStatus) const ServerStatus(), ...?actions],

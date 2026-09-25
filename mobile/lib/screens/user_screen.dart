@@ -677,7 +677,7 @@ class _PostTile extends StatelessWidget {
       button: true,
       label: count > 1 ? 'Пост, фотографий: $count' : 'Пост',
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppGap.small),
+        borderRadius: BorderRadius.circular(AppShape.small),
         child: Stack(
           fit: StackFit.expand,
           children: [
