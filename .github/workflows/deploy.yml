@@ -1,0 +1,166 @@
+name: Деплой
+
+# Прод — один VPS, деплой только отсюда и только с main (ADR-0004).
+# В PR, который трогает деплой, вместо деплоя идёт проверка доступа:
+# она только читает, что за машина, и ничего на ней не меняет.
+#
+# Секреты репозитория: VPS_HOST (IP), VPS_USER (root или пользователь
+# с sudo без пароля), VPS_SSH_KEY (приватный ключ). Переменная
+# репозитория DOMAIN необязательна: без неё адрес — <ip-через-дефисы>.sslip.io.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - deploy/**
+      - .github/workflows/deploy.yml
+  workflow_dispatch:
+
+# Два деплоя одновременно на одну машину не идут.
+concurrency:
+  group: deploy-${{ github.event_name == 'pull_request' && github.ref || 'prod' }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Доступ к VPS
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ключ SSH
+        run: ./deploy/ssh-setup.sh
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      - name: Что за машина
+        run: |
+          ssh vps 'set -e
+            . /etc/os-release; echo "ОС: $PRETTY_NAME"
+            echo "ядер: $(nproc)"
+            free -m | awk "/^Mem:/ {print \"память, МБ: \" \$2} /^Swap:/ {print \"подкачка, МБ: \" \$2}"
+            df -h / | awk "NR==2 {print \"диск: \" \$2 \", свободно \" \$4}"
+            echo "пользователь: $(id -un), sudo без пароля: $( [ "$(id -u)" = 0 ] && echo root || (sudo -n true 2>/dev/null && echo да || echo нет))"
+            echo "сервис уже стоит: $(test -f /etc/moya-dacha.env && echo да || echo нет)"
+            echo "занятые 80/443: $( (ss -ltnH "sport = :80" ; ss -ltnH "sport = :443") | awk "{print \$4}" | tr "\n" " ")"
+          ' | tee -a "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Сервер
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      domain: ${{ steps.domain.outputs.domain }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Адрес сервера
+        id: domain
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: echo "domain=${DOMAIN:-${VPS_HOST//./-}.sslip.io}" >> "$GITHUB_OUTPUT"
+
+      # Статические бинарники: на VPS не нужен ни Go, ни libc нужной версии.
+      - name: Релиз
+        run: |
+          mkdir -p release
+          cd backend
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../release/moya-dacha-server ./cmd/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../release/goose github.com/pressly/goose/v3/cmd/goose
+          cd ..
+          cp -r backend/migrations release/
+          cp deploy/setup.sh deploy/release.sh deploy/backup.sh deploy/Caddyfile \
+            deploy/moya-dacha.service deploy/moya-dacha-backup.service \
+            deploy/moya-dacha-backup.timer release/
+          tar -czf release.tgz release
+
+      - name: Ключ SSH
+        run: ./deploy/ssh-setup.sh
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Настройка машины и выкладка
+        env:
+          DOMAIN: ${{ steps.domain.outputs.domain }}
+        run: |
+          scp release.tgz vps:/tmp/moya-dacha-release.tgz
+          ssh vps "set -e
+            sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
+            rm -rf /tmp/moya-dacha-release && mkdir /tmp/moya-dacha-release
+            tar -xzf /tmp/moya-dacha-release.tgz -C /tmp/moya-dacha-release --strip-components=1
+            \$sudo env DOMAIN='$DOMAIN' bash /tmp/moya-dacha-release/setup.sh
+            \$sudo bash /tmp/moya-dacha-release/release.sh"
+
+      - name: Сервис виден снаружи
+        env:
+          DOMAIN: ${{ steps.domain.outputs.domain }}
+        run: |
+          # Первый сертификат Caddy получает не сразу.
+          for _ in $(seq 1 30); do
+            curl -fsS "https://$DOMAIN/api/health" && exit 0
+            sleep 5
+          done
+          echo "https://$DOMAIN/api/health не ответил" >&2
+          exit 1
+
+      - name: Итог
+        env:
+          DOMAIN: ${{ steps.domain.outputs.domain }}
+        run: |
+          {
+            echo "Сервер: https://$DOMAIN/api"
+            echo
+            echo "Приложение для тестировщиков: https://$DOMAIN/app.apk"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # APK для тестировщиков: адрес сервера зашит, экран «Сервер» его только
+  # переопределяет (ADR-0013). Собирается после деплоя, чтобы приложение не
+  # приехало раньше сервера, который ему нужен.
+  apk:
+    name: Приложение для тестировщиков
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+
+      - name: Сборка
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter build apk --release \
+            --dart-define=API_BASE_URL=https://${{ needs.deploy.outputs.domain }}/api
+
+      - name: Ключ SSH
+        run: ./deploy/ssh-setup.sh
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Выложить на сервер
+        run: |
+          scp mobile/build/app/outputs/flutter-apk/app-release.apk vps:/tmp/moya-dacha.apk
+          ssh vps 'sudo=$( [ "$(id -u)" = 0 ] || echo sudo )
+            $sudo install -m 644 /tmp/moya-dacha.apk /var/www/moya-dacha/moya-dacha.apk'
+          echo "APK: https://${{ needs.deploy.outputs.domain }}/app.apk" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,61 @@
+name: Приглашение
+
+# Выдать, отозвать или посмотреть приглашения на проде с телефона:
+# Actions → «Приглашение» → Run workflow (specs/015-invites.md).
+# Код приходит в итог прогона. Репозиторий приватный, итог видят только
+# те, у кого есть доступ к нему.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Что сделать
+        type: choice
+        options: [выдать, отозвать, список]
+        default: выдать
+      phone:
+        description: Номер телефона (для «выдать» и «отозвать»)
+        type: string
+        required: false
+
+jobs:
+  invite:
+    name: Приглашение
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ключ SSH
+        run: ./deploy/ssh-setup.sh
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Команда на сервере
+        env:
+          ACTION: ${{ inputs.action }}
+          PHONE: ${{ inputs.phone }}
+        run: |
+          case "$ACTION" in
+            выдать) cmd=invite ;;
+            отозвать) cmd=uninvite ;;
+            *) cmd=invites; PHONE="" ;;
+          esac
+          # Номер — только цифры, плюс, пробелы, скобки и дефисы: в команду
+          # на сервере не должно попасть ничего другого.
+          case "$PHONE" in
+            *[!0-9+\ \(\)-]*) echo "Номер записан с посторонними символами." >&2; exit 1 ;;
+          esac
+          if [ "$cmd" != invites ] && [ -z "$PHONE" ]; then
+            echo "Для «$ACTION» нужен номер телефона." >&2
+            exit 1
+          fi
+          out="$(ssh vps "sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
+            \$sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; exec moya-dacha-server \"\$@\"' _ $cmd ${PHONE:+\"$PHONE\"}")"
+          echo "$out"
+          {
+            echo '```'
+            echo "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,13 +1,24 @@
 # Caddy сам получает и продлевает TLS-сертификат (ADR-0004).
-# Подставьте реальный домен вместо example.ru.
+# Домен подставляет deploy/setup.sh вместо example.ru.
 example.ru {
 	encode gzip
 
-	# Загрузка медиа идёт через бэкенд (он режет EXIF и делает превью),
-	# поэтому тело запроса заметно больше обычного API-запроса.
-	request_body {
-		max_size 25MB
+	# APK для тестировщиков: его кладёт сюда деплой, ссылка — /app.apk.
+	handle /app.apk {
+		root * /var/www/moya-dacha
+		rewrite * /moya-dacha.apk
+		header Content-Type application/vnd.android.package-archive
+		header Content-Disposition "attachment; filename=moya-dacha.apk"
+		file_server
 	}
 
-	reverse_proxy 127.0.0.1:8080
+	handle {
+		# Загрузка медиа идёт через бэкенд (он режет EXIF и делает превью),
+		# поэтому тело запроса заметно больше обычного API-запроса.
+		request_body {
+			max_size 25MB
+		}
+
+		reverse_proxy 127.0.0.1:8080
+	}
 }
