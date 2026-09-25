@@ -80,6 +80,14 @@ jobs:
   app:
     name: Приложение и e2e-демо в эмуляторе
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      SHA: ${{ github.event.pull_request.head.sha }}
 
     steps:
       - uses: actions/checkout@v4
@@ -157,15 +165,67 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
 
-      # Этот же APK уезжает на телефон: адрес сервера внутри него — только
-      # значение по умолчанию (адрес эмулятора), а рабочий адрес человек
-      # задаёт в самом приложении (ADR-0013). Забирает артефакт джоб
-      # «Тестовая сборка для телефона».
-      - name: APK артефактом прогона
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+      # Тестовая сборка, которую ставят с телефона: APK выкладывается
+      # черновым релизом `pr-<номер>`, а прямая ссылка на него приходит
+      # комментарием в PR (ADR-0013). Адрес сервера внутри APK — только
+      # значение по умолчанию (адрес эмулятора), рабочий адрес человек
+      # задаёт в самом приложении. Выкладывается сразу после сборки, до
+      # эмулятора: посмотреть глазами обычно надо как раз то, что в
+      # эмуляторе упало. Артефактом прогона APK не передаётся: квота
+      # хранилища артефактов кончается, и тогда падала вся сборка.
+      - name: Выложить релизом PR
+        id: release
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+
+          short="${SHA:0:7}"
+          file="moya-dacha-pr$PR-$short.apk"
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk "$file"
+
+          # Тег переиздаётся целиком: иначе он остался бы на первом коммите
+          # PR, а ссылка вела бы на старую сборку.
+          gh release delete "pr-$PR" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "pr-$PR" "$file" \
+            --target "$SHA" \
+            --prerelease \
+            --title "Тестовая сборка PR #$PR" \
+            --notes "Сборка коммита $short для проверки с телефона. Ставится по ссылке ниже; адрес стенда задаётся в самом приложении."
+
+          echo "url=https://github.com/$REPO/releases/download/pr-$PR/$file" >> "$GITHUB_OUTPUT"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+
+      # Комментарий один на весь PR: каждая следующая сборка переписывает
+      # его, а не добавляет новый — иначе обсуждение тонет в ссылках.
+      - name: Ссылка комментарием в PR
+        if: github.event_name == 'pull_request'
+        env:
+          URL: ${{ steps.release.outputs.url }}
+          SHORT: ${{ steps.release.outputs.short }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo '<!-- тестовая сборка -->'
+            echo "📱 **Тестовая сборка** — коммит \`$SHORT\`"
+            echo
+            echo "[Скачать APK]($URL) — открыть ссылку с телефона и поставить."
+            echo
+            echo "Стенд, к которому её подключить: написать в этом PR \`/стенд\`."
+            echo "Адрес придёт ответным комментарием; в приложении он задаётся"
+            echo "нажатием на точку состояния сервиса в заголовке экрана."
+            echo
+            echo "Замечания — комментарием сюда."
+          } > comment.md
+
+          existing="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq 'map(select(.body | contains("<!-- тестовая сборка -->"))) | .[0].id // empty')"
+
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file comment.md
+          fi
 
       - name: Дождаться демо-стенда
         run: |
@@ -216,8 +276,11 @@ jobs:
 
       - name: Снимки экрана из эмулятора
         if: always()
+        # Квота хранилища артефактов не повод краснеть всей сборке.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 7
           name: story-screenshots
           path: demo/out/*.png
           if-no-files-found: warn
@@ -229,84 +292,3 @@ jobs:
       - name: Погасить стенд
         if: always()
         run: make demo-reset
-
-  # Тестовая сборка, которую ставят с телефона: APK из прогона выкладывается
-  # черновым релизом `pr-<номер>`, а прямая ссылка на него приходит
-  # комментарием в PR (ADR-0013). Артефакт прогона для этого не годится:
-  # он отдаётся zip-ом и с телефона не ставится.
-  testbuild:
-    name: Тестовая сборка для телефона
-    needs: app
-    # Собранный APK нужен, даже если прогон в эмуляторе упал: посмотреть
-    # глазами обычно как раз и надо на том, что не доехало.
-    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      # Джоб работает без checkout, git-репозитория рядом нет — значит gh
-      # должен узнать репозиторий из окружения, а не из remote.
-      GH_REPO: ${{ github.repository }}
-      REPO: ${{ github.repository }}
-      PR: ${{ github.event.pull_request.number }}
-      SHA: ${{ github.event.pull_request.head.sha }}
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: apk
-          path: apk
-
-      - name: Выложить релизом PR
-        id: release
-        run: |
-          set -euo pipefail
-
-          short="${SHA:0:7}"
-          file="moya-dacha-pr$PR-$short.apk"
-          mv apk/app-debug.apk "$file"
-
-          # Тег переиздаётся целиком: иначе он остался бы на первом коммите
-          # PR, а ссылка вела бы на старую сборку.
-          gh release delete "pr-$PR" --cleanup-tag --yes 2>/dev/null || true
-          gh release create "pr-$PR" "$file" \
-            --target "$SHA" \
-            --prerelease \
-            --title "Тестовая сборка PR #$PR" \
-            --notes "Сборка коммита $short для проверки с телефона. Ставится по ссылке ниже; адрес стенда задаётся в самом приложении."
-
-          echo "url=https://github.com/$REPO/releases/download/pr-$PR/$file" >> "$GITHUB_OUTPUT"
-          echo "short=$short" >> "$GITHUB_OUTPUT"
-
-      # Комментарий один на весь PR: каждая следующая сборка переписывает
-      # его, а не добавляет новый — иначе обсуждение тонет в ссылках.
-      - name: Ссылка комментарием в PR
-        env:
-          URL: ${{ steps.release.outputs.url }}
-          SHORT: ${{ steps.release.outputs.short }}
-        run: |
-          set -euo pipefail
-
-          {
-            echo '<!-- тестовая сборка -->'
-            echo "📱 **Тестовая сборка** — коммит \`$SHORT\`"
-            echo
-            echo "[Скачать APK]($URL) — открыть ссылку с телефона и поставить."
-            echo
-            echo "Стенд, к которому её подключить: написать в этом PR \`/стенд\`."
-            echo "Адрес придёт ответным комментарием; в приложении он задаётся"
-            echo "нажатием на точку состояния сервиса в заголовке экрана."
-            echo
-            echo "Замечания — комментарием сюда."
-          } > comment.md
-
-          existing="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq 'map(select(.body | contains("<!-- тестовая сборка -->"))) | .[0].id // empty')"
-
-          if [ -n "$existing" ]; then
-            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null
-          else
-            gh pr comment "$PR" --body-file comment.md
-          fi
