@@ -15,7 +15,8 @@ import (
 const usage = `команды:
   invite <номер>     выдать приглашение и напечатать код
   uninvite <номер>   отозвать приглашение
-  invites            действующие приглашения`
+  invites            действующие приглашения
+  alerts             текущие тревоги дашборда`
 
 // runCommand выполняет команду владельца сервиса против той же базы,
 // с которой работает сервис (specs/015-invites.md, требование 11).
@@ -25,7 +26,7 @@ func runCommand(args []string) error {
 
 	var phone string
 	switch {
-	case args[0] == "invites" && len(args) == 1:
+	case (args[0] == "invites" || args[0] == "alerts") && len(args) == 1:
 	case (args[0] == "invite" || args[0] == "uninvite") && len(args) == 2:
 		phone = args[1]
 	default:
@@ -43,6 +44,8 @@ func runCommand(args []string) error {
 	defer pool.Close()
 
 	switch args[0] {
+	case "alerts":
+		return printAlerts(ctx, pool)
 	case "invite":
 		normalized, code, err := auth.IssueInvite(ctx, pool, phone)
 		if err != nil {

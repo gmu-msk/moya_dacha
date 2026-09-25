@@ -79,6 +79,10 @@ services:
       # Аватары лежат в томе рядом с базой и переживают `make demo-down`
       # (specs/002-profile.md, ADR-0011). `make demo-reset` стирает и их.
       MEDIA_DIR: /var/lib/moya-dacha/media
+      # Дашборд владельца на стенде: http://localhost:8080/dashboard, имя
+      # любое, пароль этот (specs/016-dashboard.md). Данные стенда
+      # выдуманные, пароль прятать незачем; на VPS он случайный.
+      DASHBOARD_PASSWORD: dacha
     volumes:
       - demo-media-data:/var/lib/moya-dacha/media
     ports:
