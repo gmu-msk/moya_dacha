@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Без этого разрешения release-сборка не ходит в сеть вовсе: в debug
+         и profile оно добавлено отдельными манифестами, а в main его не было,
+         и APK для тестировщиков не видел сервер. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="МояДача"
         android:name="${applicationName}"
