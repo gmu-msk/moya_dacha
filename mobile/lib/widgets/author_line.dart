@@ -37,6 +37,11 @@ class AuthorLine extends StatelessWidget {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      // Плотнее материаловой строки: аватар 48 и две строки текста
+      // занимают 56, а не 72 — пост компактнее (specs/000-ui.md, «Вид»).
+      // Цель касания остаётся не меньше 48.
+      visualDensity: const VisualDensity(vertical: -4),
+      minVerticalPadding: 0,
       onTap: onTap,
       leading: AuthorAvatar(author: author, radius: AvatarRadius.inPost),
       // Никнейм — вторая краска темы: по ней видно, где кончается один пост

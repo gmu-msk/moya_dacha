@@ -38,10 +38,13 @@ void main() {
     expect(when(DateTime(2026, 9, 20, 23, 30)), 'вчера');
     expect(when(DateTime(2026, 9, 20, 0, 5)), 'вчера');
     // Полночь наступила час назад — значит уже вчера, а не «час назад».
-    expect(whenPosted(
-      DateTime(2026, 9, 20, 23, 30),
-      from: DateTime(2026, 9, 21, 0, 30),
-    ), 'вчера');
+    expect(
+      whenPosted(
+        DateTime(2026, 9, 20, 23, 30),
+        from: DateTime(2026, 9, 21, 0, 30),
+      ),
+      'вчера',
+    );
   });
 
   test('дни и недели', () {

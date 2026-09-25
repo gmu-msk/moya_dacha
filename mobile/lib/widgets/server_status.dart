@@ -76,7 +76,7 @@ class _ServerStatusState extends State<ServerStatus> {
       color = theme.colorScheme.outline;
     } else if (alive) {
       state = 'Сервер отвечает, база жива';
-      color = theme.colorScheme.primary;
+      color = AppBrand.online(theme.brightness);
     } else {
       state = 'Сервер не отвечает';
       color = theme.colorScheme.error;

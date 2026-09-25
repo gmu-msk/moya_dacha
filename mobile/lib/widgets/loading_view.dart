@@ -17,19 +17,24 @@ class LoadingView extends StatelessWidget {
     final theme = Theme.of(context);
     final label = this.label;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(semanticsLabel: label),
-        if (label != null) ...[
-          const SizedBox(height: AppGap.medium),
-          Text(
-            label,
-            style: theme.textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
+    // Посередине отведённого места, а не у края: экран, который вставил
+    // ожидание без Center, всё равно получает его по центру
+    // (specs/000-ui.md, правило 4).
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(semanticsLabel: label),
+          if (label != null) ...[
+            const SizedBox(height: AppGap.medium),
+            Text(
+              label,
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

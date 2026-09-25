@@ -91,9 +91,8 @@ class _LikeButtonState extends State<LikeButton> {
         _liked = wasLiked;
         _likes = wasLikes;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(errorMessage(error))));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -112,7 +111,8 @@ class _LikeButtonState extends State<LikeButton> {
       onPressed: _toggle,
       // Краска у сердечка одна и та же: отмечено оно или нет, видно
       // по заливке значка, а не по цвету (specs/000-ui.md, правило 7).
-      color: theme.colorScheme.primary,
+      // Это мак — акцент темы, не цвет кнопок (правило 19).
+      color: theme.colorScheme.tertiary,
     );
   }
 }

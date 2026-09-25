@@ -56,7 +56,7 @@ void main() {
     final painter = markPainter(tester);
     final scheme = appTheme(Brightness.dark).colorScheme;
     expect(painter.fence, scheme.secondary);
-    expect(painter.poppy, scheme.primary);
+    expect(painter.poppy, scheme.tertiary);
   });
 
   testWidgets('крупный системный шрифт не раздувает логотип', (tester) async {

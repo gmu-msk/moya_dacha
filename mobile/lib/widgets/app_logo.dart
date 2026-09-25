@@ -17,6 +17,11 @@ class AppLogo extends StatelessWidget {
   /// а мак выглядывает поверх.
   static const _markToText = 1.8;
 
+  /// Земля штакетника — на 92 из 100 по высоте знака
+  /// ([FenceMarkPainter._ground]). Низ надписи стоит на ней, а не
+  /// посередине знака: так «моя дача» читается подписью у забора.
+  static const _groundGap = 1 - FenceMarkPainter._ground / 100;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -36,18 +41,26 @@ class AppLogo extends StatelessWidget {
       excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           CustomPaint(
             size: Size.square(markSize),
             painter: FenceMarkPainter(
               fence: colors.secondary,
-              poppy: colors.primary,
+              poppy: colors.tertiary,
               poppyHeart: colors.onSurface,
               stem: AppBrand.stem(theme.brightness),
             ),
           ),
           const SizedBox(width: AppGap.small),
-          Text('моя дача', style: style, textScaler: TextScaler.noScaling),
+          Padding(
+            padding: EdgeInsets.only(bottom: markSize * _groundGap),
+            child: Text(
+              'моя дача',
+              style: style,
+              textScaler: TextScaler.noScaling,
+            ),
+          ),
         ],
       ),
     );

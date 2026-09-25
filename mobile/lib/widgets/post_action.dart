@@ -39,6 +39,8 @@ class PostAction extends StatelessWidget {
         onPressed: onPressed,
         style: TextButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: AppGap.small),
+          // Число того же цвета, что значок: у сердечка оба маковые.
+          foregroundColor: color,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

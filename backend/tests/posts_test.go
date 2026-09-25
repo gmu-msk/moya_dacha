@@ -603,14 +603,14 @@ func TestCreatePostWithFourPhotosKeepsTheOrderOfMediaIds(t *testing.T) {
 	requireMediaOrder(t, stored, want)
 }
 
-// Пять фотографий — 400 too_many_media («Ограничения и edge cases»).
-func TestCreatePostRejectsMoreThanFourPhotos(t *testing.T) {
+// Одиннадцать фотографий — 400 too_many_media («Ограничения и edge cases»).
+func TestCreatePostRejectsMoreThanTenPhotos(t *testing.T) {
 	baseURL := startAPI(t)
 
 	token, _ := signIn(t, baseURL, phonePretty)
 
 	var ids []string
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 11; i++ {
 		ids = append(ids, photoOf(t, baseURL, token, 200, 200).ID)
 	}
 
@@ -619,10 +619,10 @@ func TestCreatePostRejectsMoreThanFourPhotos(t *testing.T) {
 	requireError(t, resp, http.StatusBadRequest, "too_many_media")
 
 	// Пост не создан, и ни одна фотография не прикрепилась: первые
-	// четыре по-прежнему можно опубликовать.
-	retry := createdPost(t, createPostOf(t, baseURL, token, ids[0], ids[1], ids[2], ids[3]))
-	if len(retry.Media) != 4 {
-		t.Errorf("после отказа четыре фотографии должны публиковаться, в посте их %d", len(retry.Media))
+	// десять по-прежнему можно опубликовать.
+	retry := createdPost(t, createPostOf(t, baseURL, token, ids[:10]...))
+	if len(retry.Media) != 10 {
+		t.Errorf("после отказа десять фотографий должны публиковаться, в посте их %d", len(retry.Media))
 	}
 }
 

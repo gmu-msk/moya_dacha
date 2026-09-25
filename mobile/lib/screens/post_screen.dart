@@ -53,9 +53,8 @@ class _PostScreenState extends State<PostScreen> {
   /// требование 7).
   Future<void> _reload() async {
     try {
-      final updated = await PostsApi(
-        apiClient(token: widget.token),
-      ).getPost(post.id);
+      final updated = await PostsApi(apiClient(token: widget.token))
+          .getPost(post.id);
       if (!mounted || updated == null) {
         return;
       }
@@ -74,7 +73,8 @@ class _PostScreenState extends State<PostScreen> {
     final agreed = await confirmDelete(
       context,
       title: 'Удалить пост?',
-      question: 'Пост, его фотографии, лайки и комментарии исчезнут '
+      question:
+          'Пост, его фотографии, лайки и комментарии исчезнут '
           'безвозвратно.',
     );
     if (!agreed || !mounted) {
@@ -95,9 +95,8 @@ class _PostScreenState extends State<PostScreen> {
         return;
       }
       setState(() => _deleting = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(errorMessage(error))));
     }
   }
 
@@ -120,9 +119,8 @@ class _PostScreenState extends State<PostScreen> {
       if (picked == null || picked == post.visibility) {
         return;
       }
-      final updated = await PostsApi(
-        apiClient(token: widget.token),
-      ).setPostVisibility(post.id, PostVisibilityUpdate(visibility: picked));
+      final updated = await PostsApi(apiClient(token: widget.token))
+          .setPostVisibility(post.id, PostVisibilityUpdate(visibility: picked));
       debugPrint('$logMarker post=visibility id=${post.id} value=$picked');
       if (!mounted || updated == null) {
         return;
@@ -145,11 +143,12 @@ class _PostScreenState extends State<PostScreen> {
     await askAndReport(
       context,
       title: 'Пожаловаться на пост?',
-      question: 'Жалобу посмотрит владелец сервиса. Пост останется на '
+      question:
+          'Жалобу посмотрит владелец сервиса. Пост останется на '
           'месте, и автор о ней не узнает.',
-      send: (reason) => PostsApi(
-        apiClient(token: widget.token),
-      ).reportPost(post.id, reportDraft: ReportDraft(reason: reason)),
+      send: (reason) =>
+          PostsApi(apiClient(token: widget.token))
+              .reportPost(post.id, reportDraft: ReportDraft(reason: reason)),
     );
   }
 
@@ -173,10 +172,13 @@ class _PostScreenState extends State<PostScreen> {
     final theme = Theme.of(context);
 
     return AppScreen(
-      title: 'Пост',
+      // Слово «Пост» ничего не добавляет: и так видно, что это пост.
+      untitled: true,
       // Пост смотрят, а не проверяют связь: место лучше отдать
       // фотографиям.
       showServerStatus: false,
+      // Поля уже, чем у экрана-формы: пост плотный, как в ленте.
+      padded: false,
       actions: [
         if (_mine)
           IconButton(
@@ -198,6 +200,7 @@ class _PostScreenState extends State<PostScreen> {
           ),
       ],
       child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: AppGap.medium),
         children: [
           AuthorLine(
             author: post.author,
@@ -207,9 +210,9 @@ class _PostScreenState extends State<PostScreen> {
           ),
           for (final media in post.media)
             Padding(
-              padding: const EdgeInsets.only(bottom: AppGap.small),
+              padding: const EdgeInsets.only(bottom: AppGap.tiny),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppGap.small),
+                borderRadius: BorderRadius.circular(AppShape.photo),
                 child: AspectRatio(
                   // Размеры приходят вместе с постом, поэтому место под
                   // фотографию занимается до того, как она загрузится,
@@ -222,10 +225,9 @@ class _PostScreenState extends State<PostScreen> {
               ),
             ),
           if (post.caption.isNotEmpty) ...[
-            const SizedBox(height: AppGap.small),
+            const SizedBox(height: AppGap.tiny),
             Text(post.caption, style: theme.textTheme.bodyLarge),
           ],
-          const SizedBox(height: AppGap.small),
           Align(
             alignment: Alignment.centerLeft,
             child: LikeButton(
@@ -237,7 +239,7 @@ class _PostScreenState extends State<PostScreen> {
               },
             ),
           ),
-          const SizedBox(height: AppGap.medium),
+          const SizedBox(height: AppGap.small),
           CommentsView(
             postId: post.id,
             token: widget.token,

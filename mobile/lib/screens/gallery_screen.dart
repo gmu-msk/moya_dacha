@@ -44,7 +44,7 @@ final _someone = CurrentUser(
 /// дачные схемы с холста макетов, их показывали владельцу при выборе
 /// темы (specs/000-ui.md, раздел «Вид»).
 const _palettes = <String, (Color, Color)>{
-  'Ситец': (Color(0xFFC7323C), Color(0xFF2F5AA8)),
+  'Ситец': (Color(0xFF2F5AA8), Color(0xFF2F5AA8)),
   'Трава': (Color(0xFF4C7A3F), Color(0xFF7E6338)),
   'Хвоя': (Color(0xFF2E5F4C), Color(0xFF8A6A3E)),
   'Мох': (Color(0xFF667A33), Color(0xFF7A5B46)),

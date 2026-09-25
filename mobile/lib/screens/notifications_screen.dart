@@ -24,9 +24,9 @@ const _pageSize = 20;
 /// За сколько пикселей до конца списка просить следующую страницу.
 const _loadAheadPixels = 600.0;
 
-/// Миниатюра поста в строке: квадрат 48 со скруглением 8 (требование 10).
+/// Миниатюра поста в строке: квадрат 48 со скруглением как у фото.
 const _thumbnailSize = 48.0;
-const _thumbnailRadius = 8.0;
+const _thumbnailRadius = AppShape.small;
 
 /// Отступ кнопок заявки: под текстом, а не под аватаром.
 const _requestButtonsIndent =

@@ -25,7 +25,7 @@ const _iconSize = 26.0;
 /// Подложка открытого раздела: шире значка, скругление как у карточки,
 /// уменьшенной вдвое.
 const _indicatorSize = Size(64, 40);
-const _indicatorRadius = 14.0;
+const _indicatorRadius = 8.0;
 
 class AppBottomBar extends StatelessWidget {
   const AppBottomBar({
