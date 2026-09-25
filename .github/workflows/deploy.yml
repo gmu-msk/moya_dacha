@@ -121,6 +121,8 @@ jobs:
             echo "Сервер: https://$DOMAIN/api"
             echo
             echo "Приложение для тестировщиков: https://$DOMAIN/app.apk"
+            echo
+            echo "Дашборд: https://$DOMAIN/dashboard (пароль — прогон «Дашборд» с действием «пароль»)"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # APK для тестировщиков: адрес сервера зашит, экран «Сервер» его только

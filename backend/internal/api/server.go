@@ -16,6 +16,7 @@ import (
 	"github.com/gmu-msk/moya_dacha/backend/api/gen"
 	"github.com/gmu-msk/moya_dacha/backend/internal/auth"
 	"github.com/gmu-msk/moya_dacha/backend/internal/media"
+	"github.com/gmu-msk/moya_dacha/backend/internal/monitor"
 )
 
 // basePath повторяет servers[].url из контракта.
@@ -60,12 +61,21 @@ type Config struct {
 	// при запуске без настройки, но в проде и на стенде папка задаётся
 	// переменной окружения MEDIA_DIR (specs/002-profile.md).
 	Media media.Storage
+
+	// DashboardPassword — пароль дашборда владельца (переменная окружения
+	// DASHBOARD_PASSWORD, specs/016-dashboard.md). Пустой — дашборда нет.
+	DashboardPassword string
+
+	// DiskPath — где дашборд меряет диск: там, где лежат файлы
+	// пользователей. Пустой — корень файловой системы.
+	DiskPath string
 }
 
 // Server реализует gen.StrictServerInterface.
 type Server struct {
-	db  *pgxpool.Pool
-	cfg Config
+	db      *pgxpool.Pool
+	cfg     Config
+	monitor *monitor.Monitor
 }
 
 func New(db *pgxpool.Pool, cfg Config) *Server {
@@ -86,7 +96,17 @@ func New(db *pgxpool.Pool, cfg Config) *Server {
 		slog.Warn("хранилище файлов не задано, беру временную папку", "dir", dir)
 		cfg.Media = media.NewDisk(dir, DefaultMediaBaseURL)
 	}
-	return &Server{db: db, cfg: cfg}
+	if cfg.DiskPath == "" {
+		cfg.DiskPath = "/"
+	}
+	return &Server{db: db, cfg: cfg, monitor: monitor.New(db, cfg.DiskPath)}
+}
+
+// RunMonitor меряет машину для дашборда раз в минуту, пока не отменён
+// ctx (specs/016-dashboard.md, требование 13). Зовёт его main; тесты
+// кладут измерения в базу сами.
+func (s *Server) RunMonitor(ctx context.Context) {
+	s.monitor.Run(ctx)
 }
 
 // Handler возвращает готовый http.Handler со всеми маршрутами контракта.
@@ -106,18 +126,21 @@ func (s *Server) Handler() http.Handler {
 		ErrorHandlerFunc: badRequest,
 	})
 
+	mux := http.NewServeMux()
+	mux.Handle("/", api)
+
 	// Файлы пользователей раздаёт сам сервис, пока они лежат у него
 	// на диске. Объектное хранилище вернёт пустой префикс — тогда
 	// раздавать нечего, ссылки ведут мимо сервиса.
-	prefix, files := s.cfg.Media.FileHandler()
-	if prefix == "" || files == nil {
-		return api
+	if prefix, files := s.cfg.Media.FileHandler(); prefix != "" && files != nil {
+		mux.Handle(prefix, files)
 	}
 
-	mux := http.NewServeMux()
-	mux.Handle("/", api)
-	mux.Handle(prefix, files)
-	return mux
+	s.mountDashboard(mux)
+
+	// Учёт запросов и ошибок для дашборда — снаружи всего остального,
+	// чтобы видеть и панику в любом обработчике.
+	return s.observe(mux)
 }
 
 // badRequest отвечает на запрос, который не разобрался, — телом из
@@ -135,6 +158,7 @@ func badRequest(w http.ResponseWriter, r *http.Request, err error) {
 // сервиса. Подробности уходят в лог, наружу не выносятся.
 func internalError(w http.ResponseWriter, r *http.Request, err error) {
 	slog.Error("ошибка обработки запроса", "path", r.URL.Path, "err", err)
+	noteError(r, err)
 	writeError(w, http.StatusInternalServerError, gen.Error{
 		Code:    "internal_error",
 		Message: "Что-то сломалось на нашей стороне. Попробуйте позже",

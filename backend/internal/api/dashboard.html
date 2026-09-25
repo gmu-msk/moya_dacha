@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>МояДача · дашборд</title>
+<!--
+  Дашборд владельца (specs/016-dashboard.md). Страница без внешних файлов:
+  стили, скрипт и графики — здесь же. Данные — /dashboard/data раз в минуту.
+  Цвета — из темы приложения «Ситец» (mobile/lib/theme.dart).
+-->
+<style>
+  :root {
+    --bg: #FFFCF5; --card: #F9F3EA; --ink: #221E1A; --muted: #6B6257;
+    --line: #EADFD0; --axis: #8C8175; --mark: #4C7A3F; --mark-soft: #4C7A3F33;
+    --bad: #8F3A1B; --bad-bg: #FBE1D4; --bad-ink: #3F1607;
+    --good-bg: #E3EEDB; --good-ink: #22381A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16130F; --card: #221E19; --ink: #EDE5DA; --muted: #CFC4B6;
+      --line: #4B443B; --axis: #988D7F; --mark: #86B070; --mark-soft: #86B07033;
+      --bad: #FFB59B; --bad-bg: #73341A; --bad-ink: #FFDBCD;
+      --good-bg: #2C3B24; --good-ink: #D6E8C8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 16px 16px 48px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 17px; margin: 28px 0 10px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .banner { border-radius: 12px; padding: 12px 14px; margin: 14px 0 0; }
+  .banner.ok { background: var(--good-bg); color: var(--good-ink); }
+  .banner.bad { background: var(--bad-bg); color: var(--bad-ink); }
+  .banner ul { margin: 4px 0 0; padding-left: 20px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .tile { background: var(--card); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+  .tile .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tile .k { color: var(--muted); font-size: 13px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+  .chart { background: var(--card); border-radius: 12px; padding: 10px 12px 6px; min-width: 0; }
+  .chart .head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .chart .t { font-weight: 600; }
+  .chart .read { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
+  .chart svg { display: block; width: 100%; height: 110px; touch-action: pan-y; }
+  .chart .empty { height: 110px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+  .errors { background: var(--card); border-radius: 12px; padding: 4px 12px; }
+  .errors .row { padding: 8px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  .errors .row:last-child { border-bottom: 0; }
+  .errors code { font-size: 13px; }
+  .soon { background: var(--card); border-radius: 12px; padding: 12px; border: 1px dashed var(--line); }
+  .soon .t { font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>МояДача</h1>
+    <span class="muted" id="updated">Загружаем…</span>
+  </header>
+  <div id="alerts"></div>
+
+  <h2>Итоги</h2>
+  <div class="tiles" id="totals"></div>
+
+  <h2>Активность за 30 дней</h2>
+  <div class="charts" id="activity"></div>
+
+  <h2>Сервер</h2>
+  <div class="tiles" id="server-now"></div>
+  <div class="charts" id="server-history" style="margin-top:8px"></div>
+
+  <h2>Ошибки сервера</h2>
+  <div class="tiles" id="error-counts"></div>
+  <div class="errors" id="error-list" style="margin-top:8px"></div>
+
+  <h2>Дальше</h2>
+  <div class="charts">
+    <div class="soon"><div class="t">Заходы и время в приложении</div>
+      <div class="muted">Появится на следующем этапе</div></div>
+    <div class="soon"><div class="t">Отзывы</div>
+      <div class="muted">Появится на следующем этапе</div></div>
+  </div>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const nf = new Intl.NumberFormat("ru-RU");
+const num = (n) => nf.format(Math.round(n));
+
+function bytes(n) {
+  const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return (n >= 10 || i === 0 ? Math.round(n) : n.toFixed(1).replace(".", ",")) + " " + units[i];
+}
+function duration(s) {
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? d + " д " + h + " ч" : h ? h + " ч " + m + " мин" : m + " мин";
+}
+const dayLabel = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+const timeLabel = (iso) => new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function tiles(el, items) {
+  el.innerHTML = items.map(([k, v, sub]) =>
+    `<div class="tile"><div class="v">${esc(v)}</div><div class="k">${esc(k)}${sub ? "<br>" + esc(sub) : ""}</div></div>`).join("");
+}
+
+// chart рисует один ряд: столбики (kind "bar") или линию ("line").
+// Ряд один, поэтому легенды нет — ряд называет заголовок. Касание или
+// наведение показывает значение в строке справа от заголовка, без него
+// там последнее значение.
+function chart(parent, title, points, { kind = "bar", fmt = num, max } = {}) {
+  const box = document.createElement("div");
+  box.className = "chart";
+  box.innerHTML = `<div class="head"><span class="t">${esc(title)}</span><span class="read"></span></div>`;
+  parent.appendChild(box);
+  const read = box.querySelector(".read");
+  if (!points.length) {
+    box.insertAdjacentHTML("beforeend", `<div class="empty">Пока нет измерений</div>`);
+    return;
+  }
+  const W = 300, H = 110, top = 16, bottom = 18, left = 2, right = 2;
+  const peak = Math.max(max || 0, ...points.map((p) => p.v), 1);
+  const plotH = H - top - bottom, step = (W - left - right) / points.length;
+  const y = (v) => top + plotH - (v / peak) * plotH;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", title);
+  let marks = `<line x1="0" x2="${W}" y1="${top + plotH + 0.5}" y2="${top + plotH + 0.5}" stroke="var(--axis)" stroke-width="1"/>`;
+  marks += `<line x1="0" x2="${W}" y1="${top + 0.5}" y2="${top + 0.5}" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 3"/>`;
+  if (kind === "bar") {
+    const bw = Math.max(step - 2, 1);
+    points.forEach((p, i) => {
+      if (p.v <= 0) return;
+      const h = Math.max(top + plotH - y(p.v), 1.5);
+      marks += `<rect x="${left + i * step + (step - bw) / 2}" y="${top + plotH - h}" width="${bw}" height="${h}" rx="${Math.min(2, bw / 2)}" fill="var(--mark)"/>`;
+    });
+  } else {
+    const xy = points.map((p, i) => `${left + i * step + step / 2},${y(p.v)}`);
+    marks += `<polygon points="${left + step / 2},${top + plotH} ${xy.join(" ")} ${left + (points.length - 0.5) * step},${top + plotH}" fill="var(--mark-soft)"/>`;
+    marks += `<polyline points="${xy.join(" ")}" fill="none" stroke="var(--mark)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+  }
+  marks += `<text x="${left}" y="${H - 4}" font-size="10" fill="var(--muted)">${esc(points[0].label)}</text>`;
+  marks += `<text x="${W - right}" y="${H - 4}" font-size="10" fill="var(--muted)" text-anchor="end">${esc(points[points.length - 1].label)}</text>`;
+  marks += `<text x="${left}" y="${top - 5}" font-size="10" fill="var(--muted)">${esc(fmt(peak))}</text>`;
+  marks += `<line class="cursor" x1="0" x2="0" y1="${top}" y2="${top + plotH}" stroke="var(--axis)" stroke-width="1" visibility="hidden" vector-effect="non-scaling-stroke"/>`;
+  svg.innerHTML = marks;
+  box.appendChild(svg);
+
+  const cursor = svg.querySelector(".cursor");
+  const show = (i) => {
+    const p = points[i];
+    read.textContent = `${p.label}: ${fmt(p.v)}`;
+  };
+  const pick = (ev) => {
+    const r = svg.getBoundingClientRect();
+    const i = Math.min(points.length - 1, Math.max(0, Math.floor((ev.clientX - r.left) / r.width * W / step)));
+    const x = left + i * step + step / 2;
+    cursor.setAttribute("x1", x); cursor.setAttribute("x2", x);
+    cursor.setAttribute("visibility", "visible");
+    show(i);
+  };
+  svg.addEventListener("pointermove", pick);
+  svg.addEventListener("pointerdown", pick);
+  svg.addEventListener("pointerleave", () => { cursor.setAttribute("visibility", "hidden"); show(points.length - 1); });
+  show(points.length - 1);
+}
+
+function render(d) {
+  $("updated").textContent = "Обновлено в " + timeLabel(d.generated_at);
+
+  $("alerts").innerHTML = d.alerts.length
+    ? `<div class="banner bad" role="alert"><b>⚠ Тревога</b><ul>${d.alerts.map((a) => `<li>${esc(a.message)}</li>`).join("")}</ul></div>`
+    : `<div class="banner ok">✓ Всё в порядке</div>`;
+
+  const t = d.totals;
+  tiles($("totals"), [["людей", num(t.users)], ["постов", num(t.posts)], ["лайков", num(t.likes)],
+    ["комментариев", num(t.comments)], ["жалоб", num(t.reports)]]);
+
+  const act = $("activity");
+  act.innerHTML = "";
+  const series = [["Активные люди", "active_users"], ["Новые люди", "new_users"], ["Посты", "posts"],
+    ["Лайки", "likes"], ["Комментарии", "comments"]];
+  for (const [title, key] of series) {
+    chart(act, title, d.activity.map((x) => ({ label: dayLabel(x.date), v: x[key] })));
+  }
+
+  const n = d.server.now;
+  tiles($("server-now"), n ? [
+    ["процессор", Math.round(n.cpu_percent) + "%"],
+    ["память", bytes(n.memory_used_bytes), "из " + bytes(n.memory_total_bytes) + (n.swap_used_bytes ? ", подкачка " + bytes(n.swap_used_bytes) : "")],
+    ["диск", bytes(n.disk_used_bytes), "свободно " + bytes(n.disk_total_bytes - n.disk_used_bytes)],
+    ["база", bytes(n.db_size_bytes)],
+    ["работает", duration(n.uptime_seconds)],
+  ] : [["измерений пока нет", "—", "первое через минуту после запуска"]]);
+
+  const hist = $("server-history");
+  hist.innerHTML = "";
+  const h = d.server.history.map((x) => ({ ...x, label: timeLabel(x.at) }));
+  chart(hist, "Процессор, сутки", h.map((x) => ({ label: x.label, v: x.cpu_percent })),
+    { kind: "line", fmt: (v) => Math.round(v) + "%", max: 100 });
+  chart(hist, "Память, сутки", h.map((x) => ({ label: x.label, v: x.memory_used_bytes })),
+    { kind: "line", fmt: bytes, max: n ? n.memory_total_bytes : 0 });
+  chart(hist, "Запросы за 5 минут", h.map((x) => ({ label: x.label, v: x.requests })));
+  chart(hist, "Ошибки за 5 минут", h.map((x) => ({ label: x.label, v: x.errors })));
+
+  tiles($("error-counts"), [["за час", num(d.errors.last_hour)], ["за сутки", num(d.errors.last_day)]]);
+  $("error-list").innerHTML = d.errors.recent.length
+    ? d.errors.recent.map((e) => `<div class="row"><div class="muted">${esc(new Date(e.at).toLocaleString("ru-RU"))} · ${e.status}</div>
+        <code>${esc(e.method)} ${esc(e.path)}</code>${e.message ? `<div class="muted">${esc(e.message)}</div>` : ""}</div>`).join("")
+    : `<div class="row muted">Ошибок не было</div>`;
+}
+
+async function load() {
+  try {
+    const r = await fetch("dashboard/data", { cache: "no-store", credentials: "same-origin" });
+    if (!r.ok) throw new Error(r.status);
+    render(await r.json());
+  } catch (e) {
+    $("updated").textContent = "Не удалось загрузить данные";
+  }
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

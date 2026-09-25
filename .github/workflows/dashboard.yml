@@ -1,0 +1,124 @@
+name: Дашборд
+
+# Тревоги и пароль дашборда владельца (specs/016-dashboard.md).
+#
+# По расписанию раз в два часа проверяет прод: отвечает ли сервис
+# снаружи и что говорит команда `alerts` на сервере. Есть тревога —
+# задача с меткой «алерт» на владельца, GitHub присылает о ней пуш.
+# Прошло — задача закрывается. Чаще, чем раз в два часа, не надо:
+# каждый прогон стоит минуту из бесплатных минут Actions.
+#
+# Вручную: Actions → «Дашборд» → Run workflow, действие «пароль»
+# показывает адрес и пароль дашборда в итоге прогона. Репозиторий
+# приватный, итог видят только те, у кого есть доступ к нему.
+
+on:
+  schedule:
+    - cron: '23 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Что сделать
+        type: choice
+        options: [проверить, пароль]
+        default: проверить
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: dashboard
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Тревоги
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Адрес сервера
+        id: domain
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: echo "domain=${DOMAIN:-${VPS_HOST//./-}.sslip.io}" >> "$GITHUB_OUTPUT"
+
+      - name: Ключ SSH
+        run: ./deploy/ssh-setup.sh
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Пароль
+        if: inputs.action == 'пароль'
+        env:
+          DOMAIN: ${{ steps.domain.outputs.domain }}
+        run: |
+          password="$(ssh vps "sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo ); \$sudo sed -n 's/^DASHBOARD_PASSWORD=//p' /etc/moya-dacha.env")"
+          if [ -z "$password" ]; then
+            echo "Пароля на сервере ещё нет: он появится после деплоя из main." >&2
+            exit 1
+          fi
+          {
+            echo "Дашборд: https://$DOMAIN/dashboard"
+            echo
+            echo "Имя любое, пароль:"
+            echo
+            echo '```'
+            echo "$password"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Проверка
+        if: inputs.action != 'пароль'
+        id: alerts
+        env:
+          DOMAIN: ${{ steps.domain.outputs.domain }}
+        run: |
+          alerts=""
+          if ! curl -fsS --max-time 20 --retry 2 --retry-delay 10 "https://$DOMAIN/api/health" >/dev/null; then
+            alerts="Сервер не отвечает"
+          fi
+          # sudo здесь нужен и под root: им команда уходит от имени сервиса.
+          if out="$(ssh -o ConnectTimeout=20 vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; exec moya-dacha-server alerts'")"; then
+            [ "$out" = "Всё в порядке" ] || alerts="$(printf '%s\n%s' "$alerts" "$out")"
+          else
+            alerts="$(printf '%s\n%s' "$alerts" "Не удалось проверить тревоги на сервере")"
+          fi
+          alerts="$(printf '%s\n' "$alerts" | sed '/^$/d')"
+          echo "${alerts:-Всё в порядке}" | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            echo 'alerts<<EOF_ALERTS'
+            echo "$alerts"
+            echo 'EOF_ALERTS'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Задача «алерт»
+        if: inputs.action != 'пароль'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERTS: ${{ steps.alerts.outputs.alerts }}
+          DOMAIN: ${{ steps.domain.outputs.domain }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh label create "алерт" --color B60205 --description "Тревога с прода (прогон «Дашборд»)" --force >/dev/null
+          issue="$(gh issue list --label "алерт" --state open --limit 1 --json number --jq '.[0].number // empty')"
+          list="$(printf '%s\n' "$ALERTS" | sed 's/^/- /')"
+          body="$(printf '%s\n\nДашборд: https://%s/dashboard\n\n<!-- тревоги: %s -->' "$list" "$DOMAIN" "$(printf '%s' "$ALERTS" | sha256sum | cut -c1-16)")"
+          if [ -n "$ALERTS" ]; then
+            if [ -z "$issue" ]; then
+              gh issue create --title "Тревога на проде" --label "алерт" --assignee "$OWNER" --body "$body"
+              exit 0
+            fi
+            # Комментарий — только когда список тревог изменился: иначе
+            # пуш приходил бы каждые два часа об одном и том же.
+            last="$(gh issue view "$issue" --json body,comments --jq '[.body] + [.comments[].body] | last')"
+            if [ "$(printf '%s' "$last" | grep -o '<!-- тревоги: [0-9a-f]* -->')" != "$(printf '%s' "$body" | grep -o '<!-- тревоги: [0-9a-f]* -->')" ]; then
+              gh issue comment "$issue" --body "$(printf 'Тревоги изменились:\n\n%s' "$body")"
+            fi
+          elif [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "Всё в порядке: тревог больше нет."
+          fi

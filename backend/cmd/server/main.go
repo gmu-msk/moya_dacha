@@ -3,7 +3,8 @@
 //
 // Без аргументов бинарник запускает сервис. С аргументом — выполняет
 // команду владельца и выходит: invite, uninvite, invites
-// (specs/015-invites.md, требование 11).
+// (specs/015-invites.md, требование 11) и alerts (specs/016-dashboard.md,
+// требование 20).
 package main
 
 import (
@@ -83,11 +84,21 @@ func run() error {
 			baseURL = api.DefaultMediaBaseURL
 		}
 		cfg.Media = media.NewDisk(dir, baseURL)
+		cfg.DiskPath = dir
 	}
+
+	// DASHBOARD_PASSWORD открывает дашборд владельца по /dashboard
+	// (specs/016-dashboard.md). На VPS пароль заводит deploy/setup.sh.
+	cfg.DashboardPassword = os.Getenv("DASHBOARD_PASSWORD")
+	if cfg.DashboardPassword == "" {
+		slog.Info("DASHBOARD_PASSWORD не задан: дашборда нет")
+	}
+	service := api.New(pool, cfg)
+	go service.RunMonitor(ctx)
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           api.New(pool, cfg).Handler(),
+		Handler:           service.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
