@@ -20,6 +20,7 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/visibility_picker.dart';
@@ -88,6 +89,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
   @override
   void initState() {
     super.initState();
+    usage.screen('new_post');
     _loadRecent();
   }
 

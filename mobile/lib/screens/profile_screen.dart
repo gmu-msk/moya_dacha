@@ -14,6 +14,7 @@ import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/user_avatar.dart';
@@ -58,6 +59,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _busy = false;
 
   ProfileApi get _api => ProfileApi(apiClient(token: widget.token));
+
+  @override
+  void initState() {
+    super.initState();
+    usage.screen('profile_edit');
+  }
 
   @override
   void dispose() {
@@ -152,6 +159,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _signOut() async {
     setState(() => _busy = true);
+    // Конец сессии в приложении — пока токен ещё действует
+    // (specs/020-app-sessions.md, «Ограничения»).
+    await usage.finish();
     try {
       await AuthApi(apiClient(token: widget.token)).deleteSession();
     } on Exception catch (error) {

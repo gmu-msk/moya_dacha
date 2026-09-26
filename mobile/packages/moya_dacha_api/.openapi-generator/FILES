@@ -7,6 +7,7 @@ lib/api/notifications_api.dart
 lib/api/operations_api.dart
 lib/api/posts_api.dart
 lib/api/profile_api.dart
+lib/api/usage_api.dart
 lib/api/users_api.dart
 lib/api_client.dart
 lib/api_exception.dart
@@ -16,6 +17,8 @@ lib/auth/authentication.dart
 lib/auth/http_basic_auth.dart
 lib/auth/http_bearer_auth.dart
 lib/auth/oauth.dart
+lib/model/app_session_end.dart
+lib/model/app_session_started.dart
 lib/model/auth_code_accepted.dart
 lib/model/auth_code_request.dart
 lib/model/auth_code_too_soon.dart

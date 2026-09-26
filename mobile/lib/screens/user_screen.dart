@@ -14,6 +14,7 @@ import 'package:moya_dacha_api/api.dart';
 import '../api.dart';
 import '../app_scope.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
 import '../widgets/bottom_bar.dart';
@@ -119,6 +120,10 @@ class UserScreenState extends State<UserScreen> {
   @override
   void initState() {
     super.initState();
+    // Свой профиль — раздел панели, его считает главный экран.
+    if (!_mine) {
+      usage.screen('user');
+    }
     _scroll.addListener(_onScroll);
     _posts.addListener(_onPosts);
     _load();

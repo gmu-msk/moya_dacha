@@ -8,6 +8,7 @@ import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
 import '../widgets/comments_view.dart';
@@ -157,6 +158,12 @@ class _PostScreenState extends State<PostScreen> {
   void _changed(Post updated) {
     setState(() => post = updated);
     widget.onChanged?.call(updated);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    usage.screen('post');
   }
 
   @override

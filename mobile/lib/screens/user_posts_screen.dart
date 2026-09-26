@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/feed_view.dart';
@@ -59,6 +60,7 @@ class _UserPostsScreenState extends State<UserPostsScreen> {
   @override
   void initState() {
     super.initState();
+    usage.screen('user_posts');
     _scroll.addListener(_onScroll);
     _posts.addListener(_onPosts);
   }

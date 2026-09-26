@@ -11,6 +11,7 @@ import '../api.dart';
 import '../server.dart';
 import '../session.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 
@@ -29,6 +30,12 @@ class _ServerScreenState extends State<ServerScreen> {
   String? _error;
   String? _checked;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    usage.screen('server');
+  }
 
   @override
   void dispose() {

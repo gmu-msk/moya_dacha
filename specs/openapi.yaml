@@ -1140,6 +1140,79 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /app-sessions:
+    post:
+      operationId: startAppSession
+      summary: Начало сессии в приложении
+      description: |
+        Приложение вышло на экран у вошедшего человека. Сервис заводит
+        сессию со временем начала по своим часам (specs/020-app-sessions.md,
+        требования 1–4).
+      tags: [usage]
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Сессия начата
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSessionStarted"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /app-sessions/{sessionId}/end:
+    post:
+      operationId: endAppSession
+      summary: Конец сессии в приложении
+      description: |
+        Приложение ушло с экрана. Сервис ставит время конца «сейчас»
+        и заменяет экраны сессии присланными. Повторная отметка сдвигает
+        конец (specs/020-app-sessions.md, требования 5–9).
+      tags: [usage]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppSessionEnd"
+      responses:
+        "204":
+          description: Конец отмечен
+        "400":
+          description: |
+            Имя экрана не из `a-z` и `_` или длиннее 32, число не от 1 до
+            10000, экранов больше 50 (`invalid_screens`); запрос не
+            разобрался (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Сессии нет или она чужая (`not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /posts/{postId}/visibility:
     put:
       operationId: setPostVisibility
@@ -2133,6 +2206,28 @@ components:
           description: Отзывы, новые сверху
           items:
             $ref: "#/components/schemas/Feedback"
+
+    AppSessionStarted:
+      type: object
+      description: Начатая сессия в приложении (specs/020-app-sessions.md)
+      required: [id]
+      properties:
+        id:
+          type: string
+
+    AppSessionEnd:
+      type: object
+      description: Конец сессии и экраны, открытые за неё
+      properties:
+        screens:
+          type: object
+          description: |
+            Сколько раз открывался каждый экран за всю сессию — счётчик
+            накопительный (specs/020-app-sessions.md, требования 8–10)
+          additionalProperties:
+            type: integer
+            format: int32
+          example: {"feed": 3, "post": 5}
 
     NotificationPost:
       type: object

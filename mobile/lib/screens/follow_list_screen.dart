@@ -8,6 +8,7 @@ import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
 import '../widgets/empty_view.dart';
@@ -132,6 +133,7 @@ class _PeopleViewState extends State<_PeopleView> {
   @override
   void initState() {
     super.initState();
+    usage.screen('follows');
     _scroll.addListener(_onScroll);
     _refresh();
   }
