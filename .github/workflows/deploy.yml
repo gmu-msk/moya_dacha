@@ -95,7 +95,9 @@ jobs:
         env:
           DOMAIN: ${{ steps.domain.outputs.domain }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_OWNER: ${{ vars.TELEGRAM_OWNER }}
+          # Ник владельца — переменная репозитория, но и секрет с тем же
+          # именем подойдёт: оба пути выглядят в настройках одинаково.
+          TELEGRAM_OWNER: ${{ vars.TELEGRAM_OWNER || secrets.TELEGRAM_OWNER }}
         run: |
           scp release.tgz vps:/tmp/moya-dacha-release.tgz
           printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\n' "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" |
@@ -123,13 +125,18 @@ jobs:
         env:
           DOMAIN: ${{ steps.domain.outputs.domain }}
         run: |
+          # Состояние Telegram-бота (specs/018-telegram-bot.md): токен,
+          # владелец, привязанные чаты. Из итога прогона его видно с телефона.
+          bot="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; exec moya-dacha-server telegram-check'" 2>&1 || true)"
           {
             echo "Сервер: https://$DOMAIN/api"
             echo
             echo "Приложение для тестировщиков: https://$DOMAIN/app.apk"
             echo
             echo "Дашборд: https://$DOMAIN/dashboard (пароль — прогон «Дашборд» с действием «пароль»)"
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo
+            printf '%s\n' "$bot" | sed 's/$/  /'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
   # APK для тестировщиков: адрес сервера зашит, экран «Сервер» его только
   # переопределяет (ADR-0013). Собирается после деплоя, чтобы приложение не

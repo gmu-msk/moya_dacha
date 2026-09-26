@@ -18,7 +18,8 @@ const usage = `команды:
   invites            действующие приглашения
   alerts             текущие тревоги дашборда
   build-notify <owner|group> <сведения.json|-> [<apk>|<ссылка>]
-                     отправить сборку в Telegram`
+                     отправить сборку в Telegram
+  telegram-check     состояние Telegram-бота`
 
 // runCommand выполняет команду владельца сервиса против той же базы,
 // с которой работает сервис (specs/015-invites.md, требование 11).
@@ -27,6 +28,9 @@ func runCommand(args []string) error {
 	defer cancel()
 
 	// Отправка APK в Telegram идёт дольше 30 секунд на медленном канале.
+	if args[0] == "telegram-check" && len(args) == 1 {
+		return telegramCheck()
+	}
 	if args[0] == "build-notify" {
 		if len(args) < 3 || len(args) > 4 {
 			return errors.New(usage)
