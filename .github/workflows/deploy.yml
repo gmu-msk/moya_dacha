@@ -79,7 +79,7 @@ jobs:
           cp -r backend/migrations release/
           cp deploy/setup.sh deploy/release.sh deploy/backup.sh deploy/Caddyfile \
             deploy/moya-dacha.service deploy/moya-dacha-backup.service \
-            deploy/moya-dacha-backup.timer release/
+            deploy/moya-dacha-backup.timer deploy/moya-dacha-relay.service release/
           tar -czf release.tgz release
 
       - name: Ключ SSH
@@ -88,37 +88,6 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-
-      # С прода api.telegram.org не открывается, поэтому бот ходит в Telegram
-      # через Caddy на втором VPS (deploy/telegram-relay.sh). Секреты
-      # RELAY_HOST, RELAY_SSH_KEY и необязательный RELAY_USER; без
-      # RELAY_HOST шаг ничего не делает. Неудача здесь деплой не роняет.
-      - name: Посредник Telegram
-        id: relay
-        continue-on-error: true
-        env:
-          RELAY_HOST: ${{ secrets.RELAY_HOST }}
-          RELAY_USER: ${{ secrets.RELAY_USER }}
-          RELAY_SSH_KEY: ${{ secrets.RELAY_SSH_KEY }}
-        run: |
-          if [ -z "$RELAY_HOST" ]; then
-            echo "RELAY_HOST не задан: посредника нет"
-            exit 0
-          fi
-          printf '%s\n' "$RELAY_SSH_KEY" > ~/.ssh/relay
-          chmod 600 ~/.ssh/relay
-          cat >> ~/.ssh/config <<CFG
-          Host relay
-          	HostName $RELAY_HOST
-          	User ${RELAY_USER:-root}
-          	IdentityFile ~/.ssh/relay
-          	StrictHostKeyChecking accept-new
-          CFG
-          domain="${RELAY_HOST//./-}.sslip.io"
-          scp deploy/telegram-relay.sh relay:/tmp/moya-dacha-telegram-relay.sh
-          ssh relay "sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
-            \$sudo env DOMAIN='$domain' bash /tmp/moya-dacha-telegram-relay.sh"
-          echo "url=https://$domain" >> "$GITHUB_OUTPUT"
 
       # Токен бота идёт на сервер через stdin, а не в командной строке:
       # там его видно в списке процессов (specs/018-telegram-bot.md).
@@ -129,10 +98,26 @@ jobs:
           # Ник владельца — переменная репозитория, но и секрет с тем же
           # именем подойдёт: оба пути выглядят в настройках одинаково.
           TELEGRAM_OWNER: ${{ vars.TELEGRAM_OWNER || secrets.TELEGRAM_OWNER }}
-          # Адрес посредника: заданный руками или поднятый шагом выше.
-          TELEGRAM_API_URL: ${{ vars.TELEGRAM_API_URL || secrets.TELEGRAM_API_URL || steps.relay.outputs.url }}
+          TELEGRAM_API_URL: ${{ vars.TELEGRAM_API_URL || secrets.TELEGRAM_API_URL }}
+          # С прода api.telegram.org не открывается: бот ходит в Telegram
+          # через SSH-туннель до второго VPS (specs/018-telegram-bot.md, 3б).
+          # RELAY_HOST может быть и «адрес:порт».
+          RELAY_HOST: ${{ secrets.RELAY_HOST }}
+          RELAY_PORT: ${{ vars.RELAY_PORT || secrets.RELAY_PORT }}
+          RELAY_USER: ${{ vars.RELAY_USER || secrets.RELAY_USER }}
+          RELAY_SSH_KEY: ${{ secrets.RELAY_SSH_KEY }}
         run: |
           scp release.tgz vps:/tmp/moya-dacha-release.tgz
+          # Ключ и адрес второго VPS — тоже через stdin; setup.sh заберёт их
+          # из /tmp/moya-dacha-relay и удалит.
+          ssh vps 'rm -rf /tmp/moya-dacha-relay'
+          if [ -n "$RELAY_HOST" ]; then
+            host="${RELAY_HOST%%:*}" port="${RELAY_PORT:-22}"
+            case "$RELAY_HOST" in *:*) port="${RELAY_HOST##*:}" ;; esac
+            printf 'RELAY_HOST=%s\nRELAY_PORT=%s\nRELAY_USER=%s\n' "$host" "$port" "${RELAY_USER:-root}" |
+              ssh vps '(umask 077; mkdir /tmp/moya-dacha-relay; cat > /tmp/moya-dacha-relay/relay.env)'
+            printf '%s\n' "$RELAY_SSH_KEY" | ssh vps '(umask 077; cat > /tmp/moya-dacha-relay/key)'
+          fi
           printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\n' \
             "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" "$TELEGRAM_API_URL" |
           ssh vps "set -e
