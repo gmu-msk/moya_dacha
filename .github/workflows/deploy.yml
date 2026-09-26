@@ -98,9 +98,13 @@ jobs:
           # Ник владельца — переменная репозитория, но и секрет с тем же
           # именем подойдёт: оба пути выглядят в настройках одинаково.
           TELEGRAM_OWNER: ${{ vars.TELEGRAM_OWNER || secrets.TELEGRAM_OWNER }}
+          # Посредник до Bot API, если с VPS api.telegram.org не открывается
+          # (deploy/telegram-worker.js).
+          TELEGRAM_API_URL: ${{ vars.TELEGRAM_API_URL || secrets.TELEGRAM_API_URL }}
         run: |
           scp release.tgz vps:/tmp/moya-dacha-release.tgz
-          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\n' "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" |
+          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\n' \
+            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" "$TELEGRAM_API_URL" |
           ssh vps "set -e
             sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
             rm -rf /tmp/moya-dacha-release && mkdir /tmp/moya-dacha-release

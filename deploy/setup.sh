@@ -74,13 +74,13 @@ if ! grep -q '^DASHBOARD_PASSWORD=' /etc/moya-dacha.env; then
 	step "пароль дашборда"
 	echo "DASHBOARD_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -d '/+=')" >> /etc/moya-dacha.env
 fi
-# Telegram-бот (specs/018-telegram-bot.md): токен и ник владельца деплой
-# кладёт рядом с собой из секрета и переменной репозитория. Пустое
+# Telegram-бот (specs/018-telegram-bot.md): токен, ник владельца и адрес
+# посредника деплой кладёт рядом с собой из настроек репозитория. Пустое
 # значение строку не трогает.
 if [ -f "$here/telegram.env" ]; then
 	while IFS= read -r line; do
 		key="${line%%=*}" value="${line#*=}"
-		case "$key" in TELEGRAM_BOT_TOKEN | TELEGRAM_OWNER) ;; *) continue ;; esac
+		case "$key" in TELEGRAM_BOT_TOKEN | TELEGRAM_OWNER | TELEGRAM_API_URL) ;; *) continue ;; esac
 		[ -n "$value" ] || continue
 		sed -i "/^$key=/d" /etc/moya-dacha.env
 		printf '%s=%s\n' "$key" "$value" >> /etc/moya-dacha.env
