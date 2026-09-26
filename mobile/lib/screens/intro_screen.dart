@@ -9,6 +9,7 @@ import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 
@@ -46,6 +47,12 @@ class _IntroScreenState extends State<IntroScreen> {
   String? _nicknameError;
   String? _error;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    usage.screen('intro');
+  }
 
   @override
   void dispose() {

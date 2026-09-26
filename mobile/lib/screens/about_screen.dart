@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../build_info.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/loading_view.dart';
 
@@ -25,6 +26,7 @@ class _AboutScreenState extends State<AboutScreen> {
   @override
   void initState() {
     super.initState();
+    usage.screen('about');
     final info = widget.info;
     if (info != null) {
       _shown(info);

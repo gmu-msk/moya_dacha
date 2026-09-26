@@ -11,6 +11,7 @@ import 'package:moya_dacha_api/api.dart';
 import '../api.dart';
 import '../build_info.dart';
 import '../theme.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
@@ -40,6 +41,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   @override
   void initState() {
     super.initState();
+    usage.screen('feedback');
     _load();
   }
 

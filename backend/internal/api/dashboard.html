@@ -54,8 +54,8 @@
   .errors .row { padding: 8px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
   .errors .row:last-child { border-bottom: 0; }
   .errors code { font-size: 13px; }
-  .soon { background: var(--card); border-radius: 12px; padding: 12px; border: 1px dashed var(--line); }
-  .soon .t { font-weight: 600; }
+  .screen { display: flex; justify-content: space-between; gap: 8px; }
+  .screen .n { font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -72,6 +72,11 @@
   <h2>Активность за 30 дней</h2>
   <div class="charts" id="activity"></div>
 
+  <h2>Заходы и время в приложении</h2>
+  <div class="tiles" id="usage-counts"></div>
+  <div class="charts" id="usage-days" style="margin-top:8px"></div>
+  <div class="errors" id="usage-screens" style="margin-top:8px"></div>
+
   <h2>Сервер</h2>
   <div class="tiles" id="server-now"></div>
   <div class="charts" id="server-history" style="margin-top:8px"></div>
@@ -83,12 +88,6 @@
   <h2>Отзывы</h2>
   <div class="tiles" id="feedback-counts"></div>
   <div class="errors" id="feedback-list" style="margin-top:8px"></div>
-
-  <h2>Дальше</h2>
-  <div class="charts">
-    <div class="soon"><div class="t">Заходы и время в приложении</div>
-      <div class="muted">Появится на следующем этапе</div></div>
-  </div>
 </main>
 <script>
 "use strict";
@@ -197,6 +196,24 @@ function render(d) {
   for (const [title, key] of series) {
     chart(act, title, d.activity.map((x) => ({ label: dayLabel(x.date), v: x[key] })));
   }
+
+  // Заходы и время в приложении (specs/020-app-sessions.md, требование 14).
+  const u = d.usage, today = u.days[u.days.length - 1];
+  tiles($("usage-counts"), [["сегодня людей", num(today.users)], ["сегодня заходов", num(today.sessions)],
+    ["сегодня минут", num(today.minutes)], ["людей за 7 дней", num(u.week_users)]]);
+  const ud = $("usage-days");
+  ud.innerHTML = "";
+  chart(ud, "Заходили людей", u.days.map((x) => ({ label: dayLabel(x.date), v: x.users })));
+  chart(ud, "Минут в приложении", u.days.map((x) => ({ label: dayLabel(x.date), v: x.minutes })));
+  const screenTitle = { feed: "Лента", notifications: "Уведомления", profile: "Свой профиль",
+    user: "Чужой профиль", post: "Пост", new_post: "Новый пост", profile_edit: "Изменить профиль",
+    follows: "Подписки и подписчики", user_posts: "Посты человека", intro: "Знакомство",
+    feedback: "Написать разработчику", about: "О приложении", server: "Сервер" };
+  $("usage-screens").innerHTML = u.screens.length
+    ? `<div class="row muted">Экраны за неделю: открытий · людей</div>` +
+      u.screens.map((x) => `<div class="row screen"><span>${esc(screenTitle[x.screen] || x.screen)}</span>
+        <span class="n">${num(x.opens)} · ${num(x.users)}</span></div>`).join("")
+    : `<div class="row muted">Заходов пока нет</div>`;
 
   const n = d.server.now;
   tiles($("server-now"), n ? [

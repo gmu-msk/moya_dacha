@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
+import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/bottom_bar.dart';
 import '../widgets/error_view.dart';
@@ -67,7 +68,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    usage.begin(widget.token, tab: _tab.name);
     _load();
+  }
+
+  @override
+  void dispose() {
+    usage.finish();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -123,6 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// к самому верху (specs/011-bottom-bar.md, требование 4).
   void _select(HomeTab tab) {
     if (tab != _tab) {
+      usage.tab(tab.name);
       final reopened = tab == HomeTab.notifications && _notificationsOpened;
       setState(() {
         _tab = tab;
@@ -164,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     if (_tab != HomeTab.feed) {
+      usage.tab(HomeTab.feed.name);
       setState(() => _tab = HomeTab.feed);
       return;
     }
