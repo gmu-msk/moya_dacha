@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gmu-msk/moya_dacha/backend/internal/api"
+	"github.com/gmu-msk/moya_dacha/backend/internal/feedback"
 	"github.com/gmu-msk/moya_dacha/backend/internal/media"
 	"github.com/gmu-msk/moya_dacha/backend/internal/telegram"
 )
@@ -94,21 +95,33 @@ func run() error {
 	if cfg.DashboardPassword == "" {
 		slog.Info("DASHBOARD_PASSWORD не задан: дашборда нет")
 	}
+	// Отзывы разработчику и задачи GitHub (specs/019-feedback.md).
+	fb := feedback.New(pool, feedbackConfig(cfg.Media))
+	cfg.Feedback = fb
+	if !fb.Enabled() {
+		slog.Info("FEEDBACK_GITHUB_TOKEN не задан: отзывы копятся в базе без задач")
+	}
+
 	service := api.New(pool, cfg)
 	go service.RunMonitor(ctx)
 
-	// Telegram-бот: тревоги и сводка владельцу (specs/018-telegram-bot.md).
+	// Telegram-бот: тревоги и сводка владельцу (specs/018-telegram-bot.md),
+	// отзывы из Telegram (specs/019-feedback.md).
+	var notifier feedback.Notifier
 	if tg, ok := telegramConfig(); ok {
 		if tg.Owner == "" {
 			slog.Warn("TELEGRAM_OWNER не задан: бот никого не признает владельцем")
 		}
+		tg.Feedback = fb
 		bot := telegram.New(pool, tg)
+		notifier = bot
 		go bot.Run(ctx)
 		go bot.RunAlerts(ctx)
 		slog.Info("Telegram-бот запущен", "owner", tg.Owner)
 	} else {
 		slog.Info("TELEGRAM_BOT_TOKEN не задан: бота нет")
 	}
+	go fb.Run(ctx, notifier)
 
 	srv := &http.Server{
 		Addr:              addr,

@@ -15,6 +15,7 @@ import (
 
 	"github.com/gmu-msk/moya_dacha/backend/api/gen"
 	"github.com/gmu-msk/moya_dacha/backend/internal/auth"
+	"github.com/gmu-msk/moya_dacha/backend/internal/feedback"
 	"github.com/gmu-msk/moya_dacha/backend/internal/media"
 	"github.com/gmu-msk/moya_dacha/backend/internal/monitor"
 )
@@ -69,6 +70,10 @@ type Config struct {
 	// DiskPath — где дашборд меряет диск: там, где лежат файлы
 	// пользователей. Пустой — корень файловой системы.
 	DiskPath string
+
+	// Feedback — отзывы разработчику и задачи GitHub (specs/019-feedback.md,
+	// требование 33). nil — свой, без GitHub, с хранилищем Media.
+	Feedback *feedback.Service
 }
 
 // Server реализует gen.StrictServerInterface.
@@ -98,6 +103,9 @@ func New(db *pgxpool.Pool, cfg Config) *Server {
 	}
 	if cfg.DiskPath == "" {
 		cfg.DiskPath = "/"
+	}
+	if cfg.Feedback == nil {
+		cfg.Feedback = feedback.New(db, feedback.Config{Media: cfg.Media})
 	}
 	return &Server{db: db, cfg: cfg, monitor: monitor.New(db, cfg.DiskPath)}
 }

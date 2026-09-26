@@ -25,7 +25,7 @@ func (s *Server) requestInviteCode(ctx context.Context, phone string) (gen.Reque
 	if !invited {
 		return gen.RequestAuthCode403JSONResponse(errNotInvited), nil
 	}
-	return gen.RequestAuthCode202JSONResponse{Delivery: gen.Invite}, nil
+	return gen.RequestAuthCode202JSONResponse{Delivery: gen.AuthCodeAcceptedDeliveryInvite}, nil
 }
 
 // consumeInvite сверяет код с приглашением на номер. Срока у приглашения

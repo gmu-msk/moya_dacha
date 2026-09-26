@@ -101,6 +101,9 @@ jobs:
           # именем подойдёт: оба пути выглядят в настройках одинаково.
           TELEGRAM_OWNER: ${{ vars.TELEGRAM_OWNER || secrets.TELEGRAM_OWNER }}
           TELEGRAM_API_URL: ${{ vars.TELEGRAM_API_URL || secrets.TELEGRAM_API_URL }}
+          # Отзывы становятся задачами этого репозитория (specs/019-feedback.md):
+          # fine-grained токен, только Issues: read and write.
+          FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
           # С прода api.telegram.org не открывается: бот ходит в Telegram
           # через SSH-туннель до второго VPS (specs/018-telegram-bot.md, 3б).
           # RELAY_HOST может быть и «адрес:порт».
@@ -120,8 +123,8 @@ jobs:
               ssh vps '(umask 077; mkdir /tmp/moya-dacha-relay; cat > /tmp/moya-dacha-relay/relay.env)'
             printf '%s\n' "$RELAY_SSH_KEY" | ssh vps '(umask 077; cat > /tmp/moya-dacha-relay/key)'
           fi
-          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\n' \
-            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" "$TELEGRAM_API_URL" |
+          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\nFEEDBACK_GITHUB_TOKEN=%s\n' \
+            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" "$TELEGRAM_API_URL" "$FEEDBACK_GITHUB_TOKEN" |
           ssh vps "set -e
             sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
             rm -rf /tmp/moya-dacha-release && mkdir /tmp/moya-dacha-release

@@ -18,6 +18,7 @@ import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/user_avatar.dart';
 import 'about_screen.dart';
+import 'feedback_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -273,6 +274,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: const Text('Выйти'),
             ),
             const SizedBox(height: AppGap.small),
+            // Отзыв разработчику (specs/019-feedback.md, требование 14).
+            TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => FeedbackScreen(token: widget.token),
+                ),
+              ),
+              child: const Text('Написать разработчику'),
+            ),
             // Версия и номер сборки (specs/017-app-updates.md).
             TextButton(
               onPressed: () => Navigator.of(context).push(

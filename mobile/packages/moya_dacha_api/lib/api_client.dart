@@ -205,6 +205,10 @@ class ApiClient {
           return Error.fromJson(value);
         case 'Feed':
           return Feed.fromJson(value);
+        case 'Feedback':
+          return Feedback.fromJson(value);
+        case 'FeedbackList':
+          return FeedbackList.fromJson(value);
         case 'FollowList':
           return FollowList.fromJson(value);
         case 'FollowUser':

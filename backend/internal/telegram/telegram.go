@@ -22,15 +22,19 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/gmu-msk/moya_dacha/backend/internal/feedback"
 )
 
 // DefaultAPIURL — адрес Bot API.
 const DefaultAPIURL = "https://api.telegram.org"
 
-// Роли чатов (требование 4).
+// Роли чатов (требование 4). ideas — тема для отзывов
+// (specs/019-feedback.md, требование 20).
 const (
 	RoleOwner = "owner"
 	RoleGroup = "group"
+	RoleIdeas = "ideas"
 )
 
 // ErrNotBound — чат роли ещё не привязан.
@@ -50,6 +54,9 @@ type Config struct {
 	DiskPath string
 	// PollTimeout — сколько Telegram держит getUpdates без обновлений.
 	PollTimeout time.Duration
+	// Feedback — отзывы и задачи GitHub (specs/019-feedback.md,
+	// требование 34). nil — отзывы из Telegram не принимаются.
+	Feedback *feedback.Service
 }
 
 type Bot struct {
@@ -100,12 +107,24 @@ func (b *Bot) chat(ctx context.Context, role string) (int64, error) {
 	return id, err
 }
 
-func (b *Bot) bind(ctx context.Context, role string, chatID int64) error {
+// bind привязывает роль к чату; thread — тема группы или nil.
+func (b *Bot) bind(ctx context.Context, role string, chatID int64, thread *int64) error {
 	_, err := b.db.Exec(ctx, `
-		INSERT INTO telegram_chats (role, chat_id) VALUES ($1, $2)
-		ON CONFLICT (role) DO UPDATE SET chat_id = EXCLUDED.chat_id, bound_at = now()`,
-		role, chatID)
+		INSERT INTO telegram_chats (role, chat_id, thread_id) VALUES ($1, $2, $3)
+		ON CONFLICT (role) DO UPDATE
+		SET chat_id = EXCLUDED.chat_id, thread_id = EXCLUDED.thread_id, bound_at = now()`,
+		role, chatID, thread)
 	return err
+}
+
+// ideas — чат и тема для отзывов; ok == false, если не привязаны.
+func (b *Bot) ideas(ctx context.Context) (chat int64, thread *int64, ok bool, err error) {
+	err = b.db.QueryRow(ctx, `SELECT chat_id, thread_id FROM telegram_chats WHERE role = $1`, RoleIdeas).
+		Scan(&chat, &thread)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil, false, nil
+	}
+	return chat, thread, err == nil, err
 }
 
 // apiResponse — общий вид ответа Bot API.
@@ -160,6 +179,47 @@ func (b *Bot) callJSON(ctx context.Context, method string, payload, result any) 
 // Send пишет текст в чат.
 func (b *Bot) Send(ctx context.Context, chatID int64, text string) error {
 	return b.callJSON(ctx, "sendMessage", map[string]any{"chat_id": chatID, "text": text}, nil)
+}
+
+// Notify отвечает автору отзыва: в его теме и на его сообщение
+// (specs/019-feedback.md, требование 31).
+func (b *Bot) Notify(ctx context.Context, to feedback.Recipient, text string) error {
+	payload := map[string]any{"chat_id": to.ChatID, "text": text}
+	if to.ThreadID != 0 {
+		payload["message_thread_id"] = to.ThreadID
+	}
+	if to.ReplyTo != 0 {
+		// Сообщение автора могли удалить — ответ всё равно нужен.
+		payload["reply_parameters"] = map[string]any{
+			"message_id":                  to.ReplyTo,
+			"allow_sending_without_reply": true,
+		}
+	}
+	return b.callJSON(ctx, "sendMessage", payload, nil)
+}
+
+// download скачивает файл Telegram по его file_id (getFile).
+func (b *Bot) download(ctx context.Context, fileID string) ([]byte, error) {
+	var f struct {
+		FilePath string `json:"file_path"`
+	}
+	if err := b.callJSON(ctx, "getFile", map[string]any{"file_id": fileID}, &f); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		b.cfg.APIURL+"/file/bot"+b.cfg.Token+"/"+f.FilePath, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := b.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("telegram файл: %w", redact(err, b.cfg.Token))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("telegram файл: HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 20<<20))
 }
 
 // sendDocument отправляет файл с подписью под именем name.
