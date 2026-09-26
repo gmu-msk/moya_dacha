@@ -18,6 +18,7 @@ on:
     types: [opened, labeled, closed]
 
 permissions:
+  contents: read
   issues: write
 
 jobs:
