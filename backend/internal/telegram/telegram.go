@@ -188,3 +188,24 @@ func (b *Bot) sendDocument(ctx context.Context, chatID int64, path, name, captio
 func logError(what string, err error) {
 	slog.Error("telegram: "+what, "err", err)
 }
+
+// Me — ник бота по токену (getMe): проверка, что токен рабочий и
+// Telegram с этой машины доступен.
+func (b *Bot) Me(ctx context.Context) (string, error) {
+	var me struct {
+		Username string `json:"username"`
+	}
+	if err := b.callJSON(ctx, "getMe", map[string]any{}, &me); err != nil {
+		return "", err
+	}
+	return me.Username, nil
+}
+
+// Bound — привязан ли чат роли.
+func (b *Bot) Bound(ctx context.Context, role string) (bool, error) {
+	_, err := b.chat(ctx, role)
+	if errors.Is(err, ErrNotBound) {
+		return false, nil
+	}
+	return err == nil, err
+}

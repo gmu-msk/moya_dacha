@@ -17,10 +17,11 @@ import (
 // telegramConfig — настройки бота из окружения (specs/018-telegram-bot.md,
 // требования 1–2). Без токена бота нет: ok == false.
 func telegramConfig() (cfg telegram.Config, ok bool) {
+	// Пробелы и перевод строки по краям приходят из вставки с телефона.
 	cfg = telegram.Config{
-		Token:    os.Getenv("TELEGRAM_BOT_TOKEN"),
+		Token:    strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
 		APIURL:   os.Getenv("TELEGRAM_API_URL"),
-		Owner:    os.Getenv("TELEGRAM_OWNER"),
+		Owner:    strings.TrimSpace(os.Getenv("TELEGRAM_OWNER")),
 		DiskPath: os.Getenv("MEDIA_DIR"),
 	}
 	return cfg, cfg.Token != ""
@@ -82,5 +83,52 @@ func buildNotify(args []string) error {
 		return err
 	}
 	fmt.Printf("Сборка отправлена: %s\n", role)
+	return nil
+}
+
+// telegramCheck — команда telegram-check: состояние бота одним текстом
+// для итога деплоя. Проблема бота — не ошибка команды, деплой из-за неё
+// не краснеет.
+func telegramCheck() error {
+	cfg, ok := telegramConfig()
+	if !ok {
+		fmt.Println("Бот: TELEGRAM_BOT_TOKEN не задан")
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		return errors.New("переменная окружения DATABASE_URL не задана")
+	}
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	bot := telegram.New(pool, cfg)
+
+	name, err := bot.Me(ctx)
+	if err != nil {
+		fmt.Printf("Бот: Telegram не принял токен или недоступен: %v\n", err)
+		return nil
+	}
+	fmt.Printf("Бот: @%s\n", name)
+	if cfg.Owner == "" {
+		fmt.Println("Владелец: TELEGRAM_OWNER не задан, /start никого не привяжет")
+	} else {
+		fmt.Printf("Владелец: @%s\n", strings.TrimPrefix(cfg.Owner, "@"))
+	}
+	for _, role := range []string{telegram.RoleOwner, telegram.RoleGroup} {
+		bound, err := bot.Bound(ctx, role)
+		if err != nil {
+			return err
+		}
+		state := "не привязан"
+		if bound {
+			state = "привязан"
+		}
+		fmt.Printf("Чат %s: %s\n", role, state)
+	}
 	return nil
 }
