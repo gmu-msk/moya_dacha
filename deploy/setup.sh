@@ -87,6 +87,22 @@ if [ -f "$here/telegram.env" ]; then
 	done < "$here/telegram.env"
 	rm -f "$here/telegram.env"
 fi
+# Туннель до второго VPS (specs/018-telegram-bot.md, требование 3б): с
+# этой машины api.telegram.org не открывается, и бот ходит в Telegram через
+# SOCKS-прокси ssh -D. Ключ и адрес деплой кладёт в /tmp/moya-dacha-relay.
+if [ -f /tmp/moya-dacha-relay/relay.env ]; then
+	step "туннель до второго VPS"
+	install -d -o moya-dacha -g moya-dacha -m 700 /etc/moya-dacha-relay
+	install -o moya-dacha -g moya-dacha -m 600 /tmp/moya-dacha-relay/relay.env /etc/moya-dacha-relay/relay.env
+	install -o moya-dacha -g moya-dacha -m 600 /tmp/moya-dacha-relay/key /etc/moya-dacha-relay/key
+	rm -rf /tmp/moya-dacha-relay
+	install -m 644 "$here/moya-dacha-relay.service" /etc/systemd/system/
+	systemctl daemon-reload
+	systemctl enable moya-dacha-relay.service >/dev/null
+	systemctl restart moya-dacha-relay.service
+	sed -i '/^TELEGRAM_PROXY=/d' /etc/moya-dacha.env
+	echo 'TELEGRAM_PROXY=socks5://127.0.0.1:1080' >> /etc/moya-dacha.env
+fi
 chown root:moya-dacha /etc/moya-dacha.env
 chmod 640 /etc/moya-dacha.env
 

@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -42,6 +43,9 @@ type Config struct {
 	APIURL string
 	// Owner — ник владельца в Telegram без @ (TELEGRAM_OWNER).
 	Owner string
+	// Proxy — прокси до Bot API, например socks5://127.0.0.1:1080
+	// (TELEGRAM_PROXY). Пусто — напрямую.
+	Proxy string
 	// DiskPath — где мерить диск для тревог и сводки.
 	DiskPath string
 	// PollTimeout — сколько Telegram держит getUpdates без обновлений.
@@ -71,10 +75,18 @@ func New(db *pgxpool.Pool, cfg Config) *Bot {
 	}
 	cfg.APIURL = strings.TrimRight(cfg.APIURL, "/")
 	cfg.Owner = strings.TrimPrefix(cfg.Owner, "@")
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if cfg.Proxy != "" {
+		if u, err := url.Parse(cfg.Proxy); err != nil {
+			logError("TELEGRAM_PROXY не разобран, иду напрямую", err)
+		} else {
+			transport.Proxy = http.ProxyURL(u)
+		}
+	}
 	return &Bot{
 		db:   db,
 		cfg:  cfg,
-		http: &http.Client{Timeout: cfg.PollTimeout + 30*time.Second},
+		http: &http.Client{Timeout: cfg.PollTimeout + 30*time.Second, Transport: transport},
 	}
 }
 

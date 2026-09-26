@@ -1,0 +1,28 @@
+# SSH-туннель до второго VPS для Telegram-бота (specs/018-telegram-bot.md,
+# требование 3б): с прода api.telegram.org не открывается. Бот ходит через
+# SOCKS-прокси 127.0.0.1:1080 (TELEGRAM_PROXY). Ставит deploy/setup.sh,
+# только если заданы секреты RELAY_HOST и RELAY_SSH_KEY.
+[Unit]
+Description=МояДача: туннель до второго VPS для Telegram-бота
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=moya-dacha
+Group=moya-dacha
+EnvironmentFile=/etc/moya-dacha-relay/relay.env
+ExecStart=/usr/bin/ssh -N -F /dev/null \
+	-D 127.0.0.1:1080 \
+	-p ${RELAY_PORT} -i /etc/moya-dacha-relay/key \
+	-o UserKnownHostsFile=/etc/moya-dacha-relay/known_hosts \
+	-o StrictHostKeyChecking=accept-new \
+	-o BatchMode=yes \
+	-o ExitOnForwardFailure=yes \
+	-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+	${RELAY_USER}@${RELAY_HOST}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

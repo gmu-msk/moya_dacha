@@ -22,6 +22,7 @@ func telegramConfig() (cfg telegram.Config, ok bool) {
 		Token:    strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
 		APIURL:   strings.TrimSpace(os.Getenv("TELEGRAM_API_URL")),
 		Owner:    strings.TrimSpace(os.Getenv("TELEGRAM_OWNER")),
+		Proxy:    strings.TrimSpace(os.Getenv("TELEGRAM_PROXY")),
 		DiskPath: os.Getenv("MEDIA_DIR"),
 	}
 	return cfg, cfg.Token != ""
@@ -113,9 +114,12 @@ func telegramCheck() error {
 		fmt.Printf("Бот: Telegram не принял токен или недоступен: %v\n", err)
 		return nil
 	}
-	if cfg.APIURL != "" {
+	switch {
+	case cfg.Proxy != "":
+		fmt.Printf("Бот: @%s, через туннель до второго VPS\n", name)
+	case cfg.APIURL != "":
 		fmt.Printf("Бот: @%s, через %s\n", name, cfg.APIURL)
-	} else {
+	default:
 		fmt.Printf("Бот: @%s\n", name)
 	}
 	if cfg.Owner == "" {
