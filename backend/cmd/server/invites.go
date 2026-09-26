@@ -16,13 +16,23 @@ const usage = `команды:
   invite <номер>     выдать приглашение и напечатать код
   uninvite <номер>   отозвать приглашение
   invites            действующие приглашения
-  alerts             текущие тревоги дашборда`
+  alerts             текущие тревоги дашборда
+  build-notify <owner|group> <сведения.json|-> [<apk>|<ссылка>]
+                     отправить сборку в Telegram`
 
 // runCommand выполняет команду владельца сервиса против той же базы,
 // с которой работает сервис (specs/015-invites.md, требование 11).
 func runCommand(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// Отправка APK в Telegram идёт дольше 30 секунд на медленном канале.
+	if args[0] == "build-notify" {
+		if len(args) < 3 || len(args) > 4 {
+			return errors.New(usage)
+		}
+		return buildNotify(args[1:])
+	}
 
 	var phone string
 	switch {

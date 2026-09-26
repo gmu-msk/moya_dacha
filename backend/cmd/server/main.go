@@ -3,8 +3,8 @@
 //
 // Без аргументов бинарник запускает сервис. С аргументом — выполняет
 // команду владельца и выходит: invite, uninvite, invites
-// (specs/015-invites.md, требование 11) и alerts (specs/016-dashboard.md,
-// требование 20).
+// (specs/015-invites.md, требование 11), alerts (specs/016-dashboard.md,
+// требование 20) и build-notify (specs/018-telegram-bot.md, требование 16).
 package main
 
 import (
@@ -22,6 +22,7 @@ import (
 
 	"github.com/gmu-msk/moya_dacha/backend/internal/api"
 	"github.com/gmu-msk/moya_dacha/backend/internal/media"
+	"github.com/gmu-msk/moya_dacha/backend/internal/telegram"
 )
 
 func main() {
@@ -95,6 +96,19 @@ func run() error {
 	}
 	service := api.New(pool, cfg)
 	go service.RunMonitor(ctx)
+
+	// Telegram-бот: тревоги и сводка владельцу (specs/018-telegram-bot.md).
+	if tg, ok := telegramConfig(); ok {
+		if tg.Owner == "" {
+			slog.Warn("TELEGRAM_OWNER не задан: бот никого не признает владельцем")
+		}
+		bot := telegram.New(pool, tg)
+		go bot.Run(ctx)
+		go bot.RunAlerts(ctx)
+		slog.Info("Telegram-бот запущен", "owner", tg.Owner)
+	} else {
+		slog.Info("TELEGRAM_BOT_TOKEN не задан: бота нет")
+	}
 
 	srv := &http.Server{
 		Addr:              addr,
