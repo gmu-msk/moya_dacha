@@ -29,6 +29,7 @@ part 'auth/http_basic_auth.dart';
 part 'auth/http_bearer_auth.dart';
 
 part 'api/auth_api.dart';
+part 'api/feedback_api.dart';
 part 'api/follows_api.dart';
 part 'api/notifications_api.dart';
 part 'api/operations_api.dart';
@@ -47,6 +48,8 @@ part 'model/comments.dart';
 part 'model/current_user.dart';
 part 'model/error.dart';
 part 'model/feed.dart';
+part 'model/feedback.dart';
+part 'model/feedback_list.dart';
 part 'model/follow_list.dart';
 part 'model/follow_user.dart';
 part 'model/health.dart';

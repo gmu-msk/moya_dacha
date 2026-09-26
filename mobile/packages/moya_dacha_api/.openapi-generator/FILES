@@ -1,6 +1,7 @@
 analysis_options.yaml
 lib/api.dart
 lib/api/auth_api.dart
+lib/api/feedback_api.dart
 lib/api/follows_api.dart
 lib/api/notifications_api.dart
 lib/api/operations_api.dart
@@ -26,6 +27,8 @@ lib/model/comments.dart
 lib/model/current_user.dart
 lib/model/error.dart
 lib/model/feed.dart
+lib/model/feedback.dart
+lib/model/feedback_list.dart
 lib/model/follow_list.dart
 lib/model/follow_user.dart
 lib/model/health.dart

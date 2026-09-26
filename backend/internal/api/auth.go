@@ -90,7 +90,7 @@ func (s *Server) RequestAuthCode(ctx context.Context, request gen.RequestAuthCod
 	}
 
 	return gen.RequestAuthCode202JSONResponse{
-		Delivery:    gen.Sent,
+		Delivery:    gen.AuthCodeAcceptedDeliverySent,
 		ResendAfter: int32(s.cfg.ResendAfter.Seconds()),
 		CodeTtl:     int32(s.cfg.CodeTTL.Seconds()),
 	}, nil

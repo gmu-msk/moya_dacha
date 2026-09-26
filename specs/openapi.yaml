@@ -1057,6 +1057,89 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /me/feedback:
+    get:
+      operationId: getMyFeedback
+      summary: Мои отзывы
+      description: |
+        Свои отзывы разработчику, новые сверху, не больше 50, и что с ними
+        стало (specs/019-feedback.md, требования 17 и 19).
+      tags: [feedback]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Отзывы
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackList"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: sendFeedback
+      summary: Написать разработчику
+      description: |
+        Отзыв с необязательным скриншотом. Сервис записывает его и в фоне
+        заводит задачу GitHub «входящее» (specs/019-feedback.md,
+        требование 18).
+      tags: [feedback]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  description: Текст отзыва, 1–4000 символов после обрезки пробелов
+                screenshot:
+                  type: string
+                  format: binary
+                  description: Скриншот JPEG или PNG до 10 МБ
+                app_version:
+                  type: string
+                  description: Версия приложения, например «1.0.0 (386900)»
+                device:
+                  type: string
+                  description: Телефон, например «Google Pixel 7, Android 14»
+      responses:
+        "201":
+          description: Отзыв записан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feedback"
+        "400":
+          description: |
+            Текст пустой или длиннее 4000 символов (`invalid_text`),
+            скриншот не картинка (`invalid_image`), запрос не разобрался
+            (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Скриншот больше 10 МБ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /posts/{postId}/visibility:
     put:
       operationId: setPostVisibility
@@ -2009,6 +2092,47 @@ components:
         unread:
           type: boolean
           description: Новее ли строка последнего открытия раздела
+
+    Feedback:
+      type: object
+      description: Отзыв разработчику (specs/019-feedback.md)
+      required: [id, text, status, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        text:
+          type: string
+        status:
+          type: string
+          enum: [sent, accepted, approved, declined, done, released]
+          description: |
+            `sent` — записан, задачи ещё нет; `accepted` — задача заведена;
+            `approved` — одобрено; `declined` — делать не будем; `done` —
+            сделано, ждёт сборки; `released` — вышло в сборке `build`.
+        issue:
+          type: integer
+          format: int32
+          description: Номер задачи GitHub, когда она заведена
+          example: 71
+        build:
+          type: integer
+          format: int64
+          description: Только у `released` — номер сборки, в которой вышло
+          example: 386950
+        created_at:
+          type: string
+          format: date-time
+
+    FeedbackList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Отзывы, новые сверху
+          items:
+            $ref: "#/components/schemas/Feedback"
 
     NotificationPost:
       type: object

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,8 +12,30 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/gmu-msk/moya_dacha/backend/internal/feedback"
+	"github.com/gmu-msk/moya_dacha/backend/internal/media"
 	"github.com/gmu-msk/moya_dacha/backend/internal/telegram"
 )
+
+// feedbackConfig — настройки отзывов из окружения (specs/019-feedback.md,
+// требования 3 и 28). store — хранилище файлов сервиса, nil — из MEDIA_DIR.
+func feedbackConfig(store media.Storage) feedback.Config {
+	if store == nil {
+		if dir := os.Getenv("MEDIA_DIR"); dir != "" {
+			baseURL := os.Getenv("MEDIA_BASE_URL")
+			if baseURL == "" {
+				baseURL = "/media"
+			}
+			store = media.NewDisk(dir, baseURL)
+		}
+	}
+	return feedback.Config{
+		Token:     strings.TrimSpace(os.Getenv("FEEDBACK_GITHUB_TOKEN")),
+		Repo:      strings.TrimSpace(os.Getenv("FEEDBACK_GITHUB_REPO")),
+		PublicURL: strings.TrimSpace(os.Getenv("PUBLIC_URL")),
+		Media:     store,
+	}
+}
 
 // telegramConfig — настройки бота из окружения (specs/018-telegram-bot.md,
 // требования 1–2). Без токена бота нет: ok == false.
@@ -75,7 +98,8 @@ func buildNotify(args []string) error {
 	}
 	defer pool.Close()
 
-	err = telegram.New(pool, cfg).SendBuild(ctx, role, info, apk, link)
+	bot := telegram.New(pool, cfg)
+	err = bot.SendBuild(ctx, role, info, apk, link)
 	if errors.Is(err, telegram.ErrNotBound) {
 		fmt.Printf("Чат %s не привязан: сборка не отправлена\n", role)
 		return nil
@@ -84,6 +108,19 @@ func buildNotify(args []string) error {
 		return err
 	}
 	fmt.Printf("Сборка отправлена: %s\n", role)
+
+	// Сборка main в группе — всё сделанное из отзывов вышло в ней
+	// (specs/019-feedback.md, требование 11). Неудача сборку не отменяет.
+	if role == telegram.RoleGroup {
+		var bi struct {
+			Build int64 `json:"build"`
+		}
+		if err := json.Unmarshal(info, &bi); err == nil && bi.Build > 0 {
+			if err := feedback.New(pool, feedbackConfig(nil)).Release(ctx, bi.Build, bot); err != nil {
+				fmt.Printf("Отзывы: не удалось отметить вышедшее: %v\n", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -138,5 +175,21 @@ func telegramCheck() error {
 		}
 		fmt.Printf("Чат %s: %s\n", role, state)
 	}
+	printGitHub(ctx, pool)
 	return nil
+}
+
+// printGitHub — строка про задачи GitHub (specs/019-feedback.md,
+// требование 29).
+func printGitHub(ctx context.Context, pool *pgxpool.Pool) {
+	fb := feedback.New(pool, feedbackConfig(nil))
+	err := fb.Check(ctx)
+	switch {
+	case errors.Is(err, feedback.ErrNotConfigured):
+		fmt.Println("GitHub: FEEDBACK_GITHUB_TOKEN не задан — отзывы копятся в базе")
+	case err != nil:
+		fmt.Printf("GitHub: не принял токен: %v\n", err)
+	default:
+		fmt.Printf("GitHub: задачи в %s\n", fb.Repo())
+	}
 }

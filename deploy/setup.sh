@@ -75,17 +75,23 @@ if ! grep -q '^DASHBOARD_PASSWORD=' /etc/moya-dacha.env; then
 	echo "DASHBOARD_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -d '/+=')" >> /etc/moya-dacha.env
 fi
 # Telegram-бот (specs/018-telegram-bot.md): токен, ник владельца и адрес
-# посредника деплой кладёт рядом с собой из настроек репозитория. Пустое
+# посредника, а с ними токен GitHub для отзывов (specs/019-feedback.md) деплой кладёт рядом с собой из настроек репозитория. Пустое
 # значение строку не трогает.
 if [ -f "$here/telegram.env" ]; then
 	while IFS= read -r line; do
 		key="${line%%=*}" value="${line#*=}"
-		case "$key" in TELEGRAM_BOT_TOKEN | TELEGRAM_OWNER | TELEGRAM_API_URL) ;; *) continue ;; esac
+		case "$key" in TELEGRAM_BOT_TOKEN | TELEGRAM_OWNER | TELEGRAM_API_URL | FEEDBACK_GITHUB_TOKEN) ;; *) continue ;; esac
 		[ -n "$value" ] || continue
 		sed -i "/^$key=/d" /etc/moya-dacha.env
 		printf '%s=%s\n' "$key" "$value" >> /etc/moya-dacha.env
 	done < "$here/telegram.env"
 	rm -f "$here/telegram.env"
+fi
+# Адрес сервиса снаружи: по нему открываются скриншоты в задачах GitHub
+# (specs/019-feedback.md, требование 28).
+if [ -n "${DOMAIN:-}" ]; then
+	sed -i '/^PUBLIC_URL=/d' /etc/moya-dacha.env
+	echo "PUBLIC_URL=https://$DOMAIN" >> /etc/moya-dacha.env
 fi
 # Туннель до второго VPS (specs/018-telegram-bot.md, требование 3б): с
 # этой машины api.telegram.org не открывается, и бот ходит в Telegram через

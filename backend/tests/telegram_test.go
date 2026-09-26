@@ -50,7 +50,7 @@ const (
 const (
 	tgOwnerBound   = "Готово: сюда будут приходить тревоги и тестовые сборки."
 	tgGroupBound   = "Готово: сюда будут приходить сборки приложения."
-	tgStrangerText = "Это служебный бот МоейДачи."
+	tgStrangerText = "Здравствуйте! Это бот МоейДачи. Напишите сюда идею или что сломалось — я передам разработчику и пришлю номер задачи."
 	tgAlertHeader  = "Тревога на проде:"
 	tgAllClear     = "Всё в порядке: тревог больше нет."
 )
@@ -73,6 +73,8 @@ type tgSent struct {
 	text     string // text у sendMessage, caption у sendDocument
 	filename string // имя файла document
 	content  []byte // содержимое файла document
+	threadID int64  // message_thread_id у sendMessage; 0 — не задан (019, ФТ-31)
+	replyTo  int64  // reply_parameters.message_id у sendMessage; 0 — не задан
 }
 
 // fakeTelegram — Telegram Bot API в миниатюре.
@@ -88,6 +90,11 @@ type fakeTelegram struct {
 	wrong    []string
 	arrived  chan struct{}
 	closing  chan struct{}
+
+	// Файлы для getFile и скачивания <APIURL>/file/bot<Token>/<путь>
+	// (specs/019-feedback.md, ФТ-21); заполняет feedback_test.go.
+	files     map[string]tgFile // по file_id
+	fileAsked []string          // file_id из запросов getFile
 }
 
 func newFakeTelegram(t *testing.T) *fakeTelegram {
@@ -207,6 +214,10 @@ func (f *fakeTelegram) waitSent(chatID int64, n int, what string) []tgSent {
 }
 
 func (f *fakeTelegram) serve(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/file/bot"+tgToken+"/") {
+		f.serveFile(w, r)
+		return
+	}
 	prefix := "/bot" + tgToken + "/"
 	if !strings.HasPrefix(r.URL.Path, prefix) {
 		f.mu.Lock()
@@ -224,6 +235,8 @@ func (f *fakeTelegram) serve(w http.ResponseWriter, r *http.Request) {
 		f.serveSendMessage(w, r)
 	case "sendDocument":
 		f.serveSendDocument(w, r)
+	case "getFile":
+		f.serveGetFile(w, r)
 	case "getMe":
 		tgReply(w, map[string]any{"id": 999, "is_bot": true, "first_name": "МояДача", "username": "moya_dacha_bot"})
 	default:
@@ -288,8 +301,12 @@ func (f *fakeTelegram) take(offset int64) []map[string]any {
 
 func (f *fakeTelegram) serveSendMessage(w http.ResponseWriter, r *http.Request) {
 	var params struct {
-		ChatID json.RawMessage `json:"chat_id"`
-		Text   string          `json:"text"`
+		ChatID          json.RawMessage `json:"chat_id"`
+		Text            string          `json:"text"`
+		MessageThreadID int64           `json:"message_thread_id"`
+		ReplyParameters *struct {
+			MessageID int64 `json:"message_id"`
+		} `json:"reply_parameters"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		f.mu.Lock()
@@ -299,7 +316,11 @@ func (f *fakeTelegram) serveSendMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	f.record(w, tgSent{method: "sendMessage", chatID: f.chatID(string(params.ChatID)), text: params.Text})
+	s := tgSent{method: "sendMessage", chatID: f.chatID(string(params.ChatID)), text: params.Text, threadID: params.MessageThreadID}
+	if params.ReplyParameters != nil {
+		s.replyTo = params.ReplyParameters.MessageID
+	}
+	f.record(w, s)
 }
 
 func (f *fakeTelegram) serveSendDocument(w http.ResponseWriter, r *http.Request) {
@@ -607,8 +628,8 @@ func TestTelegramOwnerNickIgnoresCase(t *testing.T) {
 	waitBound(t, pool, "owner", tgOwnerID)
 }
 
-// Команда в личке от чужого получает «Это служебный бот МоейДачи.»
-// и ничего не привязывает (ФТ-7).
+// Команда в личке от чужого получает приветствие из specs/019-feedback.md, ФТ-23
+// (раньше — «Это служебный бот МоейДачи.», 018 ФТ-7), и ничего не привязывает.
 func TestTelegramStrangerInPrivateGetsServiceReply(t *testing.T) {
 	cases := []struct {
 		name     string

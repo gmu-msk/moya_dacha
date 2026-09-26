@@ -18,6 +18,23 @@ type Snapshot struct {
 	Activity    []Day     `json:"activity"`
 	Server      Server    `json:"server"`
 	Errors      Errors    `json:"errors"`
+	Feedback    Feedback  `json:"feedback"`
+}
+
+// Feedback — отзывы разработчику (specs/019-feedback.md, требование 27).
+type Feedback struct {
+	Week   int64           `json:"week"`
+	Recent []FeedbackEntry `json:"recent"`
+}
+
+type FeedbackEntry struct {
+	CreatedAt time.Time `json:"created_at"`
+	Source    string    `json:"source"`
+	Author    string    `json:"author"`
+	Text      string    `json:"text"`
+	Status    string    `json:"status"`
+	Issue     *int32    `json:"issue"`
+	IssueURL  *string   `json:"issue_url"`
 }
 
 type Alert struct {
@@ -86,7 +103,7 @@ type ServerError struct {
 func (m *Monitor) Collect(ctx context.Context) (Snapshot, error) {
 	snap := Snapshot{GeneratedAt: time.Now().UTC()}
 	steps := []func(context.Context, *Snapshot) error{
-		m.totals, m.activity, m.server, m.errors,
+		m.totals, m.activity, m.server, m.errors, m.feedback,
 	}
 	for _, step := range steps {
 		if err := step(ctx, &snap); err != nil {
@@ -106,6 +123,32 @@ func (m *Monitor) Collect(ctx context.Context) (Snapshot, error) {
 	}
 	snap.Alerts = alerts
 	return snap, nil
+}
+
+// feedback — отзывы за неделю и последние десять (019, требование 27).
+func (m *Monitor) feedback(ctx context.Context, s *Snapshot) error {
+	if err := m.db.QueryRow(ctx, `
+		SELECT count(*) FROM feedback WHERE created_at > now() - interval '7 days'`).
+		Scan(&s.Feedback.Week); err != nil {
+		return err
+	}
+	rows, err := m.db.Query(ctx, `
+		SELECT created_at, source, author,
+		       CASE WHEN char_length(text) > 140 THEN left(text, 140) || '…' ELSE text END,
+		       status, issue, issue_url
+		FROM feedback ORDER BY created_at DESC, id DESC LIMIT 10`)
+	if err != nil {
+		return err
+	}
+	s.Feedback.Recent, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (FeedbackEntry, error) {
+		var e FeedbackEntry
+		err := row.Scan(&e.CreatedAt, &e.Source, &e.Author, &e.Text, &e.Status, &e.Issue, &e.IssueURL)
+		return e, err
+	})
+	if s.Feedback.Recent == nil {
+		s.Feedback.Recent = []FeedbackEntry{}
+	}
+	return err
 }
 
 func (m *Monitor) totals(ctx context.Context, s *Snapshot) error {

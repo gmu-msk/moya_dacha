@@ -2,10 +2,13 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gmu-msk/moya_dacha/backend/internal/feedback"
 	"github.com/gmu-msk/moya_dacha/backend/internal/monitor"
 )
 
@@ -13,7 +16,16 @@ import (
 const (
 	textOwnerBound = "Готово: сюда будут приходить тревоги и тестовые сборки."
 	textGroupBound = "Готово: сюда будут приходить сборки приложения."
-	textStranger   = "Это служебный бот МоейДачи."
+	// Незнакомцу в личке — как написать отзыв (specs/019-feedback.md,
+	// требование 23).
+	textStranger = "Здравствуйте! Это бот МоейДачи. Напишите сюда идею или что сломалось — я передам разработчику и пришлю номер задачи."
+
+	// Команды отзывов (specs/019-feedback.md, требования 20, 24–26).
+	textIdeasBound = "Готово: сообщения отсюда станут задачами."
+	textInboxEmpty = "Входящих нет."
+	textApproveUse = "Напишите номер задачи: /одобрить 71"
+	textNoGitHub   = "GitHub не настроен: нет FEEDBACK_GITHUB_TOKEN."
+	textNoCaption  = "Скриншот без подписи"
 )
 
 type update struct {
@@ -22,9 +34,19 @@ type update struct {
 }
 
 type message struct {
-	Text string `json:"text"`
+	MessageID       int64  `json:"message_id"`
+	MessageThreadID int64  `json:"message_thread_id"`
+	IsTopicMessage  bool   `json:"is_topic_message"`
+	Text            string `json:"text"`
+	Caption         string `json:"caption"`
+	Photo           []struct {
+		FileID string `json:"file_id"`
+	} `json:"photo"`
 	From *struct {
-		Username string `json:"username"`
+		IsBot     bool   `json:"is_bot"`
+		Username  string `json:"username"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
 	} `json:"from"`
 	Chat struct {
 		ID   int64  `json:"id"`
@@ -83,7 +105,7 @@ func (b *Bot) isOwner(m *message) bool {
 func (b *Bot) handle(ctx context.Context, m *message) error {
 	cmd := command(m.Text)
 	if cmd == "" {
-		return nil
+		return b.takeFeedback(ctx, m)
 	}
 	private := m.Chat.Type == "private"
 	group := m.Chat.Type == "group" || m.Chat.Type == "supergroup"
@@ -98,15 +120,28 @@ func (b *Bot) handle(ctx context.Context, m *message) error {
 
 	switch {
 	case cmd == "/start" && private:
-		if err := b.bind(ctx, RoleOwner, m.Chat.ID); err != nil {
+		if err := b.bind(ctx, RoleOwner, m.Chat.ID, nil); err != nil {
 			return err
 		}
 		return b.Send(ctx, m.Chat.ID, textOwnerBound)
 	case (cmd == "/group" || cmd == "/группа") && group:
-		if err := b.bind(ctx, RoleGroup, m.Chat.ID); err != nil {
+		if err := b.bind(ctx, RoleGroup, m.Chat.ID, nil); err != nil {
 			return err
 		}
 		return b.Send(ctx, m.Chat.ID, textGroupBound)
+	case (cmd == "/ideas" || cmd == "/идеи") && group:
+		var thread *int64
+		if m.IsTopicMessage && m.MessageThreadID != 0 {
+			thread = &m.MessageThreadID
+		}
+		if err := b.bind(ctx, RoleIdeas, m.Chat.ID, thread); err != nil {
+			return err
+		}
+		return b.reply(ctx, m, textIdeasBound)
+	case cmd == "/inbox" || cmd == "/входящие":
+		return b.reply(ctx, m, b.inbox(ctx))
+	case cmd == "/approve" || cmd == "/одобрить":
+		return b.reply(ctx, m, b.approve(ctx, m.Text))
 	case cmd == "/status" || cmd == "/статус":
 		text, err := b.Status(ctx)
 		if err != nil {
@@ -158,4 +193,141 @@ func uptime(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%d мин", minutes)
 	}
+}
+
+// reply отвечает в том же чате и той же теме.
+func (b *Bot) reply(ctx context.Context, m *message, text string) error {
+	to := feedback.Recipient{ChatID: m.Chat.ID}
+	if m.IsTopicMessage {
+		to.ThreadID = m.MessageThreadID
+	}
+	return b.Notify(ctx, to, text)
+}
+
+// takeFeedback превращает сообщение в отзыв, если оно в личке или в теме
+// для идей (specs/019-feedback.md, требования 21–22, 9).
+func (b *Bot) takeFeedback(ctx context.Context, m *message) error {
+	fb := b.cfg.Feedback
+	if fb == nil || m.From == nil || m.From.IsBot {
+		return nil
+	}
+	private := m.Chat.Type == "private"
+	if !private {
+		chat, thread, ok, err := b.ideas(ctx)
+		if err != nil || !ok || chat != m.Chat.ID {
+			return err
+		}
+		if thread != nil && !(m.IsTopicMessage && m.MessageThreadID == *thread) {
+			return nil
+		}
+	}
+
+	text := strings.TrimSpace(m.Text)
+	if text == "" {
+		text = strings.TrimSpace(m.Caption)
+	}
+	var shot []byte
+	if len(m.Photo) > 0 {
+		// Последний размер — самый большой.
+		raw, err := b.download(ctx, m.Photo[len(m.Photo)-1].FileID)
+		if err != nil {
+			logError("не удалось скачать фото отзыва", err)
+		} else {
+			shot = raw
+		}
+		if text == "" {
+			text = textNoCaption
+		}
+	}
+	if text == "" {
+		return nil
+	}
+
+	to := &feedback.Recipient{ChatID: m.Chat.ID, ReplyTo: m.MessageID}
+	if m.IsTopicMessage {
+		to.ThreadID = m.MessageThreadID
+	}
+	item := feedback.Item{
+		Source:     feedback.SourceTelegram,
+		Author:     author(m),
+		Text:       text,
+		Screenshot: shot,
+		Telegram:   to,
+		Private:    private,
+	}
+	entry, err := fb.Add(ctx, item)
+	if err != nil && len(shot) > 0 {
+		// Картинка не разобралась — отзыв важнее скриншота.
+		logError("фото отзыва не картинка", err)
+		item.Screenshot = nil
+		entry, err = fb.Add(ctx, item)
+	}
+	if err != nil {
+		return err
+	}
+	if !fb.Enabled() {
+		return b.Notify(ctx, *to, feedback.TextThanks)
+	}
+	// Не вышло — задачу заведёт и ответит следующая сверка.
+	if err := fb.Submit(ctx, entry.ID, b); err != nil {
+		logError("задача GitHub не заведена, повторю", err)
+	}
+	return nil
+}
+
+// author — «@ник» или имя и фамилия (требование 22).
+func author(m *message) string {
+	if m.From.Username != "" {
+		return "@" + m.From.Username
+	}
+	return strings.TrimSpace(m.From.FirstName + " " + m.From.LastName)
+}
+
+// inbox — ответ на /входящие (требование 24).
+func (b *Bot) inbox(ctx context.Context) string {
+	if b.cfg.Feedback == nil {
+		return textNoGitHub
+	}
+	issues, err := b.cfg.Feedback.Inbox(ctx)
+	switch {
+	case errors.Is(err, feedback.ErrNotConfigured):
+		return textNoGitHub
+	case err != nil:
+		logError("не удалось прочитать входящие", err)
+		return "Не получилось спросить GitHub: " + err.Error()
+	case len(issues) == 0:
+		return textInboxEmpty
+	}
+	var s strings.Builder
+	s.WriteString("Входящие:")
+	for _, i := range issues {
+		fmt.Fprintf(&s, "\n#%d %s", i.Number, i.Title)
+	}
+	return s.String()
+}
+
+// approve — ответ на /одобрить N (требования 25–26).
+func (b *Bot) approve(ctx context.Context, text string) string {
+	if b.cfg.Feedback == nil {
+		return textNoGitHub
+	}
+	fields := strings.Fields(text)
+	if len(fields) < 2 {
+		return textApproveUse
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(fields[1], "#"))
+	if err != nil || n <= 0 {
+		return textApproveUse
+	}
+	err = b.cfg.Feedback.Approve(ctx, n, b)
+	switch {
+	case errors.Is(err, feedback.ErrNotConfigured):
+		return textNoGitHub
+	case errors.Is(err, feedback.ErrNoIssue):
+		return fmt.Sprintf("Задачи #%d нет.", n)
+	case err != nil:
+		logError("не удалось одобрить задачу", err)
+		return "Не получилось: " + err.Error()
+	}
+	return fmt.Sprintf("#%d одобрена.", n)
 }

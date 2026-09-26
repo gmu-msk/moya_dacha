@@ -80,11 +80,13 @@
   <div class="tiles" id="error-counts"></div>
   <div class="errors" id="error-list" style="margin-top:8px"></div>
 
+  <h2>Отзывы</h2>
+  <div class="tiles" id="feedback-counts"></div>
+  <div class="errors" id="feedback-list" style="margin-top:8px"></div>
+
   <h2>Дальше</h2>
   <div class="charts">
     <div class="soon"><div class="t">Заходы и время в приложении</div>
-      <div class="muted">Появится на следующем этапе</div></div>
-    <div class="soon"><div class="t">Отзывы</div>
       <div class="muted">Появится на следующем этапе</div></div>
   </div>
 </main>
@@ -220,6 +222,17 @@ function render(d) {
     ? d.errors.recent.map((e) => `<div class="row"><div class="muted">${esc(new Date(e.at).toLocaleString("ru-RU"))} · ${e.status}</div>
         <code>${esc(e.method)} ${esc(e.path)}</code>${e.message ? `<div class="muted">${esc(e.message)}</div>` : ""}</div>`).join("")
     : `<div class="row muted">Ошибок не было</div>`;
+
+  // Отзывы (specs/019-feedback.md, требование 27).
+  const source = { app: "приложение", telegram: "Telegram" };
+  const status = { sent: "ждёт задачи", accepted: "входящее", approved: "одобрено",
+    declined: "не будем делать", done: "сделано", released: "вышло" };
+  tiles($("feedback-counts"), [["за неделю", num(d.feedback.week)]]);
+  $("feedback-list").innerHTML = d.feedback.recent.length
+    ? d.feedback.recent.map((f) => `<div class="row"><div class="muted">${esc(new Date(f.created_at).toLocaleString("ru-RU"))}
+        · ${esc(source[f.source] || f.source)} · ${esc(f.author)} · ${esc(status[f.status] || f.status)}
+        ${f.issue_url ? ` · <a href="${esc(f.issue_url)}">#${f.issue}</a>` : ""}</div>${esc(f.text)}</div>`).join("")
+    : `<div class="row muted">Отзывов пока нет</div>`;
 }
 
 async function load() {
