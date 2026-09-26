@@ -132,8 +132,14 @@ jobs:
     name: Приложение для тестировщиков
     needs: deploy
     runs-on: ubuntu-latest
+    env:
+      DOMAIN: ${{ needs.deploy.outputs.domain }}
     steps:
+      # «Что нового» — заголовки коммитов main со сборки, которая сейчас
+      # лежит на сервере: нужна история, а не один коммит.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -146,13 +152,6 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Сборка
-        working-directory: mobile
-        run: |
-          flutter pub get
-          flutter build apk --release \
-            --dart-define=API_BASE_URL=https://${{ needs.deploy.outputs.domain }}/api
-
       - name: Ключ SSH
         run: ./deploy/ssh-setup.sh
         env:
@@ -160,9 +159,31 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
 
+      # Постоянный ключ подписи лежит на VPS (ADR-0021): с ним новая
+      # сборка ставится поверх старой.
+      - name: Ключ подписи
+        run: ./deploy/signing-key.sh
+
+      - name: Сборка
+        run: |
+          set -euo pipefail
+          since=$(curl -fsS "https://$DOMAIN/app.json" | jq -r '.commit // empty' || true)
+          build=$(SINCE="$since" mobile/tool/stamp-build.sh)
+          echo "Сборка $build, что нового:"
+          jq -r '.whatsNew[]' mobile/assets/build_info.json
+          cd mobile
+          flutter pub get
+          flutter build apk --release --build-number="$build" \
+            --dart-define=API_BASE_URL=https://$DOMAIN/api
+          rm -f android/key.properties "$RUNNER_TEMP/moya-dacha-release.jks"
+
+      # Сначала APK, потом app.json: приложение, узнавшее о новой версии,
+      # должно найти по ссылке уже её.
       - name: Выложить на сервер
         run: |
           scp mobile/build/app/outputs/flutter-apk/app-release.apk vps:/tmp/moya-dacha.apk
+          scp mobile/assets/build_info.json vps:/tmp/moya-dacha.json
           ssh vps 'sudo=$( [ "$(id -u)" = 0 ] || echo sudo )
-            $sudo install -m 644 /tmp/moya-dacha.apk /var/www/moya-dacha/moya-dacha.apk'
-          echo "APK: https://${{ needs.deploy.outputs.domain }}/app.apk" >> "$GITHUB_STEP_SUMMARY"
+            $sudo install -m 644 /tmp/moya-dacha.apk /var/www/moya-dacha/moya-dacha.apk
+            $sudo install -m 644 /tmp/moya-dacha.json /var/www/moya-dacha/moya-dacha.json'
+          echo "APK: https://$DOMAIN/app.apk" >> "$GITHUB_STEP_SUMMARY"

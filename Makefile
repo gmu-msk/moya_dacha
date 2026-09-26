@@ -9,6 +9,9 @@ OPENAPI_GENERATOR_JAR     := .cache/openapi-generator-cli-$(OPENAPI_GENERATOR_VE
 # Дополнительные --dart-define для сборки приложения. Ими сценарий показа
 # открывает приложение не на обычном экране (demo/stories/README.md).
 APP_DART_DEFINE ?=
+# Номер сборки и прочие флаги flutter build для APK с телефона
+# (specs/017-app-updates.md): их задаёт CI.
+APP_BUILD_ARGS ?=
 TEST_DATABASE_URL ?= postgres://moya_dacha:moya_dacha@127.0.0.1:55432/moya_dacha_test?sslmode=disable
 DEMO_COMPOSE   := docker compose -f docker-compose.demo.yml
 # Режим приглашений на стенде включает сценарий, у которого в story.env
@@ -121,7 +124,7 @@ theme-tokens: ## Числа темы для макета: цвета обеих 
 		| awk '/--- ТОКЕНЫ ТЕМЫ ---/{flag=1;next} /--- КОНЕЦ ---/{flag=0} flag{sub(/^Shell: /,""); print}'
 
 app-apk: ## Собрать debug-APK приложения (адрес стенда — как у эмулятора)
-	cd $(MOBILE) && flutter build apk --debug $(APP_DART_DEFINE)
+	cd $(MOBILE) && flutter build apk --debug $(APP_DART_DEFINE) $(APP_BUILD_ARGS)
 
 apk-phone: ## Собрать APK для телефона: адрес стенда в локальной сети
 	./demo/apk-phone.sh

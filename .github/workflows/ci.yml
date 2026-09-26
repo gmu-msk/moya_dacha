@@ -171,17 +171,36 @@ jobs:
       # Эмуляторная сборка откладывается и возвращается на место: прогон
       # в эмуляторе ниже берёт APK из обычного пути сборки. Другой адрес
       # (стенд по `/стенд`) по-прежнему задаётся в самом приложении.
+      #
+      # Ещё она подписана постоянным ключом с VPS и несёт номер сборки и
+      # «Что нового» — заголовок PR: так она встаёт поверх сборки из main
+      # и наоборот (specs/017-app-updates.md, ADR-0021).
       - name: Сборка APK для телефона
         if: github.event_name == 'pull_request'
         env:
           DOMAIN: ${{ vars.DOMAIN }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           set -euo pipefail
           apk=mobile/build/app/outputs/flutter-apk/app-debug.apk
           cp "$apk" "$RUNNER_TEMP/emulator.apk"
           domain="${DOMAIN:-${VPS_HOST//./-}.sslip.io}"
-          make app-apk APP_DART_DEFINE="--dart-define=API_BASE_URL=https://$domain/api"
+          # Без доступа к VPS (PR от бота) — debug-ключ: сборка встанет
+          # только начисто, но соберётся.
+          if [ -n "$VPS_SSH_KEY" ]; then
+            ./deploy/ssh-setup.sh
+            ./deploy/signing-key.sh
+          else
+            echo "::warning::Нет доступа к VPS: APK подписан debug-ключом и поверх не встанет"
+          fi
+          build=$(WHATS_NEW="$PR_TITLE" COMMIT="$SHA" mobile/tool/stamp-build.sh)
+          make app-apk \
+            APP_DART_DEFINE="--dart-define=API_BASE_URL=https://$domain/api" \
+            APP_BUILD_ARGS="--build-number=$build"
+          rm -f mobile/android/key.properties "$RUNNER_TEMP/moya-dacha-release.jks"
           cp "$apk" "$RUNNER_TEMP/phone.apk"
           cp "$RUNNER_TEMP/emulator.apk" "$apk"
 

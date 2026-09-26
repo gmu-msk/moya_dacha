@@ -17,6 +17,7 @@ import '../theme.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/user_avatar.dart';
+import 'about_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -270,6 +271,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             OutlinedButton(
               onPressed: _busy ? null : _signOut,
               child: const Text('Выйти'),
+            ),
+            const SizedBox(height: AppGap.small),
+            // Версия и номер сборки (specs/017-app-updates.md).
+            TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const AboutScreen()),
+              ),
+              child: const Text('О приложении'),
             ),
           ],
         ),
