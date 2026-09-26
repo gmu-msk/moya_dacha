@@ -89,6 +89,37 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
 
+      # С прода api.telegram.org не открывается, поэтому бот ходит в Telegram
+      # через Caddy на втором VPS (deploy/telegram-relay.sh). Секреты
+      # RELAY_HOST, RELAY_SSH_KEY и необязательный RELAY_USER; без
+      # RELAY_HOST шаг ничего не делает. Неудача здесь деплой не роняет.
+      - name: Посредник Telegram
+        id: relay
+        continue-on-error: true
+        env:
+          RELAY_HOST: ${{ secrets.RELAY_HOST }}
+          RELAY_USER: ${{ secrets.RELAY_USER }}
+          RELAY_SSH_KEY: ${{ secrets.RELAY_SSH_KEY }}
+        run: |
+          if [ -z "$RELAY_HOST" ]; then
+            echo "RELAY_HOST не задан: посредника нет"
+            exit 0
+          fi
+          printf '%s\n' "$RELAY_SSH_KEY" > ~/.ssh/relay
+          chmod 600 ~/.ssh/relay
+          cat >> ~/.ssh/config <<CFG
+          Host relay
+          	HostName $RELAY_HOST
+          	User ${RELAY_USER:-root}
+          	IdentityFile ~/.ssh/relay
+          	StrictHostKeyChecking accept-new
+          CFG
+          domain="${RELAY_HOST//./-}.sslip.io"
+          scp deploy/telegram-relay.sh relay:/tmp/moya-dacha-telegram-relay.sh
+          ssh relay "sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
+            \$sudo env DOMAIN='$domain' bash /tmp/moya-dacha-telegram-relay.sh"
+          echo "url=https://$domain" >> "$GITHUB_OUTPUT"
+
       # Токен бота идёт на сервер через stdin, а не в командной строке:
       # там его видно в списке процессов (specs/018-telegram-bot.md).
       - name: Настройка машины и выкладка
@@ -98,9 +129,8 @@ jobs:
           # Ник владельца — переменная репозитория, но и секрет с тем же
           # именем подойдёт: оба пути выглядят в настройках одинаково.
           TELEGRAM_OWNER: ${{ vars.TELEGRAM_OWNER || secrets.TELEGRAM_OWNER }}
-          # Посредник до Bot API, если с VPS api.telegram.org не открывается
-          # (deploy/telegram-worker.js).
-          TELEGRAM_API_URL: ${{ vars.TELEGRAM_API_URL || secrets.TELEGRAM_API_URL }}
+          # Адрес посредника: заданный руками или поднятый шагом выше.
+          TELEGRAM_API_URL: ${{ vars.TELEGRAM_API_URL || secrets.TELEGRAM_API_URL || steps.relay.outputs.url }}
         run: |
           scp release.tgz vps:/tmp/moya-dacha-release.tgz
           printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\n' \
