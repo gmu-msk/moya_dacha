@@ -128,7 +128,6 @@ class _IntroScreenState extends State<IntroScreen> {
               labelText: 'Никнейм',
               helperText: 'Латиница, цифры и _, от 3 до 20 символов',
               errorText: _nicknameError,
-              errorMaxLines: 2,
             ),
           ),
           const SizedBox(height: AppGap.medium),

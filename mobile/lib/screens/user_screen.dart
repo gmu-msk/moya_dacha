@@ -468,26 +468,35 @@ class _Header extends StatelessWidget {
                   // (specs/010-nicknames.md, требование 9).
                   // Замок справа от ника — профиль закрыт
                   // (specs/012-follows.md, требование 22).
-                  Text.rich(
-                    TextSpan(
-                      text: profile.nickname,
-                      children: [
-                        if (profile.closed)
-                          WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: AppGap.tiny),
-                              child: Icon(
-                                Icons.lock_outline,
-                                semanticLabel: 'Закрытый профиль',
-                                color: theme.colorScheme.onSurface,
+                  // Никнейм без пробелов, и длинный при крупном шрифте рвался
+                  // посреди слова: он уменьшается, оставаясь в одну строку.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text.rich(
+                      maxLines: 1,
+                      TextSpan(
+                        text: profile.nickname,
+                        children: [
+                          if (profile.closed)
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: AppGap.tiny,
+                                ),
+                                child: Icon(
+                                  Icons.lock_outline,
+                                  semanticLabel: 'Закрытый профиль',
+                                  color: theme.colorScheme.onSurface,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: theme.colorScheme.secondary,
+                        ],
+                      ),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: theme.colorScheme.secondary,
+                      ),
                     ),
                   ),
                   if (profile.name.isNotEmpty)
@@ -568,15 +577,25 @@ class FollowCounts extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppGap.small),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppGap.small),
+            padding: const EdgeInsets.symmetric(
+              vertical: AppGap.small,
+              horizontal: AppGap.tiny,
+            ),
             child: Column(
               children: [
                 Text('$number', style: theme.textTheme.titleLarge),
-                Text(
-                  word,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                // При крупном системном шрифте «подписчиков» не влезает в
+                // треть ширины и рвалось посреди слова; слово уменьшается
+                // целиком (specs/000-ui.md, требование 2).
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    word,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
