@@ -20,8 +20,11 @@ services:
       - "127.0.0.1:55433:5432"
     volumes:
       - demo-postgres-data:/var/lib/postgresql/data
+    # По TCP, а не через сокет: пока идёт первичная инициализация, образ
+    # поднимает временный сервер только на сокете, и сокетная проверка
+    # отвечает «готов» до его перезапуска — migrate ловил connection refused.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U moya_dacha -d moya_dacha"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U moya_dacha -d moya_dacha"]
       interval: 2s
       timeout: 3s
       retries: 30
