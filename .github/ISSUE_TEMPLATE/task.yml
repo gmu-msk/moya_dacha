@@ -1,0 +1,15 @@
+name: Задача
+description: Техническая работа или часть этапа
+labels: [задача, входящее]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что сделать
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Как понять, что готово
+      description: Что владелец увидит на телефоне или в дашборде.

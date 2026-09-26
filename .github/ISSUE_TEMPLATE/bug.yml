@@ -1,0 +1,16 @@
+name: Баг
+description: Что-то работает не так
+labels: [баг, входящее]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что случилось
+      description: Что делали, что ожидали, что увидели.
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Сборка
+      description: Номер сборки из экрана «О приложении», если знаете.

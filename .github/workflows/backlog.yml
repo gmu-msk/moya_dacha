@@ -1,0 +1,62 @@
+name: Бэклог
+
+# Метки бэклога (ADR-0020) из .github/labels.txt. Прогон идемпотентен:
+# недостающие метки создаёт, у существующих выравнивает цвет и описание,
+# лишние не трогает.
+#
+# Ещё два правила задач, чтобы метки состояния не расходились:
+# «одобрено» снимает «входящее» и «отложено»; «в работе» снимает
+# «одобрено»; закрытая задача теряет метки состояния.
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/labels.txt', '.github/workflows/backlog.yml']
+  workflow_dispatch:
+  issues:
+    types: [labeled, closed]
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    name: Метки
+    if: github.event_name != 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Синхронизировать
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          grep -v '^#' .github/labels.txt | grep -v '^$' |
+          while IFS='|' read -r name color description; do
+            gh label create "$name" --color "$color" --description "$description" --force
+          done
+
+  state:
+    name: Состояние задачи
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Снять лишние метки
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          case "$ACTION:$LABEL" in
+            labeled:одобрено)  drop="входящее,отложено" ;;
+            labeled:в\ работе) drop="входящее,одобрено,отложено" ;;
+            labeled:отложено)  drop="входящее,одобрено" ;;
+            closed:*)          drop="входящее,одобрено,в работе,на проверке" ;;
+            *) exit 0 ;;
+          esac
+          have="$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name] | join(",")')"
+          IFS=',' read -ra list <<< "$drop"
+          for l in "${list[@]}"; do
+            case ",$have," in *",$l,"*) gh issue edit "$ISSUE" --remove-label "$l" ;; esac
+          done

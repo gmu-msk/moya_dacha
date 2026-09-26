@@ -1,0 +1,16 @@
+name: Идея
+description: Чего не хватает в приложении
+labels: [идея, входящее]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что хочется
+      description: Своими словами, как рассказали бы соседу по даче.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Зачем
+      description: Что сейчас неудобно или невозможно.
