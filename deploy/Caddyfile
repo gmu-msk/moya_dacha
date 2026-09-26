@@ -12,6 +12,15 @@ example.ru {
 		file_server
 	}
 
+	# Сведения о сборке, которая лежит в /app.apk: по ним приложение
+	# узнаёт, что вышла новая версия (specs/017-app-updates.md).
+	handle /app.json {
+		root * /var/www/moya-dacha
+		rewrite * /moya-dacha.json
+		header Cache-Control no-cache
+		file_server
+	}
+
 	handle {
 		# Загрузка медиа идёт через бэкенд (он режет EXIF и делает превью),
 		# поэтому тело запроса заметно больше обычного API-запроса.
