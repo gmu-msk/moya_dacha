@@ -20,7 +20,7 @@ func telegramConfig() (cfg telegram.Config, ok bool) {
 	// Пробелы и перевод строки по краям приходят из вставки с телефона.
 	cfg = telegram.Config{
 		Token:    strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
-		APIURL:   os.Getenv("TELEGRAM_API_URL"),
+		APIURL:   strings.TrimSpace(os.Getenv("TELEGRAM_API_URL")),
 		Owner:    strings.TrimSpace(os.Getenv("TELEGRAM_OWNER")),
 		DiskPath: os.Getenv("MEDIA_DIR"),
 	}
@@ -113,7 +113,11 @@ func telegramCheck() error {
 		fmt.Printf("Бот: Telegram не принял токен или недоступен: %v\n", err)
 		return nil
 	}
-	fmt.Printf("Бот: @%s\n", name)
+	if cfg.APIURL != "" {
+		fmt.Printf("Бот: @%s, через %s\n", name, cfg.APIURL)
+	} else {
+		fmt.Printf("Бот: @%s\n", name)
+	}
 	if cfg.Owner == "" {
 		fmt.Println("Владелец: TELEGRAM_OWNER не задан, /start никого не привяжет")
 	} else {
