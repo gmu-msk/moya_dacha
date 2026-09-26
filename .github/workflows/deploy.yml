@@ -11,6 +11,8 @@ name: Деплой
 on:
   push:
     branches: [main]
+    # Правка только документации не меняет ни сервер, ни приложение.
+    paths-ignore: ['*.md', 'docs/**', '.claude/**']
   pull_request:
     paths:
       - deploy/**
@@ -196,6 +198,20 @@ jobs:
       - name: Ключ подписи
         run: ./deploy/signing-key.sh
 
+      # Тот же кэш Gradle и тот же ключ, что в CI: без него сборка качает
+      # зависимости заново, а сохранённый здесь кэш main подхватывают
+      # и первые прогоны новых веток PR.
+      - name: Кэш Gradle
+        id: gradle-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/gradle/wrapper/gradle-wrapper.properties', 'mobile/pubspec.lock') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
       - name: Сборка
         run: |
           set -euo pipefail
@@ -208,6 +224,15 @@ jobs:
           flutter build apk --release --build-number="$build" \
             --dart-define=API_BASE_URL=https://$DOMAIN/api
           rm -f android/key.properties "$RUNNER_TEMP/moya-dacha-release.jks"
+
+      - name: Сохранить кэш Gradle
+        if: steps.gradle-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
 
       # Сначала APK, потом app.json: приложение, узнавшее о новой версии,
       # должно найти по ссылке уже её.

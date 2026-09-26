@@ -1,9 +1,14 @@
 name: CI
 
+# Минуты Actions в приватном репозитории платные, поэтому правки только
+# в документации CI не гоняют, а main проверяется одним быстрым гейтом:
+# стенд и эмулятор на этом коде уже прошли в PR.
 on:
   pull_request:
+    paths-ignore: ['*.md', 'docs/**', '.claude/**']
   push:
     branches: [main]
+    paths-ignore: ['*.md', 'docs/**', '.claude/**']
   workflow_dispatch:
 
 # Новый пуш в ветку отменяет её прошлый прогон: ждать результат, который
@@ -58,6 +63,7 @@ jobs:
   # на /api/health. Основной гейт из ADR-0002 — это job выше.
   demo:
     name: Демо-стенд поднимается
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -79,6 +85,7 @@ jobs:
   # того, что путь эмулятор -> приложение -> API -> Postgres цел.
   app:
     name: Приложение и e2e-демо в эмуляторе
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
