@@ -1,8 +1,8 @@
 // Экран входа: номер телефона, затем код из СМС (specs/001-auth.md)
 // или из приглашения (specs/015-invites.md).
 //
-// Регистрация и вход — одно действие, поэтому экран один: новый человек
-// и вернувшийся проходят одинаковый путь.
+// Шаг номера — как был. Шаг кода — по макету «Сад» (2a): четыре клетки,
+// номер в подзаголовке не переносится на другую строку.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -14,18 +14,12 @@ import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/masked_input.dart';
 
-/// Поход в сервис за кодом и за сессией.
-///
-/// Отдельным слоем он существует ради проверок: экран живёт таймерами и
-/// отказами сервиса, и без подмены сервиса их не проверить
-/// (`mobile/test/login_screen_test.dart`).
 abstract class AuthGateway {
   Future<AuthCodeAccepted> requestCode(String phone);
 
   Future<SessionCreated> signIn(String phone, String code);
 }
 
-/// Настоящий сервис.
 class ApiAuthGateway implements AuthGateway {
   const ApiAuthGateway();
 
@@ -57,10 +51,7 @@ class LoginScreen extends StatefulWidget {
     this.auth = const ApiAuthGateway(),
   });
 
-  /// Вызывается, когда сервис выдал токен: дальше решает приложение.
   final Future<void> Function(SessionCreated session) onSignedIn;
-
-  /// Сервис, у которого экран просит код и сессию.
   final AuthGateway auth;
 
   @override
@@ -76,26 +67,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _codeSent = false;
   bool _busy = false;
-
-  /// Код у человека в приглашении: сервис ничего не отправлял, и
-  /// отправить ещё раз тоже нечего (specs/015-invites.md, требование 13).
   bool _byInvite = false;
-
-  /// Что не так с введённым: стоит под полем, как и все ошибки поля
-  /// (specs/000-ui.md, правило 16).
   String? _error;
-
-  /// Беда связи: она не про поле, и место ей внизу экрана.
   String? _offline;
-
-  /// Сколько секунд осталось до повторной отправки кода. Пока счётчик
-  /// идёт, «Получить код» и «Отправить ещё раз» неактивны.
   int _wait = 0;
-
-  /// Отказ пришёл на запрос кода, а не на вход: тогда счётчик виден
-  /// сообщением под полем номера.
   bool _waitOnPhone = false;
-
   Timer? _ticker;
 
   @override
@@ -127,8 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  /// Номер меняют — от этого зависит кнопка, а прошлый отказ больше
-  /// не про этот номер.
   void _phoneChanged(String digits) {
     setState(() {
       _error = null;
@@ -139,7 +113,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  /// Код набран целиком — входим сами: отдельной кнопке тут делать нечего.
   void _codeChanged(String digits) {
     if (_error != null) {
       setState(() => _error = null);
@@ -200,10 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       setState(() {
         _failed(error, onPhone: false);
-        // Набирать поверх неверного кода нечего: поле чистое, и человек
-        // сразу вводит следующий.
         _code.clear();
-        // Код истёк или попытки кончились — нужен новый, и ждать нечего.
         final code = serviceErrorCode(error);
         if (code == 'code_expired' || code == 'too_many_attempts') {
           _ticker?.cancel();
@@ -217,7 +187,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Разбор отказа: сервис сказал, что не так, или до него не дошли.
   void _failed(Exception error, {required bool onPhone}) {
     final message = serviceErrorCode(error) == null
         ? null
@@ -242,7 +211,6 @@ class _LoginScreenState extends State<LoginScreen> {
       _offline = null;
       _ticker?.cancel();
       _wait = 0;
-      // Номер вводится заново: человек вернулся сюда именно за этим.
       _phone.clear();
       _code.clear();
     });
@@ -266,20 +234,12 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             if (_codeSent) ...[
               const SizedBox(height: AppGap.small),
-              Text(
-                _byInvite
-                    ? 'Введите код из приглашения для ${_phone.text}'
-                    : 'Мы отправили СМС-код на ${_phone.text}',
-                style: theme.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
+              _sentTo(theme),
             ],
             const SizedBox(height: AppGap.large),
             if (_codeSent) ..._codeFields(theme) else ..._phoneFields(theme),
             if (offline != null) ...[
               const SizedBox(height: AppGap.medium),
-              // Повторять нечего: следующий шаг человек делает сам —
-              // исправляет номер или код и нажимает кнопку выше.
               ErrorView(message: offline),
             ],
           ],
@@ -288,8 +248,43 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Строка под полем: что не так или чего ждём.
-  Widget _underField(ThemeData theme, String text, {bool alarming = true}) {
+  /// «Мы отправили СМС-код на +7(915)234-56-78»: номер — одним куском,
+  /// на дефисах он не рвётся.
+  Widget _sentTo(ThemeData theme) {
+    final style = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Text.rich(
+      TextSpan(
+        text: _byInvite
+            ? 'Введите код из приглашения для '
+            : 'Мы отправили СМС-код на ',
+        children: [
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: Text(
+              _phone.text,
+              softWrap: false,
+              style: style?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+      style: style,
+      textAlign: TextAlign.center,
+    );
+  }
+
+  Widget _underField(
+    ThemeData theme,
+    String text, {
+    bool alarming = true,
+    TextAlign align = TextAlign.start,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(top: AppGap.small),
       child: Text(
@@ -299,7 +294,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ? theme.colorScheme.error
               : theme.colorScheme.onSurfaceVariant,
         ),
-        textAlign: TextAlign.start,
+        textAlign: align,
       ),
     );
   }
@@ -339,17 +334,20 @@ class _LoginScreenState extends State<LoginScreen> {
         controller: _code,
         label: 'Код',
         autofocus: true,
-        centered: true,
-        textStyle: theme.textTheme.headlineSmall?.copyWith(letterSpacing: 8),
+        boxes: true,
+        done: _busy && _code.complete,
         onChanged: _codeChanged,
       ),
       if (_busy)
-        _underField(theme, 'Проверяем код…', alarming: false)
+        _underField(
+          theme,
+          'Проверяем код…',
+          alarming: false,
+          align: TextAlign.center,
+        )
       else if (error != null)
-        _underField(theme, error),
+        _underField(theme, error, align: TextAlign.center),
       const SizedBox(height: AppGap.medium),
-      // Второстепенность видна видом, а не размером: цели касания мельче
-      // кнопки из темы не бывают (specs/000-ui.md, правило 8).
       if (!_byInvite)
         TextButton(
           onPressed: _busy || _wait > 0 ? null : _requestCode,

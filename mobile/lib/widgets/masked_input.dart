@@ -1,10 +1,13 @@
 // Поле с записью известного вида: номер телефона, код из СМС.
 //
 // Подсказка показана целиком и никуда не девается: человек видит
-// `+7(000)000-00-00` и вводит цифры на места нулей — введённое становится
-// тёмным, незаполненный хвост остаётся светлым (specs/000-ui.md,
+// `+7(000)000-00-00` и вводит цифры на места нулей (specs/000-ui.md,
 // правило 18). Недопустимый символ в поле не попадает: вместо него поле
-// подсвечивается и качается (правило 17), а стирать потом нечего.
+// подсвечивается и качается (правило 17).
+//
+// Код из СМС показывается четырьмя клетками (макет «Сад», 2a): активная
+// клетка обведена основной краской, введённая — тёмной; когда код набран
+// и проверяется, клетки заливаются и по очереди приподнимаются.
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -15,21 +18,15 @@ import '../theme.dart';
 final _notDigit = RegExp(r'\D');
 final _letters = RegExp(r'\p{L}', unicode: true);
 
-/// Запись: что человек видит в пустом поле и куда встают цифры.
 @immutable
 class InputMask {
   const InputMask({required this.skeleton, required this.slots});
 
-  /// Поле целиком, пока не введено ни одной цифры.
   final String skeleton;
-
-  /// Места цифр в [skeleton], по порядку ввода.
   final List<int> slots;
 
-  /// Сколько цифр принимает поле.
   int get length => slots.length;
 
-  /// Поле с введёнными цифрами на своих местах.
   String apply(String digits) {
     final chars = skeleton.split('');
     for (var i = 0; i < digits.length && i < slots.length; i++) {
@@ -38,23 +35,17 @@ class InputMask {
     return chars.join();
   }
 
-  /// Где стоит курсор, когда введено [typed] цифр: сразу за последней.
   int caret(int typed) =>
       typed >= slots.length ? skeleton.length : slots[typed];
 }
 
-/// Номер телефона. `+7` стоит в поле сразу и не стирается: лишние цифры
-/// человеку писать незачем (specs/001-auth.md, требование 3).
 const phoneMask = InputMask(
   skeleton: '+7(000)000-00-00',
   slots: [3, 4, 5, 7, 8, 9, 11, 12, 14, 15],
 );
 
-/// Код из СМС: четыре знакоместа, и видно, что их четыре.
 const codeMask = InputMask(skeleton: '____', slots: [0, 1, 2, 3]);
 
-/// Цифры номера без кода страны: `89152345678`, `+7 915 234-56-78` и
-/// `9152345678` — один и тот же номер (specs/001-auth.md, требование 2).
 String phoneDigits(String raw) {
   var digits = raw.replaceAll(_notDigit, '');
   if (digits.length == 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
@@ -66,43 +57,29 @@ String phoneDigits(String raw) {
   return digits;
 }
 
-/// Содержимое поля с маской.
-///
-/// Хранит введённые цифры, а не текст: текст — это всегда маска с ними
-/// на своих местах, и собрать его можно в любой момент.
 class MaskedController extends TextEditingController {
   MaskedController({required this.mask, this.boldPrefix = 0})
     : super.fromValue(
         TextEditingValue(
           text: mask.skeleton,
-          // Курсор сразу за неизменной частью: человек начинает вводить
-          // со следующей цифры.
           selection: TextSelection.collapsed(offset: mask.caret(0)),
         ),
       );
 
   final InputMask mask;
-
-  /// Сколько знаков в начале показывать заметнее: `+7` у номера.
   final int boldPrefix;
-
-  /// Цвет незаполненного хвоста. Ставится экраном из темы.
   Color? hintColor;
 
   String _digits = '';
 
-  /// Введённые цифры без разделителей.
   String get digits => _digits;
 
-  /// Все ли цифры введены.
   bool get complete => _digits.length == mask.length;
 
   set digits(String value) {
     super.value = applyDigits(value);
   }
 
-  /// Содержимое поля с этими цифрами. Само поле не трогает: правку
-  /// применяет тот, кто её разбирал, иначе она уедет дважды.
   TextEditingValue applyDigits(String value) {
     _digits = value;
     return TextEditingValue(
@@ -139,8 +116,6 @@ class MaskedController extends TextEditingController {
   }
 }
 
-/// Поле с маской: показывает [controller], сообщает о набранном и о том,
-/// что символ не принят.
 class MaskedField extends StatefulWidget {
   const MaskedField({
     super.key,
@@ -148,6 +123,8 @@ class MaskedField extends StatefulWidget {
     required this.label,
     this.autofocus = false,
     this.centered = false,
+    this.boxes = false,
+    this.done = false,
     this.textStyle,
     this.onChanged,
   });
@@ -155,13 +132,15 @@ class MaskedField extends StatefulWidget {
   final MaskedController controller;
   final String label;
   final bool autofocus;
-
-  /// Код из СМС стоит по центру поля, номер телефона — по левому краю.
   final bool centered;
 
-  final TextStyle? textStyle;
+  /// Показать клетками — по одной на цифру (код из СМС).
+  final bool boxes;
 
-  /// Вызывается после каждой принятой правки.
+  /// Код набран и проверяется: клетки залиты основной краской.
+  final bool done;
+
+  final TextStyle? textStyle;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -179,7 +158,6 @@ class _MaskedFieldState extends State<MaskedField>
     }
   });
 
-  /// Последний символ не принят: форма подсвечена и качается.
   bool _rejected = false;
 
   @override
@@ -204,14 +182,6 @@ class _MaskedFieldState extends State<MaskedField>
     super.dispose();
   }
 
-  /// Курсор стоит за последней введённой цифрой и дальше не уходит.
-  ///
-  /// В незаполненную часть подсказки ему нельзя: там не текст, а запись
-  /// того, что ещё предстоит набрать, и поставленный туда курсор обещал
-  /// бы человеку ввод не с той цифры. Касание в хвост поля, как и переход
-  /// в конец текста при получении фокуса, возвращает курсор на место.
-  /// Выделение мышью или долгим нажатием не трогаем: им человек копирует
-  /// и вставляет.
   void _keepCaretAtTheEnd() {
     final controller = widget.controller;
     final selection = controller.selection;
@@ -229,11 +199,6 @@ class _MaskedFieldState extends State<MaskedField>
     _shake.forward(from: 0);
   }
 
-  /// Правка поля: из старого и нового текста видно, что человек сделал —
-  /// набрал знак, стёр знак или вставил номер из буфера.
-  ///
-  /// Буква в поле для цифр не принимается вовсе: отказ виден подсветкой
-  /// и покачиванием (specs/000-ui.md, правило 17).
   TextEditingValue _edit(TextEditingValue before, TextEditingValue after) {
     final controller = widget.controller;
     final mask = controller.mask;
@@ -251,7 +216,6 @@ class _MaskedFieldState extends State<MaskedField>
 
     String digits;
     if (fresh.length > canonical.length) {
-      // Набрано или вставлено: берём только что появившийся кусок.
       final added = fresh.length - canonical.length;
       final at = after.selection.baseOffset - added;
       final chunk = at >= 0 && at + added <= fresh.length
@@ -264,11 +228,8 @@ class _MaskedFieldState extends State<MaskedField>
       }
       digits = was + typed;
     } else if (_shorterByOne(fresh, canonical)) {
-      // Стёрли знак: уходит последняя введённая цифра, а не знак маски.
       digits = was.isEmpty ? was : was.substring(0, was.length - 1);
     } else {
-      // Поле переписали целиком: так приходит вставка из буфера и
-      // подстановка клавиатурой.
       digits = fresh.replaceAll(_notDigit, '');
     }
 
@@ -283,7 +244,6 @@ class _MaskedFieldState extends State<MaskedField>
     return value;
   }
 
-  /// Стал ли текст прежним без одного знака.
   bool _shorterByOne(String fresh, String canonical) {
     if (fresh.length != canonical.length - 1) {
       return false;
@@ -302,31 +262,68 @@ class _MaskedFieldState extends State<MaskedField>
     final scheme = theme.colorScheme;
     widget.controller.hintColor = scheme.outline;
 
-    // Рамка отказа — общая рамка полей из темы, перекрашенная: своего
-    // скругления экран не придумывает (specs/000-ui.md, правило 9).
     final shape = theme.inputDecorationTheme.border;
     final border = (shape is OutlineInputBorder ? shape : const OutlineInputBorder())
         .copyWith(borderSide: BorderSide(color: scheme.error, width: 2));
 
-    final field = TextField(
-      key: const Key('masked-field'),
-      controller: widget.controller,
-      autofocus: widget.autofocus,
-      keyboardType: TextInputType.number,
-      style: widget.textStyle,
-      textAlign: widget.centered ? TextAlign.center : TextAlign.start,
-      inputFormatters: [TextInputFormatter.withFunction(_edit)],
-      decoration: InputDecoration(
-        labelText: widget.label,
-        // Отказ виден и цветом, и движением: одного цвета мало
-        // (specs/000-ui.md, правило 7).
-        enabledBorder: _rejected ? border : null,
-        focusedBorder: _rejected ? border : null,
-        labelStyle: _rejected ? TextStyle(color: scheme.error) : null,
-        filled: _rejected,
-        fillColor: scheme.errorContainer.withValues(alpha: 0.35),
-      ),
-    );
+    final Widget field;
+    if (widget.boxes) {
+      // Настоящее поле лежит поверх клеток невидимым: оно принимает ввод,
+      // вставку и клавиатуру, а видно только клетки.
+      field = Stack(
+        children: [
+          ListenableBuilder(
+            listenable: widget.controller,
+            builder: (context, _) => _CodeBoxes(
+              digits: widget.controller.digits,
+              length: widget.controller.mask.length,
+              done: widget.done,
+              rejected: _rejected,
+              style: widget.textStyle ?? theme.textTheme.headlineMedium,
+            ),
+          ),
+          Positioned.fill(
+            child: TextField(
+              key: const Key('masked-field'),
+              controller: widget.controller,
+              autofocus: widget.autofocus,
+              keyboardType: TextInputType.number,
+              showCursor: false,
+              enableInteractiveSelection: false,
+              style: const TextStyle(color: Colors.transparent),
+              inputFormatters: [TextInputFormatter.withFunction(_edit)],
+              decoration: InputDecoration(
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: _rejected ? border : InputBorder.none,
+                focusedBorder: _rejected ? border : InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                semanticCounterText: widget.label,
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      field = TextField(
+        key: const Key('masked-field'),
+        controller: widget.controller,
+        autofocus: widget.autofocus,
+        keyboardType: TextInputType.number,
+        style: widget.textStyle,
+        textAlign: widget.centered ? TextAlign.center : TextAlign.start,
+        inputFormatters: [TextInputFormatter.withFunction(_edit)],
+        decoration: InputDecoration(
+          labelText: widget.label,
+          enabledBorder: _rejected ? border : null,
+          focusedBorder: _rejected ? border : null,
+          labelStyle: _rejected ? TextStyle(color: scheme.error) : null,
+          fillColor: _rejected
+              ? scheme.errorContainer.withValues(alpha: 0.35)
+              : null,
+        ),
+      );
+    }
 
     return AnimatedBuilder(
       animation: _shake,
@@ -338,6 +335,85 @@ class _MaskedFieldState extends State<MaskedField>
         child: child,
       ),
       child: field,
+    );
+  }
+}
+
+/// Клетки кода: 62×70, скругление полей, между клетками 12.
+class _CodeBoxes extends StatelessWidget {
+  const _CodeBoxes({
+    required this.digits,
+    required this.length,
+    required this.done,
+    required this.rejected,
+    required this.style,
+  });
+
+  final String digits;
+  final int length;
+  final bool done;
+  final bool rejected;
+  final TextStyle? style;
+
+  static const _size = Size(62, 70);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final shape = theme.inputDecorationTheme.border;
+    final radius = shape is OutlineInputBorder
+        ? shape.borderRadius
+        : BorderRadius.circular(AppShape.medium);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < length; i++) ...[
+          if (i > 0) const SizedBox(width: AppGap.snug),
+          _box(scheme, radius, i),
+        ],
+      ],
+    );
+  }
+
+  Widget _box(ColorScheme scheme, BorderRadius radius, int i) {
+    final ch = i < digits.length ? digits[i] : '';
+    final active = i == digits.length && !done;
+    final line = rejected
+        ? scheme.error
+        : done || active
+        ? scheme.primary
+        : ch.isNotEmpty
+        ? scheme.onSurfaceVariant
+        : scheme.outlineVariant;
+
+    return AnimatedSlide(
+      offset: Offset(0, done ? -0.09 : 0),
+      duration: AppMotion.quick + AppMotion.stagger * (done ? i : 0),
+      curve: AppMotion.spring,
+      child: AnimatedScale(
+        scale: active ? 1.06 : 1,
+        duration: AppMotion.quick,
+        curve: AppMotion.spring,
+        child: AnimatedContainer(
+          duration: AppMotion.quick,
+          width: _size.width,
+          height: _size.height,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: done ? scheme.primary : scheme.surfaceContainerLowest,
+            borderRadius: radius,
+            border: Border.all(color: line, width: 2),
+          ),
+          child: Text(
+            ch,
+            style: style?.copyWith(
+              color: done ? scheme.onPrimary : scheme.onSurface,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

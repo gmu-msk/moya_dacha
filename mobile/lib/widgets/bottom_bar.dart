@@ -25,7 +25,7 @@ const _iconSize = 26.0;
 /// Подложка открытого раздела: шире значка, скругление как у карточки,
 /// уменьшенной вдвое.
 const _indicatorSize = Size(64, 40);
-const _indicatorRadius = 8.0;
+const _indicatorRadius = 14.0;
 
 class AppBottomBar extends StatelessWidget {
   const AppBottomBar({
@@ -90,7 +90,8 @@ class AppBottomBar extends StatelessWidget {
                 painter: (color, filled) => BellIconPainter(
                   color: color,
                   filled: filled,
-                  dot: unread ? colors.primary : null,
+                  // Точка — томат, как сердечко: «тут что-то новое».
+                  dot: unread ? colors.tertiary : null,
                   dotBorder: colors.surface,
                 ),
               ),
@@ -146,7 +147,8 @@ class _BarButton extends StatelessWidget {
             highlightShape: BoxShape.rectangle,
             child: Center(
               child: AnimatedContainer(
-                duration: kThemeAnimationDuration,
+                duration: AppMotion.quick,
+                curve: AppMotion.ease,
                 width: _indicatorSize.width,
                 height: _indicatorSize.height,
                 decoration: BoxDecoration(
@@ -158,9 +160,15 @@ class _BarButton extends StatelessWidget {
                   borderRadius: BorderRadius.circular(_indicatorRadius),
                 ),
                 child: Center(
-                  child: CustomPaint(
-                    size: const Size.square(_iconSize),
-                    painter: painter(colors.onSurface, selected),
+                  // Открытый раздел чуть подрастает с перелётом.
+                  child: AnimatedScale(
+                    scale: selected ? 1.1 : 1,
+                    duration: AppMotion.standard,
+                    curve: AppMotion.spring,
+                    child: CustomPaint(
+                      size: const Size.square(_iconSize),
+                      painter: painter(colors.onSurface, selected),
+                    ),
                   ),
                 ),
               ),

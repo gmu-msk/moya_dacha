@@ -1,66 +1,48 @@
-// Тема приложения: цвета, шрифты, размеры текста, отступы и цели касания.
+// Тема приложения: цвета, шрифты, размеры текста, отступы, движение.
 //
-// Вид — «Ситец»: белое тёплое полотно, две краски (мак и василёк),
-// карточка с тонким кантом и скруглением 8. Выбран владельцем из
-// вариантов на холсте макетов (specs/000-ui.md, раздел «Вид»).
+// Вид — «Сад» (раунд 2 холста «Моя дача — редизайн», вариант 2a): льняное
+// полотно, мох и томат. Шрифты прежние — Rubik для заголовков и Golos Text
+// для текста, крупнее материаловых (ADR-0003). Карточек в ленте нет: пост
+// лежит прямо на полотне, фото 4:5 со скруглением 6.
 //
-// Аудитория МояДачи — дачники, среди них много людей старшего возраста
-// (ADR-0003). Поэтому базовый шрифт крупнее материалового, а кнопки выше
-// того, что Material даёт по умолчанию.
-//
-// Экраны не задают ни цветов, ни размеров шрифта, ни голых чисел отступа:
-// всё это живёт здесь (ADR-0012).
+// Экраны не задают ни цветов, ни размеров шрифта, ни голых чисел отступа
+// и длительностей: всё это живёт здесь (ADR-0012).
 import 'package:flutter/material.dart';
 
-/// Основная краска — василёк: кнопки, крутилка, выделение, главное
-/// действие. Красных кнопок в приложении нет: красное читается как
-/// «опасно» и «ошибка» (specs/000-ui.md, правило 19).
-const _primary = Color(0xFF2F5AA8);
+/// Основная краска — мох: кнопки, выделение, главное действие.
+const _primary = Color(0xFF34502C);
 
-/// Вторая краска — тоже василёк: имена авторов, комментарии, аватары
-/// соседей. Отдельной константой, чтобы песочница могла развести их.
-const _secondary = Color(0xFF2F5AA8);
+/// Вторая краска — чернила полотна: имена авторов и комментаторов.
+/// В «Саду» имя выделено начертанием, а не цветом.
+const _secondary = Color(0xFF1D231B);
 
-/// Акцент — мак: только сердечко «нравится» и мак в логотипе. Ситец
-/// узнаётся парой красок, но маку оставлено то, где красный уместен.
-const _accent = Color(0xFFC7323C);
+/// Акцент — томат: сердечко «нравится», точка непрочитанного, мак
+/// в логотипе.
+const _accent = Color(0xFFD4442A);
 
-/// Во сколько раз шрифт крупнее материалового по умолчанию: основной текст
-/// становится 17–18sp вместо 14sp. Системное увеличение шрифта этим не
-/// отменяется, а умножается на него, поэтому экраны должны выживать и при
-/// двукратном размере — это пункт чек-листа каждого сценария показа.
+/// Те же краски на тёмном полотне: светлее, чтобы читались как текст.
+const _primaryDark = Color(0xFFB5CE98);
+const _onPrimaryDark = Color(0xFF16200F);
+const _secondaryDark = Color(0xFFEDE7DA);
+const _accentDark = Color(0xFFFF7657);
+
+/// Во сколько раз шрифт крупнее материалового по умолчанию.
 const _fontScale = 1.25;
 
-/// Наименьшая высота кнопки. Material 3 даёт 40dp; рекомендация по целям
-/// касания — 48dp, а нашим пользователям и этого мало.
+/// Наименьшая высота кнопки.
 const _tapTargetHeight = 56.0;
 
-/// Скругление рамки у полей ввода и кнопок. Столько же у карточки:
-/// в «Ситце» все крупные углы одинаковые. Было 16 — владелец попросил
-/// углы строже.
-const _inputRadius = 8.0;
+/// Скругление рамки у полей ввода. Кнопки — «таблетки».
+const _inputRadius = 14.0;
 
-/// Скругление карточки поста.
-const _cardRadius = 8.0;
+/// Скругление карточек вне ленты (плашки, диалоги, листы).
+const _cardRadius = 14.0;
 
-/// Шрифт заголовков: имена, названия экранов, подписи постов.
 const _headingFont = 'Rubik';
-
-/// Шрифт остального текста.
 const _bodyFont = 'Golos Text';
 
-/// Величины темы, которые можно покрутить, не пересобирая приложение.
-///
-/// Значения по умолчанию — те, с которыми приложение живёт: продуктовые
-/// экраны вызывают [appTheme] без настройки и получают ровно прежнюю тему.
-/// Другие значения подставляет только песочница витрины
-/// (`mobile/lib/screens/gallery_screen.dart`, ADR-0012): владелец крутит
-/// их на своём телефоне и присылает то, что понравилось, а сюда они
-/// попадают правкой констант выше.
-///
-/// Отступов [AppGap] здесь нет и быть не может: они — константы времени
-/// компиляции, экраны подставляют их прямо в свои `EdgeInsets`, и без
-/// пересборки они не меняются.
+/// Величины темы, которые можно покрутить в песочнице витрины
+/// (`gallery_screen.dart`, ADR-0012), не пересобирая приложение.
 @immutable
 class ThemeTuning {
   const ThemeTuning({
@@ -73,29 +55,14 @@ class ThemeTuning {
     this.cardRadius = _cardRadius,
   });
 
-  /// Основная краска: кнопки, крутилка, выделение.
   final Color primary;
-
-  /// Вторая краска: имена и комментарии.
   final Color secondary;
-
-  /// Акцент: отметка «нравится» и мак в логотипе.
   final Color accent;
-
-  /// Множитель размера текста поверх материалового.
   final double fontScale;
-
-  /// Наименьшая высота кнопки.
   final double tapTargetHeight;
-
-  /// Скругление рамки полей ввода и кнопок.
   final double inputRadius;
-
-  /// Скругление карточки поста.
   final double cardRadius;
 
-  /// То же самое в виде констант этого файла: песочница витрины
-  /// показывает их и даёт скопировать, чтобы прислать в задачу.
   String asThemeConstants() {
     return 'const _primary = Color(0x${_hex(primary)});\n'
         'const _secondary = Color(0x${_hex(secondary)});\n'
@@ -132,69 +99,84 @@ class ThemeTuning {
 
 /// Отступы. Других чисел отступа в экранах быть не должно.
 abstract final class AppGap {
-  /// Впритык: между картинкой и подписью к ней, между значками в ряду.
   static const tiny = 4.0;
-
-  /// Между строками одного блока.
   static const small = 8.0;
-
-  /// Поля карточки поста и расстояние между постами в ленте: плотнее
-  /// блока экрана, чтобы в ленте было видно больше постов, чем воздуха.
   static const snug = 12.0;
-
-  /// Между блоками внутри экрана.
   static const medium = 16.0;
-
-  /// Поля экрана и расстояние между его крупными частями.
   static const large = 24.0;
+
+  /// Между постами в ленте: без карточек пост отделяет воздух.
+  static const loose = 36.0;
 }
 
-/// Скругления и толщина канта. Крупные углы (карточка, кнопка, поле)
-/// живут в [ThemeTuning] — их крутит песочница; здесь то, что стоит рядом
-/// и в песочнице не нужно.
+/// Скругления и толщина линий.
 abstract final class AppShape {
-  /// Фотография внутри карточки: скругление меньше, чем у самой карточки.
-  static const photo = 4.0;
+  /// Фотография поста в ленте.
+  static const photo = 6.0;
 
-  /// Мелкие плашки: отметка «2/7» на фото, превью фотографий, внутренние
-  /// вкладки переключателя.
-  static const small = 4.0;
+  /// Мелкие плашки и превью.
+  static const small = 8.0;
 
-  /// Кант карточки и разделительных линий.
+  /// Превью выбранных фото в новом посте, ячейки сетки.
+  static const medium = 14.0;
+
+  /// «Таблетка»: кнопки, переключатели, точки карусели.
+  static const pill = 999.0;
+
+  /// Линии разделителей и верх нижней панели.
   static const hairline = 1.5;
 }
 
-/// Зелень, которой нет в палитре Material: стебель мака в логотипе и
-/// точка «сервер на связи». Больше зелёного в приложении нигде нет
-/// (specs/000-ui.md, «Логотип» и правило 13).
+/// Движение. Числа сняты с макета (раунд 1, «Предложенные анимации»).
+abstract final class AppMotion {
+  /// Смена цвета, подложки, мелкие отклики.
+  static const quick = Duration(milliseconds: 200);
+
+  /// Переключатели, карусель, раскрытие фото.
+  static const standard = Duration(milliseconds: 450);
+
+  /// Выезд нового поста снизу.
+  static const sheet = Duration(milliseconds: 550);
+
+  /// Появление поста в ленте и шаг между соседними.
+  static const entrance = Duration(milliseconds: 650);
+  static const stagger = Duration(milliseconds: 85);
+
+  /// Сердечко: подскок, лепестки, большое сердце при двойном касании.
+  static const heartPop = Duration(milliseconds: 350);
+  static const petals = Duration(milliseconds: 600);
+  static const bigHeart = Duration(milliseconds: 900);
+
+  /// Плавное торможение — почти всё движение приложения.
+  static const ease = Cubic(0.2, 0.8, 0.2, 1);
+
+  /// С лёгким перелётом: ползунок переключателя, подскок значков.
+  static const spring = Cubic(0.3, 1.3, 0.5, 1);
+}
+
+/// Зелень логотипа и точки «сервер на связи».
 abstract final class AppBrand {
-  /// Стебель мака: в тёмной теме светлее, чтобы не пропал на фоне.
   static Color stem(Brightness brightness) => brightness == Brightness.light
-      ? const Color(0xFF4C7A3F)
+      ? const Color(0xFF6E8F4F)
       : const Color(0xFF86B070);
 
-  /// Точка состояния сервиса, когда он отвечает: та же зелень, что
-  /// у стебля, — «всё растёт».
   static Color online(Brightness brightness) => stem(brightness);
 }
 
-/// Нейтраль «Ситца» — тёплое белое полотно и белая карточка на нём.
-/// От выбранных красок не зависит: меняются краски, полотно остаётся.
+/// Нейтраль «Сада» — льняное полотно.
 ColorScheme _neutral(ColorScheme scheme, Brightness brightness) {
   if (brightness == Brightness.light) {
     return scheme.copyWith(
-      surface: const Color(0xFFFFFCF5),
-      onSurface: const Color(0xFF221E1A),
-      onSurfaceVariant: const Color(0xFF6B6257),
-      surfaceContainerLowest: const Color(0xFFFFFFFF),
-      surfaceContainerLow: const Color(0xFFFFFCF5),
-      surfaceContainer: const Color(0xFFF9F3EA),
-      surfaceContainerHigh: const Color(0xFFF6EFE4),
-      surfaceContainerHighest: const Color(0xFFF3ECE0),
-      outline: const Color(0xFF8C8175),
-      outlineVariant: const Color(0xFFEADFD0),
-      // Ошибка теплее и темнее мака: рядом с кнопкой её не спутать.
-      // Одним цветом состояние всё равно не различается (правило 7).
+      surface: const Color(0xFFF2EDE3),
+      onSurface: const Color(0xFF1D231B),
+      onSurfaceVariant: const Color(0xFF66675A),
+      surfaceContainerLowest: const Color(0xFFFAF7F1),
+      surfaceContainerLow: const Color(0xFFF2EDE3),
+      surfaceContainer: const Color(0xFFEDE7DC),
+      surfaceContainerHigh: const Color(0xFFE9E2D4),
+      surfaceContainerHighest: const Color(0xFFE7E0D1),
+      outline: const Color(0xFF8E8B7C),
+      outlineVariant: const Color(0xFFD8CFBF),
       error: const Color(0xFF8F3A1B),
       onError: const Color(0xFFFFFFFF),
       errorContainer: const Color(0xFFFBE1D4),
@@ -202,16 +184,16 @@ ColorScheme _neutral(ColorScheme scheme, Brightness brightness) {
     );
   }
   return scheme.copyWith(
-    surface: const Color(0xFF16130F),
-    onSurface: const Color(0xFFEDE5DA),
-    onSurfaceVariant: const Color(0xFFCFC4B6),
-    surfaceContainerLowest: const Color(0xFF100E0B),
-    surfaceContainerLow: const Color(0xFF1C1915),
-    surfaceContainer: const Color(0xFF221E19),
-    surfaceContainerHigh: const Color(0xFF2C2822),
-    surfaceContainerHighest: const Color(0xFF37322B),
-    outline: const Color(0xFF988D7F),
-    outlineVariant: const Color(0xFF4B443B),
+    surface: const Color(0xFF12150F),
+    onSurface: const Color(0xFFEDE7DA),
+    onSurfaceVariant: const Color(0xFFA9A695),
+    surfaceContainerLowest: const Color(0xFF0D100B),
+    surfaceContainerLow: const Color(0xFF161A13),
+    surfaceContainer: const Color(0xFF1A1E17),
+    surfaceContainerHigh: const Color(0xFF20251C),
+    surfaceContainerHighest: const Color(0xFF262B22),
+    outline: const Color(0xFF6F6C60),
+    outlineVariant: const Color(0xFF30362C),
     error: const Color(0xFFFFB59B),
     onError: const Color(0xFF55200A),
     errorContainer: const Color(0xFF73341A),
@@ -219,9 +201,6 @@ ColorScheme _neutral(ColorScheme scheme, Brightness brightness) {
   );
 }
 
-/// Палитра из красок: василёк — основной цвет и второй, мак — акцент
-/// (`tertiary`). Оттенки под них (заливка аватара, подложка отметки)
-/// Material выводит сам, поэтому краску в песочнице можно заменить любой.
 ColorScheme _scheme(Brightness brightness, ThemeTuning tuning) {
   final fromPrimary = ColorScheme.fromSeed(
     seedColor: tuning.primary,
@@ -237,19 +216,27 @@ ColorScheme _scheme(Brightness brightness, ThemeTuning tuning) {
   );
   final light = brightness == Brightness.light;
 
+  // В тёмной теме свои, подобранные на макете тона; если краску поменяли
+  // в песочнице — светлый тон той же краски выводит Material.
+  final darkPrimary =
+      tuning.primary == _primary ? _primaryDark : fromPrimary.primary;
+  final darkOnPrimary =
+      tuning.primary == _primary ? _onPrimaryDark : fromPrimary.onPrimary;
+  final darkSecondary =
+      tuning.secondary == _secondary ? _secondaryDark : fromSecondary.primary;
+  final darkAccent =
+      tuning.accent == _accent ? _accentDark : fromAccent.primary;
+
   return _neutral(
     fromPrimary.copyWith(
-      // Краска берётся как есть, не «гармонизируется»: в светлой теме
-      // это заливка кнопки, в тёмной — цвет текста на тёмном, поэтому
-      // там нужен светлый тон той же краски.
-      primary: light ? tuning.primary : fromPrimary.primary,
-      onPrimary: light ? const Color(0xFFFFFFFF) : fromPrimary.onPrimary,
-      secondary: light ? tuning.secondary : fromSecondary.primary,
-      onSecondary: light ? const Color(0xFFFFFFFF) : fromSecondary.onPrimary,
+      primary: light ? tuning.primary : darkPrimary,
+      onPrimary: light ? const Color(0xFFF6F2E8) : darkOnPrimary,
+      secondary: light ? tuning.secondary : darkSecondary,
+      onSecondary: light ? const Color(0xFFF2EDE3) : const Color(0xFF12150F),
       secondaryContainer: fromSecondary.primaryContainer,
       onSecondaryContainer: fromSecondary.onPrimaryContainer,
-      tertiary: light ? tuning.accent : fromAccent.primary,
-      onTertiary: light ? const Color(0xFFFFFFFF) : fromAccent.onPrimary,
+      tertiary: light ? tuning.accent : darkAccent,
+      onTertiary: light ? const Color(0xFFFFFFFF) : const Color(0xFF12150F),
       tertiaryContainer: fromAccent.primaryContainer,
       onTertiaryContainer: fromAccent.onPrimaryContainer,
     ),
@@ -257,8 +244,7 @@ ColorScheme _scheme(Brightness brightness, ThemeTuning tuning) {
   );
 }
 
-/// Тема светлая или тёмная. Какая из них показана, решает система
-/// (`themeMode: ThemeMode.system`), своего переключателя в приложении нет.
+/// Тема светлая или тёмная; какая показана, решает система.
 ThemeData appTheme(
   Brightness brightness, {
   ThemeTuning tuning = const ThemeTuning(),
@@ -266,24 +252,13 @@ ThemeData appTheme(
   final colorScheme = _scheme(brightness, tuning);
   final base = ThemeData(colorScheme: colorScheme, fontFamily: _bodyFont);
 
-  // Кнопка не ниже tuning.tapTargetHeight, какой бы короткой ни была
-  // надпись, и со скруглением как у карточки — стадион Material 3
-  // рядом с прямоугольной карточкой смотрится из другой темы.
+  // Кнопка — «таблетка» не ниже цели касания.
   final buttonSize = ButtonStyle(
     minimumSize: WidgetStatePropertyAll(Size(64, tuning.tapTargetHeight)),
-    shape: WidgetStatePropertyAll(
-      RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(tuning.inputRadius),
-      ),
-    ),
+    shape: const WidgetStatePropertyAll(StadiumBorder()),
   );
 
   return base.copyWith(
-    // Размеры текста живут в «геометрии» темы, а не в textTheme: в самой
-    // теме размер у стиля не проставлен, он появляется только когда
-    // MaterialApp домешивает геометрию под язык. Поэтому увеличиваем
-    // геометрию — тогда крупнее становится весь текст сразу, включая
-    // заголовки, кнопки и подписи полей.
     typography: Typography.material2021(
       platform: base.platform,
       colorScheme: colorScheme,
@@ -293,17 +268,18 @@ ThemeData appTheme(
       dense: Typography.dense2021.apply(fontSizeFactor: tuning.fontScale),
       tall: Typography.tall2021.apply(fontSizeFactor: tuning.fontScale),
     ),
-    // Заголовки — Rubik, остальное — Golos Text из ThemeData выше.
-    // Размер здесь не ставится: его домешает геометрия.
     textTheme: _headings(base.textTheme),
-    // Стандартная плотность, а не компактная: цели касания не ужимаются.
     visualDensity: VisualDensity.standard,
     materialTapTargetSize: MaterialTapTargetSize.padded,
-    appBarTheme: base.appBarTheme.copyWith(centerTitle: true),
+    appBarTheme: base.appBarTheme.copyWith(
+      centerTitle: true,
+      backgroundColor: colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+    ),
     filledButtonTheme: FilledButtonThemeData(style: buttonSize),
     outlinedButtonTheme: OutlinedButtonThemeData(style: buttonSize),
     textButtonTheme: TextButtonThemeData(style: buttonSize),
-    // Карточка поста: белая на полотне, тонкий кант вместо тени.
+    // Карточка — только вне ленты: светлая плашка без канта и тени.
     cardTheme: CardThemeData(
       color: brightness == Brightness.light
           ? colorScheme.surfaceContainerLowest
@@ -312,24 +288,44 @@ ThemeData appTheme(
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(tuning.cardRadius),
-        side: BorderSide(
+      ),
+    ),
+    inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      filled: true,
+      fillColor: brightness == Brightness.light
+          ? colorScheme.surfaceContainerLowest
+          : colorScheme.surfaceContainer,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(tuning.inputRadius),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(tuning.inputRadius),
+        borderSide: BorderSide(
           color: colorScheme.outlineVariant,
           width: AppShape.hairline,
         ),
       ),
-    ),
-    // Рамка у полей ввода — общая: экран её не повторяет.
-    inputDecorationTheme: base.inputDecorationTheme.copyWith(
-      border: OutlineInputBorder(
+      focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(tuning.inputRadius),
+        borderSide: BorderSide(color: colorScheme.primary, width: 2),
       ),
       contentPadding: const EdgeInsets.all(AppGap.medium),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: colorScheme.onSurface,
+      contentTextStyle: TextStyle(color: colorScheme.surface),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(tuning.inputRadius),
+      ),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: colorScheme.primary,
+      refreshBackgroundColor: colorScheme.surfaceContainerLowest,
     ),
   );
 }
 
-/// Заголовочные стили на [_headingFont]. Размеры не трогаются: они
-/// приходят из геометрии, когда `MaterialApp` локализует тему.
 TextTheme _headings(TextTheme base) {
   TextStyle? rubik(TextStyle? style) =>
       style?.copyWith(fontFamily: _headingFont, fontWeight: FontWeight.w600);
@@ -346,17 +342,7 @@ TextTheme _headings(TextTheme base) {
   );
 }
 
-/// Поведение прокрутки, общее для всего приложения.
-///
-/// Android с 12-й версии показывает край списка растяжением содержимого:
-/// при прокрутке до упора картинки и текст плывут. На крупном шрифте и
-/// на фотографиях это читается как поломка, поэтому край показываем
-/// по-старому — свечением у границы (`GlowingOverscrollIndicator`).
-/// Свечение ничего не двигает: оно появляется на краю, гаснет само и
-/// говорит ровно одно — дальше прокручивать нечего.
-///
-/// Физика прокрутки при этом материаловая, то есть список упирается
-/// в край, а не отпружинивает.
+/// Край списка — свечением, а не растяжением (см. историю файла).
 class AppScrollBehavior extends MaterialScrollBehavior {
   const AppScrollBehavior();
 
@@ -369,7 +355,6 @@ class AppScrollBehavior extends MaterialScrollBehavior {
     switch (getPlatform(context)) {
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
-        // Там прокрутка упругая, край виден и без указателя.
         return child;
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
@@ -377,7 +362,7 @@ class AppScrollBehavior extends MaterialScrollBehavior {
       case TargetPlatform.windows:
         return GlowingOverscrollIndicator(
           axisDirection: details.direction,
-          color: Theme.of(context).colorScheme.secondary,
+          color: Theme.of(context).colorScheme.primary,
           child: child,
         );
     }

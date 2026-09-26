@@ -30,16 +30,31 @@ void main() {
       ),
     );
     expect(find.text('Кто увидит'), findsOneWidget);
-    expect(find.text('Всем'), findsOneWidget);
-    expect(find.text('Все дачники в МоейДаче'), findsOneWidget);
-    expect(find.text('Те, с кем вы подписаны друг на друга'), findsOneWidget);
-    expect(find.text('Пост виден только вам'), findsOneWidget);
+    expect(find.text('Все'), findsOneWidget);
+    expect(find.text('Друзья'), findsOneWidget);
+    expect(find.text('Только я'), findsOneWidget);
+    // Пояснение — только к выбранному сегменту.
+    expect(find.text('Все дачники в «Моей даче»'), findsOneWidget);
+    expect(find.text('Пост виден только вам'), findsNothing);
 
-    await tester.tap(find.text('Друзьям'));
+    await tester.tap(find.text('Друзья'));
     expect(picked, PostVisibility.friends);
   });
 
-  testWidgets('у закрытого профиля «Всем» — это «Подписчикам»', (tester) async {
+  testWidgets('пояснение меняется вместе с выбором', (tester) async {
+    await pump(
+      tester,
+      VisibilityPicker(
+        value: PostVisibility.me,
+        closed: false,
+        onChanged: (_) {},
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Пост виден только вам'), findsOneWidget);
+  });
+
+  testWidgets('у закрытого профиля «Все» — это «Подписчики»', (tester) async {
     await pump(
       tester,
       VisibilityPicker(
@@ -48,8 +63,8 @@ void main() {
         onChanged: (_) {},
       ),
     );
-    expect(find.text('Всем'), findsNothing);
-    expect(find.text('Подписчикам'), findsOneWidget);
+    expect(find.text('Все'), findsNothing);
+    expect(find.text('Подписчики'), findsOneWidget);
     expect(find.text('Только ваши подписчики'), findsOneWidget);
   });
 
