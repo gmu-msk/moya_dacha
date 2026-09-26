@@ -291,6 +291,10 @@ ThemeData appTheme(
       ),
     ),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      // Подсказка и ошибка под полем при крупном шрифте не обрезаются
+      // многоточием: в них правила поля (specs/000-ui.md, требование 2).
+      helperMaxLines: 3,
+      errorMaxLines: 3,
       filled: true,
       fillColor: brightness == Brightness.light
           ? colorScheme.surfaceContainerLowest
