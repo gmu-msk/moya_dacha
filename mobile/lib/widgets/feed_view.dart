@@ -1,9 +1,8 @@
 // Лента: specs/004-feed.md, вкладки «Все» и «Подписки» — specs/012-follows.md.
 //
-// Страницы подгружаются по мере прокрутки, жест вниз обновляет ленту
-// целиком. Ошибка следующей страницы не стирает то, что уже показано:
-// на дачной связи это обычное дело, и терять из-за неё пролистанное
-// нельзя (specs/004-feed.md, требование 13).
+// Вид «Сад» (2a): пост без карточки — автор, фото 4:5, подпись, действия.
+// Посты въезжают снизу по очереди, фото листаются свайпом, двойное касание
+// ставит отметку с большим сердцем, касание раскрывает фото в пост.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -13,6 +12,7 @@ import '../api.dart';
 import '../theme.dart';
 import 'author_line.dart';
 import 'bottom_bar.dart';
+import 'comment_icon.dart';
 import 'empty_view.dart';
 import 'error_view.dart';
 import 'like_button.dart';
@@ -20,21 +20,22 @@ import 'post_action.dart';
 import 'loading_view.dart';
 import 'segment_tabs.dart';
 
-/// Сколько постов запрашивается за раз. Столько же сервис отдаёт
-/// по умолчанию (specs/004-feed.md, требование 4).
 const feedPageSize = 20;
-
-/// За сколько пикселей до конца списка запрашивается следующая страница:
-/// примерно экран, чтобы к моменту, когда человек долистает, она уже была.
 const _loadAheadPixels = 600.0;
 
-/// Вкладки ленты. Имя — значение параметра `scope` в запросе.
+/// Тег перехода «фото из ленты → пост».
+String postHeroTag(Post post) => 'post-photo-${post.id}';
+
+/// Сколько постов после обновления въезжают по очереди; дальше — без
+/// задержки, чтобы низ ленты не ждал.
+const _staggered = 6;
+
+/// Сколько после обновления ленты новые карточки ещё въезжают. Потом
+/// прокрутка показывает посты сразу, без анимации.
+const _entranceWindow = Duration(milliseconds: 1200);
+
 enum FeedScope { all, following }
 
-/// Лента с вкладками «Все» (слева, открывается первой) и «Подписки»
-/// (specs/012-follows.md, требования 15 и 19). Обе вкладки живут, пока
-/// открыт главный экран: переключение не теряет пролистанное, а вкладка
-/// «Подписки» строится при первом касании.
 class FeedTabs extends StatefulWidget {
   const FeedTabs({
     super.key,
@@ -49,9 +50,6 @@ class FeedTabs extends StatefulWidget {
   final void Function(Post post) onOpenPost;
   final void Function(Author author)? onOpenAuthor;
   final VoidCallback onNewPost;
-
-  /// Ленту потянули вниз: заодно узнать, нет ли нового в уведомлениях
-  /// (specs/014-notifications.md, требование 6).
   final VoidCallback? onRefreshed;
 
   @override
@@ -69,17 +67,13 @@ class FeedTabsState extends State<FeedTabs> {
   Iterable<FeedViewState> get _opened =>
       _views.values.map((key) => key.currentState).whereType<FeedViewState>();
 
-  /// Обе вкладки заново: свой пост выложен или удалён, на кого-то
-  /// подписались или отписались.
   Future<void> refresh() async {
     await Future.wait(_opened.map((view) => view.refresh()));
   }
 
-  /// Открытую вкладку — наверх (требование 19).
   Future<void> scrollToTop() async =>
       _views[_scope]!.currentState?.scrollToTop();
 
-  /// Пост изменился — в обеих вкладках, где он есть.
   void replace(Post post) {
     for (final view in _opened) {
       view.replace(post);
@@ -96,17 +90,23 @@ class FeedTabsState extends State<FeedTabs> {
       _scope = scope;
       _followingOpened = _followingOpened || scope == FeedScope.following;
     });
+    _views[scope]!.currentState?.replayEntrance();
   }
 
-  FeedView _view(FeedScope scope) => FeedView(
-    key: _views[scope],
-    token: widget.token,
-    scope: scope,
-    onOpenPost: widget.onOpenPost,
-    onNewPost: widget.onNewPost,
-    onOpenAuthor: widget.onOpenAuthor,
-    onShowAll: () => _select(FeedScope.all),
-    onRefreshed: widget.onRefreshed,
+  // Один и тот же пост может быть в обеих вкладках: переход «фото → пост»
+  // включён только у открытой, иначе у героя два двойника.
+  Widget _view(FeedScope scope) => HeroMode(
+    enabled: scope == _scope,
+    child: FeedView(
+      key: _views[scope],
+      token: widget.token,
+      scope: scope,
+      onOpenPost: widget.onOpenPost,
+      onNewPost: widget.onNewPost,
+      onOpenAuthor: widget.onOpenAuthor,
+      onShowAll: () => _select(FeedScope.all),
+      onRefreshed: widget.onRefreshed,
+    ),
   );
 
   @override
@@ -148,24 +148,11 @@ class FeedView extends StatefulWidget {
   });
 
   final String token;
-
-  /// Какая это вкладка ленты.
   final FeedScope scope;
-
-  /// Из пустых «Подписок» — во «Все» (specs/012-follows.md, требование 2
-  /// сценария).
   final VoidCallback? onShowAll;
-
-  /// Ленту потянули вниз.
   final VoidCallback? onRefreshed;
-
-  /// Открыть пост целиком: все фотографии и подпись.
   final void Function(Post post) onOpenPost;
-
-  /// Открыть профиль автора поста (specs/009-user-profile.md).
   final void Function(Author author)? onOpenAuthor;
-
-  /// Выложить первый пост — из пустой ленты.
   final VoidCallback onNewPost;
 
   @override
@@ -181,6 +168,12 @@ class FeedViewState extends State<FeedView> {
   String? _nextPageError;
   bool _loading = true;
   bool _loadingMore = false;
+
+  /// Когда лента показана заново: от этого момента карточки въезжают.
+  DateTime _shownAt = DateTime.now();
+
+  /// Поколение показа: новое — карточки строятся заново и въезжают.
+  int _generation = 0;
 
   PostsApi get _api => PostsApi(apiClient(token: widget.token));
 
@@ -207,16 +200,21 @@ class FeedViewState extends State<FeedView> {
     }
   }
 
-  /// Обновление ленты: первая страница запрашивается заново и показывается
-  /// вместо накопленного (specs/004-feed.md, требование 12).
   Future<void> refresh() => _refresh();
 
-  /// К самому верху ленты: повторное касание «Ленты» в нижней панели
-  /// (specs/011-bottom-bar.md, требование 4).
   Future<void> scrollToTop() => scrollBackToTop(_scroll);
 
-  /// Показать пост заново: его лайкнули здесь или на экране поста,
-  /// и в ленте должно быть то же число (specs/005-likes.md).
+  /// Вкладку открыли снова — посты въезжают, как на макете.
+  void replayEntrance() {
+    if (!mounted || _posts.isEmpty) {
+      return;
+    }
+    setState(() {
+      _shownAt = DateTime.now();
+      _generation++;
+    });
+  }
+
   void replace(Post post) {
     final at = _posts.indexWhere((item) => item.id == post.id);
     if (at < 0) {
@@ -225,7 +223,6 @@ class FeedViewState extends State<FeedView> {
     setState(() => _posts[at] = post);
   }
 
-  /// Потянули вниз — лента заново, и заодно проверка уведомлений.
   Future<void> _pulled() {
     widget.onRefreshed?.call();
     return _refresh();
@@ -256,6 +253,8 @@ class FeedViewState extends State<FeedView> {
           ..addAll(page?.items ?? const []);
         _cursor = page?.nextCursor;
         _loading = false;
+        _shownAt = DateTime.now();
+        _generation++;
       });
     } on Exception catch (error) {
       debugPrint('$logMarker feed=failed error=$error');
@@ -319,15 +318,11 @@ class FeedViewState extends State<FeedView> {
     if (_posts.isEmpty) {
       return RefreshIndicator(
         onRefresh: _pulled,
-        // Пустое состояние тоже должно тянуться вниз, иначе обновить
-        // ленту, пока в ней пусто, нечем.
         child: ListView(
           children: [
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.6,
               child: widget.scope == FeedScope.following
-                  // Новичок ни на кого не подписан (specs/012-follows.md,
-                  // «Тексты»).
                   ? EmptyView(
                       icon: Icons.people_outline,
                       title: 'Вы пока ни на кого не подписаны',
@@ -360,24 +355,36 @@ class FeedViewState extends State<FeedView> {
       onRefresh: _pulled,
       child: ListView.separated(
         controller: _scroll,
-        padding: const EdgeInsets.symmetric(horizontal: AppGap.medium),
+        padding: const EdgeInsets.fromLTRB(
+          AppGap.medium,
+          AppGap.tiny,
+          AppGap.medium,
+          AppGap.large,
+        ),
         itemCount: _posts.length + 1,
-        separatorBuilder: (_, _) => const SizedBox(height: AppGap.snug),
+        separatorBuilder: (_, _) => const SizedBox(height: AppGap.loose),
         itemBuilder: (context, index) {
           if (index == _posts.length) {
             return _footer();
           }
           final post = _posts[index];
-          return FeedPostCard(
-            // Состояние карточки должно ехать за постом, а не за местом
-            // в списке: иначе после обновления ленты сердечко остаётся
-            // от того, кто был здесь раньше.
-            key: ValueKey(post.id),
-            post: post,
-            token: widget.token,
-            onTap: () => widget.onOpenPost(post),
-            onChanged: replace,
-            onOpenAuthor: widget.onOpenAuthor,
+          final fresh =
+              DateTime.now().difference(_shownAt) < _entranceWindow;
+          return Entrance(
+            key: ValueKey('${post.id}-$_generation'),
+            animate: fresh,
+            delay: fresh && index < _staggered
+                ? AppMotion.stagger * index
+                : Duration.zero,
+            child: FeedPostCard(
+              key: ValueKey(post.id),
+              post: post,
+              token: widget.token,
+              heroTag: postHeroTag(post),
+              onTap: () => widget.onOpenPost(post),
+              onChanged: replace,
+              onOpenAuthor: widget.onOpenAuthor,
+            ),
           );
         },
       ),
@@ -403,10 +410,70 @@ class FeedViewState extends State<FeedView> {
   }
 }
 
-/// Пост в ленте: автор, фотографии каруселью и начало подписи. Подпись
-/// целиком и комментарии — на экране поста (specs/004-feed.md,
-/// требования 9 и 11).
-class FeedPostCard extends StatelessWidget {
+/// Въезд снизу с проявлением: сдвиг 28, масштаб .97 → 1.
+class Entrance extends StatefulWidget {
+  const Entrance({
+    super.key,
+    required this.child,
+    this.animate = true,
+    this.delay = Duration.zero,
+  });
+
+  final Widget child;
+  final bool animate;
+  final Duration delay;
+
+  @override
+  State<Entrance> createState() => _EntranceState();
+}
+
+class _EntranceState extends State<Entrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: AppMotion.entrance,
+    value: widget.animate ? 0 : 1,
+  );
+  Timer? _start;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.animate) {
+      _start = Timer(widget.delay, () {
+        if (mounted) {
+          _c.forward();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _start?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = CurvedAnimation(parent: _c, curve: AppMotion.ease);
+    return AnimatedBuilder(
+      animation: t,
+      child: widget.child,
+      builder: (context, child) => Opacity(
+        opacity: t.value.clamp(0.0, 1.0),
+        child: Transform.translate(
+          offset: Offset(0, 28 * (1 - t.value)),
+          child: Transform.scale(scale: 0.97 + 0.03 * t.value, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+/// Пост в ленте: автор, фото каруселью, начало подписи и действия.
+class FeedPostCard extends StatefulWidget {
   const FeedPostCard({
     super.key,
     required this.post,
@@ -415,111 +482,141 @@ class FeedPostCard extends StatelessWidget {
     required this.onChanged,
     this.onOpenAuthor,
     this.showAuthor = true,
+    this.heroTag,
   });
 
   final Post post;
   final String token;
   final VoidCallback onTap;
-
-  /// Пост изменился: его лайкнули прямо здесь.
   final void Function(Post post) onChanged;
-
-  /// Открыть профиль автора: касанием имени или аватара.
   final void Function(Author author)? onOpenAuthor;
-
-  /// Показывать ли строку автора. В постах одного человека её нет: автор
-  /// один и назван в заголовке экрана (specs/009-user-profile.md,
-  /// требование 11) — остаётся только время.
   final bool showAuthor;
 
-  /// Сколько строк подписи видно в ленте.
+  /// Тег перехода «фото → пост»; без него фото не летит.
+  final Object? heroTag;
+
   static const captionLines = 3;
+
+  @override
+  State<FeedPostCard> createState() => _FeedPostCardState();
+}
+
+class _FeedPostCardState extends State<FeedPostCard> {
+  final _like = GlobalKey<LikeButtonState>();
+  final _heart = GlobalKey<BigHeartState>();
+
+  void _doubleTap() {
+    _heart.currentState?.play();
+    _like.currentState?.likeByDoubleTap();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final post = widget.post;
 
-    // Пост — карточка на полотне: белая подложка, тонкий кант и
-    // скругление приходят из темы, экран их не повторяет (ADR-0012).
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppGap.snug),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (showAuthor)
-                AuthorLine(
-                  author: post.author,
-                  when: post.createdAt,
-                  visibility: post.visibility,
-                  onTap: onOpenAuthor == null
-                      ? null
-                      : () => onOpenAuthor!(post.author),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppGap.small),
-                  child: PostedLine(
-                    when: post.createdAt,
-                    visibility: post.visibility,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              if (post.media.isNotEmpty) FeedPhotos(media: post.media),
-              if (post.caption.isNotEmpty) ...[
-                const SizedBox(height: AppGap.tiny),
-                Text(
-                  post.caption,
-                  style: theme.textTheme.bodyLarge,
-                  maxLines: captionLines,
-                  overflow: TextOverflow.ellipsis,
-                ),
+    Widget photos = FeedPhotos(media: post.media);
+    final tag = widget.heroTag;
+    if (tag != null) {
+      photos = Hero(tag: tag, child: photos);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.showAuthor)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppGap.snug),
+            child: AuthorLine(
+              author: post.author,
+              when: post.createdAt,
+              visibility: post.visibility,
+              onTap: widget.onOpenAuthor == null
+                  ? null
+                  : () => widget.onOpenAuthor!(post.author),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppGap.small),
+            child: PostedLine(
+              when: post.createdAt,
+              visibility: post.visibility,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        if (post.media.isNotEmpty)
+          GestureDetector(
+            onTap: widget.onTap,
+            onDoubleTap: _doubleTap,
+            child: Stack(
+              children: [
+                photos,
+                Positioned.fill(child: BigHeart(key: _heart)),
               ],
-              Row(
-                children: [
-                  LikeButton(post: post, token: token, onChanged: onChanged),
-                  // Число комментариев: по нему видно, где разговор идёт,
-                  // а где ещё нет (specs/006-comments.md, требование 7).
-                  // Сам разговор — на экране поста, поэтому кнопка ведёт
-                  // туда.
-                  PostAction(
-                    icon: Icons.mode_comment_outlined,
-                    count: post.comments,
-                    tooltip: 'Комментарии',
-                    onPressed: onTap,
-                    // Комментарии — вторая краска темы, отметка — основная:
-                    // в ряду под постом их видно порознь.
-                    color: theme.colorScheme.secondary,
-                  ),
-                ],
+            ),
+          ),
+        if (post.caption.isNotEmpty)
+          InkWell(
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.only(top: AppGap.snug),
+              child: Text(
+                post.caption,
+                style: theme.textTheme.bodyLarge,
+                maxLines: FeedPostCard.captionLines,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.only(top: AppGap.tiny),
+          child: Row(
+            children: [
+              LikeButton(
+                key: _like,
+                post: post,
+                token: widget.token,
+                onChanged: widget.onChanged,
+              ),
+              PostAction(
+                iconWidget: CommentIcon(color: theme.colorScheme.secondary),
+                count: post.comments,
+                tooltip: 'Комментарии',
+                onPressed: widget.onTap,
+                color: theme.colorScheme.secondary,
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 }
 
-/// Фотографии поста в ленте. Если их несколько, они листаются свайпом
-/// прямо здесь; точки внизу показывают, какая открыта, а отметка «2/7»
-/// появляется после свайпа и плавно гаснет (specs/004-feed.md,
-/// требование 9). Следующая фотография не грузится, пока до неё не
-/// долистали: `PageView` строит страницы только по мере надобности.
+/// Фото поста: карусель 4:5 со свайпом. Точки внизу показывают, какая
+/// открыта (открытая — вытянутая «таблетка»), отметка «2/7» появляется
+/// после свайпа и гаснет (specs/004-feed.md, требование 9).
 class FeedPhotos extends StatefulWidget {
-  const FeedPhotos({super.key, required this.media});
+  const FeedPhotos({
+    super.key,
+    required this.media,
+    this.radius = AppShape.photo,
+    this.aspectRatio = 4 / 5,
+  });
 
   final List<Media> media;
 
-  /// Сколько видна отметка «2/7» после свайпа.
-  static const countShown = Duration(milliseconds: 1500);
+  /// Скругление: в ленте 6, в посте фото во всю ширину — 0.
+  final double radius;
 
-  /// За сколько она гаснет и появляется.
+  /// Рамка единая для всех постов (макет «Сад»): лента не прыгает по
+  /// высоте, место занято до загрузки (требование 10).
+  final double aspectRatio;
+
+  static const countShown = Duration(milliseconds: 1500);
   static const countFade = Duration(milliseconds: 400);
 
   @override
@@ -565,63 +662,68 @@ class _FeedPhotosState extends State<FeedPhotos> {
   @override
   Widget build(BuildContext context) {
     final media = widget.media;
-    final first = media.first;
+    final scheme = Theme.of(context).colorScheme;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(AppShape.photo),
+      borderRadius: BorderRadius.circular(widget.radius),
       child: AspectRatio(
-        // Размеры приходят вместе с постом, поэтому место под фотографию
-        // занято до её загрузки и лента не дёргается (specs/004-feed.md,
-        // требование 10). Рамку задаёт первая фотография, остальные
-        // вписываются в неё обрезкой — иначе карточка прыгала бы по
-        // высоте на каждом свайпе.
-        aspectRatio: first.height == 0 ? 1 : first.width / first.height,
-        child: media.length == 1
-            ? _photo(first)
-            : Stack(
-                fit: StackFit.expand,
-                children: [
-                  PageView.builder(
-                    controller: _pages,
-                    itemCount: media.length,
-                    onPageChanged: _turned,
-                    itemBuilder: (_, index) => _photo(media[index]),
-                  ),
-                  Positioned(
-                    top: AppGap.small,
-                    right: AppGap.small,
-                    child: IgnorePointer(
-                      child: AnimatedOpacity(
-                        opacity: _countVisible ? 1 : 0,
-                        duration: FeedPhotos.countFade,
-                        child: _PhotoCount(
-                          current: _page + 1,
-                          count: media.length,
+        aspectRatio: widget.aspectRatio,
+        child: ColoredBox(
+          color: scheme.surfaceContainerHighest,
+          child: media.length == 1
+              ? _photo(media.first)
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    PageView.builder(
+                      controller: _pages,
+                      itemCount: media.length,
+                      onPageChanged: _turned,
+                      itemBuilder: (_, index) => _photo(media[index]),
+                    ),
+                    Positioned(
+                      top: AppGap.snug,
+                      right: AppGap.snug,
+                      child: IgnorePointer(
+                        child: AnimatedOpacity(
+                          opacity: _countVisible ? 1 : 0,
+                          duration: FeedPhotos.countFade,
+                          child: _PhotoCount(
+                            current: _page + 1,
+                            count: media.length,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // Точки остаются всегда: по ним видно, что фотография
-                  // не одна, и когда отметка погасла.
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: AppGap.small,
-                    child: IgnorePointer(
-                      child: _PhotoDots(current: _page, count: media.length),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: AppGap.snug,
+                      child: IgnorePointer(
+                        child: _PhotoDots(current: _page, count: media.length),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+        ),
       ),
     );
   }
 
-  Widget _photo(Media photo) =>
-      Image.network(mediaUrl(photo.url), fit: BoxFit.cover);
+  Widget _photo(Media photo) => Image.network(
+    mediaUrl(photo.url),
+    fit: BoxFit.cover,
+    // Проявление при загрузке вместо резкого появления.
+    frameBuilder: (context, child, frame, sync) => sync
+        ? child
+        : AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: AppMotion.standard,
+            child: child,
+          ),
+  );
 }
 
-/// Отметка «2/7» на фотографии поста.
 class _PhotoCount extends StatelessWidget {
   const _PhotoCount({required this.current, required this.count});
 
@@ -635,11 +737,11 @@ class _PhotoCount extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.black54,
-        borderRadius: BorderRadius.circular(AppShape.small),
+        borderRadius: BorderRadius.circular(AppShape.pill),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
-          horizontal: AppGap.small,
+          horizontal: AppGap.small + AppGap.tiny,
           vertical: AppGap.tiny,
         ),
         child: Text(
@@ -651,12 +753,15 @@ class _PhotoCount extends StatelessWidget {
   }
 }
 
-/// Точки под фотографией: сколько их в посте и какая открыта.
+/// Точки: открытая — «таблетка» 18×6, остальные — кружки 6×6.
 class _PhotoDots extends StatelessWidget {
   const _PhotoDots({required this.current, required this.count});
 
   final int current;
   final int count;
+
+  static const _dot = 6.0;
+  static const _active = 18.0;
 
   @override
   Widget build(BuildContext context) {
@@ -665,16 +770,20 @@ class _PhotoDots extends StatelessWidget {
       children: [
         for (var i = 0; i < count; i++)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: DecoratedBox(
+            padding: const EdgeInsets.symmetric(horizontal: 2.5),
+            child: AnimatedContainer(
+              duration: AppMotion.standard,
+              curve: AppMotion.ease,
+              width: i == current ? _active : _dot,
+              height: _dot,
               decoration: BoxDecoration(
-                // Точки лежат на фотографии, а какая она — неизвестно,
-                // поэтому цвета темы здесь не годятся: белое на тёмной
-                // подложке видно на любом снимке.
-                color: i == current ? Colors.white : Colors.white54,
-                shape: BoxShape.circle,
+                // Белое с тенью видно на любом снимке.
+                color: i == current ? Colors.white : Colors.white70,
+                borderRadius: BorderRadius.circular(AppShape.pill),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 4),
+                ],
               ),
-              child: const SizedBox.square(dimension: AppGap.small),
             ),
           ),
       ],

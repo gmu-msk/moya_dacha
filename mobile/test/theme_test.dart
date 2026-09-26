@@ -1,4 +1,4 @@
-// Тема «Ситец»: две краски, свои шрифты и общие формы.
+// Тема «Сад»: мох, чернила и томат на льне, прежние шрифты, общие формы.
 //
 // Проверка не про вкус, а про то, что выбранное владельцем доехало до
 // экранов: краски на местах, шрифты подставлены, карточка и кнопка
@@ -27,12 +27,15 @@ Future<ThemeData> builtTheme(WidgetTester tester, Brightness brightness) async {
 }
 
 void main() {
-  testWidgets('кнопки васильковые, мак — только акцент', (tester) async {
+  testWidgets('кнопки — мох, имена — чернила, томат — только акцент', (
+    tester,
+  ) async {
     final theme = await builtTheme(tester, Brightness.light);
 
-    expect(theme.colorScheme.primary, const Color(0xFF2F5AA8));
-    expect(theme.colorScheme.secondary, const Color(0xFF2F5AA8));
-    expect(theme.colorScheme.tertiary, const Color(0xFFC7323C));
+    expect(theme.colorScheme.primary, const Color(0xFF34502C));
+    expect(theme.colorScheme.secondary, const Color(0xFF1D231B));
+    expect(theme.colorScheme.tertiary, const Color(0xFFD4442A));
+    expect(theme.colorScheme.surface, const Color(0xFFF2EDE3));
   });
 
   testWidgets('заголовки набраны Rubik, остальной текст — Golos Text', (
@@ -46,7 +49,7 @@ void main() {
     expect(theme.textTheme.labelLarge?.fontFamily, 'Golos Text');
   });
 
-  testWidgets('карточка поста: белая, с кантом и скруглением 8', (
+  testWidgets('карточка: светлая плашка без канта, скругление 14', (
     tester,
   ) async {
     final theme = await builtTheme(tester, Brightness.light);
@@ -54,8 +57,15 @@ void main() {
 
     expect(theme.cardTheme.color, theme.colorScheme.surfaceContainerLowest);
     expect(theme.cardTheme.elevation, 0);
-    expect(shape.borderRadius, BorderRadius.circular(8));
-    expect(shape.side.width, AppShape.hairline);
+    expect(shape.borderRadius, BorderRadius.circular(14));
+    expect(shape.side, BorderSide.none);
+  });
+
+  testWidgets('кнопка — «таблетка»', (tester) async {
+    final theme = await builtTheme(tester, Brightness.light);
+    final shape = theme.filledButtonTheme.style?.shape?.resolve({});
+
+    expect(shape, isA<StadiumBorder>());
   });
 
   testWidgets('тёмная тема остаётся тёмной, краски в ней светлее', (

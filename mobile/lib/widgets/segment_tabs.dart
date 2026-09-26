@@ -1,15 +1,13 @@
-// Вкладки-сегменты на подложке: «Все» и «Подписки» в ленте, подписчики
-// и подписки в списках (specs/012-follows.md, требование 20).
+// Вкладки-сегменты: «Все» / «Подписки» в ленте, «Все» / «Друзья» /
+// «Только я» в новом посте, списки подписок (specs/012-follows.md).
 //
-// Открытая вкладка — на полотне с кантом, закрытая — приглушённым
-// текстом без подложки. Та же подложка, что у открытого раздела нижней
-// панели: один приём выделения на всё приложение.
+// Дорожка-«таблетка» на подложке, открытый сегмент — тёмный ползунок,
+// который переезжает с лёгким перелётом (макет «Сад», 2a).
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
-/// Высота сегмента: не ниже цели касания, даже при крупном шрифте текст
-/// растягивает его, а не обрезается.
+/// Высота сегмента: не ниже цели касания; крупный шрифт его растягивает.
 const _segmentHeight = 44.0;
 
 class SegmentTabs extends StatelessWidget {
@@ -18,37 +16,59 @@ class SegmentTabs extends StatelessWidget {
     required this.labels,
     required this.selected,
     required this.onSelect,
+    this.margin = const EdgeInsets.fromLTRB(
+      AppGap.medium,
+      0,
+      AppGap.medium,
+      AppGap.small,
+    ),
   });
 
   final List<String> labels;
   final int selected;
   final ValueChanged<int> onSelect;
+  final EdgeInsets margin;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
+    final n = labels.length;
+    final x = n == 1 ? 0.0 : -1 + 2 * selected / (n - 1);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppGap.medium,
-        0,
-        AppGap.medium,
-        AppGap.small,
-      ),
+      padding: margin,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppGap.small),
+          borderRadius: BorderRadius.circular(AppShape.pill),
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppGap.tiny),
-          child: Row(
+          child: Stack(
             children: [
-              for (var i = 0; i < labels.length; i++) ...[
-                if (i > 0) const SizedBox(width: AppGap.tiny),
-                Expanded(child: _segment(context, i)),
-              ],
+              Positioned.fill(
+                child: AnimatedAlign(
+                  alignment: Alignment(x, 0),
+                  duration: AppMotion.standard,
+                  curve: AppMotion.spring,
+                  child: FractionallySizedBox(
+                    widthFactor: 1 / n,
+                    heightFactor: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: scheme.onSurface,
+                        borderRadius: BorderRadius.circular(AppShape.pill),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  for (var i = 0; i < n; i++)
+                    Expanded(child: _segment(context, i)),
+                ],
+              ),
             ],
           ),
         ),
@@ -64,35 +84,24 @@ class SegmentTabs extends StatelessWidget {
     return Semantics(
       selected: open,
       button: true,
-      child: Material(
-        color: open ? scheme.surface : Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppShape.small),
-          side: open
-              ? BorderSide(
-                  color: scheme.outlineVariant,
-                  width: AppShape.hairline,
-                )
-              : BorderSide.none,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => onSelect(index),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: _segmentHeight),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppGap.small,
-                  vertical: AppGap.tiny,
-                ),
-                child: Text(
-                  labels[index],
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: open ? scheme.onSurface : scheme.onSurfaceVariant,
-                  ),
-                ),
+      child: InkWell(
+        onTap: () => onSelect(index),
+        customBorder: const StadiumBorder(),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: _segmentHeight),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppGap.small,
+                vertical: AppGap.tiny,
+              ),
+              child: AnimatedDefaultTextStyle(
+                duration: AppMotion.quick,
+                style: (theme.textTheme.titleSmall ?? const TextStyle())
+                    .copyWith(
+                      color: open ? scheme.surface : scheme.onSurfaceVariant,
+                    ),
+                child: Text(labels[index], textAlign: TextAlign.center),
               ),
             ),
           ),

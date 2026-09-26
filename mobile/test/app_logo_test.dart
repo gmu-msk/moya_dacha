@@ -40,12 +40,12 @@ void main() {
     expect(find.bySemanticsLabel('МояДача'), findsOneWidget);
   });
 
-  testWidgets('штакетник васильковый, мак маковый', (tester) async {
+  testWidgets('штакетник чернильный, мак томатный', (tester) async {
     await pumpLogo(tester, Brightness.light);
 
     final painter = markPainter(tester);
-    expect(painter.fence, const Color(0xFF2F5AA8));
-    expect(painter.poppy, const Color(0xFFC7323C));
+    expect(painter.fence, const Color(0xFF1D231B));
+    expect(painter.poppy, const Color(0xFFD4442A));
   });
 
   testWidgets('в тёмной теме знак перекрашивается вместе с экраном', (

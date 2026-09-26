@@ -3,6 +3,10 @@
          и profile оно добавлено отдельными манифестами, а в main его не было,
          и APK для тестировщиков не видел сервер. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Последние фото на экране нового поста (photo_manager). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
     <application
         android:label="МояДача"
         android:name="${applicationName}"

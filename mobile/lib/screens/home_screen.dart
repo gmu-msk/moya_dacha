@@ -19,6 +19,7 @@ import '../widgets/bottom_bar.dart';
 import '../widgets/error_view.dart';
 import '../widgets/feed_view.dart';
 import '../widgets/loading_view.dart';
+import '../widgets/slide_up_route.dart';
 import 'intro_screen.dart';
 import 'notifications_screen.dart';
 import 'new_post_screen.dart';
@@ -290,8 +291,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// требование 8).
   Future<void> _newPost() async {
     final user = _user;
+    // Выезжает снизу (макет «Сад», одобрено в раунде 2).
     final post = await Navigator.of(context, rootNavigator: true).push<Post>(
-      MaterialPageRoute(
+      SlideUpRoute(
         builder: (_) =>
             NewPostScreen(token: widget.token, closed: user?.closed ?? false),
       ),
@@ -326,6 +328,8 @@ class _HomeScreenState extends State<HomeScreen> {
           post: post,
           token: widget.token,
           viewerId: user.id,
+          // Фото из ленты раскрывается в пост (макет, раунд 1).
+          heroTag: postHeroTag(post),
           onChanged: (updated) => _feed.currentState?.replace(updated),
         ),
       ),

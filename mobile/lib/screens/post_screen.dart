@@ -1,7 +1,8 @@
 // Экран поста (specs/003-posts.md).
 //
-// Пост целиком: все фотографии и подпись без сокращений. Сюда попадают
-// с ленты (specs/004-feed.md) и сразу после публикации.
+// Вид «Сад» (2a): фото во всю ширину 4:5 листаются свайпом, как в ленте;
+// из ленты фото «раскрывается» сюда переходом-героем. Двойное касание
+// ставит отметку. Ниже — автор, подпись целиком, отметка и комментарии.
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
@@ -11,6 +12,7 @@ import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
 import '../widgets/comments_view.dart';
 import '../widgets/confirm.dart';
+import '../widgets/feed_view.dart';
 import '../widgets/like_button.dart';
 import '../widgets/report_dialog.dart';
 import '../widgets/visibility_picker.dart';
@@ -23,19 +25,16 @@ class PostScreen extends StatefulWidget {
     required this.token,
     required this.viewerId,
     this.onChanged,
+    this.heroTag,
   });
 
   final Post post;
   final String token;
-
-  /// Кто смотрит: у своего поста и своего комментария есть «Удалить»,
-  /// у чужого — «Пожаловаться» (specs/007-deletion.md, требование 12,
-  /// specs/008-reports.md, требование 11).
   final String viewerId;
-
-  /// Пост изменился: его лайкнули здесь, и лента должна показать то же
-  /// число (specs/005-likes.md).
   final void Function(Post post)? onChanged;
+
+  /// Тег фото в ленте, из которого экран раскрылся.
+  final Object? heroTag;
 
   @override
   State<PostScreen> createState() => _PostScreenState();
@@ -44,13 +43,13 @@ class PostScreen extends StatefulWidget {
 class _PostScreenState extends State<PostScreen> {
   late Post post = widget.post;
 
+  final _like = GlobalKey<LikeButtonState>();
+  final _heart = GlobalKey<BigHeartState>();
+
   bool _deleting = false;
 
   bool get _mine => post.author.id == widget.viewerId;
 
-  /// Перечитать пост: после своего комментария у него другое число, и
-  /// показать его должны и этот экран, и лента (specs/006-comments.md,
-  /// требование 7).
   Future<void> _reload() async {
     try {
       final updated = await PostsApi(apiClient(token: widget.token))
@@ -61,14 +60,10 @@ class _PostScreenState extends State<PostScreen> {
       setState(() => post = updated);
       widget.onChanged?.call(updated);
     } on Exception catch (error) {
-      // Комментарий уже оставлен и виден: молчаливо разойтись здесь
-      // лучше, чем ругаться на то, что человеку удалось.
       debugPrint('$logMarker post=reload_failed error=$error');
     }
   }
 
-  /// Удалить свой пост. Возвращаемся в ленту: показывать экран того,
-  /// чего больше нет, нечестно (specs/007-deletion.md).
   Future<void> _delete() async {
     final agreed = await confirmDelete(
       context,
@@ -100,9 +95,6 @@ class _PostScreenState extends State<PostScreen> {
     }
   }
 
-  /// Кто увидит свой пост — из меню поста (specs/013-post-visibility.md,
-  /// требование 6). Слова первого пункта зависят от того, закрыт ли
-  /// профиль, поэтому сначала спрашиваем сервис о себе.
   Future<void> _changeVisibility() async {
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -136,9 +128,6 @@ class _PostScreenState extends State<PostScreen> {
     }
   }
 
-  /// Пожаловаться на чужой пост. На экране от этого не меняется ничего:
-  /// жалоба — сигнал владельцу сервиса, а не действие над постом
-  /// (specs/008-reports.md, требование 12).
   Future<void> _report() async {
     await askAndReport(
       context,
@@ -152,8 +141,6 @@ class _PostScreenState extends State<PostScreen> {
     );
   }
 
-  /// Профиль автора поста или комментария (specs/009-user-profile.md,
-  /// требование 9).
   void _openAuthor(Author author) => openUserProfile(
     context,
     token: widget.token,
@@ -167,17 +154,24 @@ class _PostScreenState extends State<PostScreen> {
     },
   );
 
+  void _changed(Post updated) {
+    setState(() => post = updated);
+    widget.onChanged?.call(updated);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    Widget photos = FeedPhotos(media: post.media, radius: 0);
+    final tag = widget.heroTag;
+    if (tag != null) {
+      photos = Hero(tag: tag, child: photos);
+    }
+
     return AppScreen(
-      // Слово «Пост» ничего не добавляет: и так видно, что это пост.
       untitled: true,
-      // Пост смотрят, а не проверяют связь: место лучше отдать
-      // фотографиям.
       showServerStatus: false,
-      // Поля уже, чем у экрана-формы: пост плотный, как в ленте.
       padded: false,
       actions: [
         if (_mine)
@@ -200,52 +194,60 @@ class _PostScreenState extends State<PostScreen> {
           ),
       ],
       child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: AppGap.medium),
+        padding: const EdgeInsets.only(bottom: AppGap.large),
         children: [
-          AuthorLine(
-            author: post.author,
-            when: post.createdAt,
-            visibility: post.visibility,
-            onTap: () => _openAuthor(post.author),
-          ),
-          for (final media in post.media)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppGap.tiny),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppShape.photo),
-                child: AspectRatio(
-                  // Размеры приходят вместе с постом, поэтому место под
-                  // фотографию занимается до того, как она загрузится,
-                  // и экран не дёргается (specs/003-posts.md, требование 8).
-                  aspectRatio: media.height == 0
-                      ? 1
-                      : media.width / media.height,
-                  child: Image.network(mediaUrl(media.url), fit: BoxFit.cover),
-                ),
+          if (post.media.isNotEmpty)
+            GestureDetector(
+              onDoubleTap: () {
+                _heart.currentState?.play();
+                _like.currentState?.likeByDoubleTap();
+              },
+              child: Stack(
+                children: [
+                  photos,
+                  Positioned.fill(child: BigHeart(key: _heart)),
+                ],
               ),
             ),
-          if (post.caption.isNotEmpty) ...[
-            const SizedBox(height: AppGap.tiny),
-            Text(post.caption, style: theme.textTheme.bodyLarge),
-          ],
-          Align(
-            alignment: Alignment.centerLeft,
-            child: LikeButton(
-              post: post,
-              token: widget.token,
-              onChanged: (updated) {
-                setState(() => post = updated);
-                widget.onChanged?.call(updated);
-              },
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppGap.medium,
+              AppGap.medium,
+              AppGap.medium,
+              0,
             ),
-          ),
-          const SizedBox(height: AppGap.small),
-          CommentsView(
-            postId: post.id,
-            token: widget.token,
-            viewerId: widget.viewerId,
-            onChanged: _reload,
-            onOpenAuthor: _openAuthor,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AuthorLine(
+                  author: post.author,
+                  when: post.createdAt,
+                  visibility: post.visibility,
+                  onTap: () => _openAuthor(post.author),
+                ),
+                if (post.caption.isNotEmpty) ...[
+                  const SizedBox(height: AppGap.small),
+                  Text(post.caption, style: theme.textTheme.bodyLarge),
+                ],
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: LikeButton(
+                    key: _like,
+                    post: post,
+                    token: widget.token,
+                    onChanged: _changed,
+                  ),
+                ),
+                const SizedBox(height: AppGap.small),
+                CommentsView(
+                  postId: post.id,
+                  token: widget.token,
+                  viewerId: widget.viewerId,
+                  onChanged: _reload,
+                  onOpenAuthor: _openAuthor,
+                ),
+              ],
+            ),
           ),
         ],
       ),
