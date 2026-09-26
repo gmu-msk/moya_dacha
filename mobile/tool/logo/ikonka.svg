@@ -1,18 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Иконка для Android до версии 8: васильковый круг, знак светлый.
+  <!-- Иконка для Android до версии 8: моховой круг, штакетник льняной, мак томатный.
        С Android 8 иконка собирается из слоёв res/drawable/ic_launcher_*.xml,
        а PNG из этого файла печатает png.sh. -->
-  <circle cx="50" cy="50" r="46" fill="#2F5AA8"/>
+  <circle cx="50" cy="50" r="46" fill="#34502C"/>
   <g transform="translate(21.5 21.5) scale(0.57)">
-    <path d="M84 44 C86 36 86 28 83 20" stroke="#4C7A3F" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <path d="M12 44 L21 34 L30 44 L30 92 L12 92 Z" fill="#FFFCF5"/>
-    <path d="M41 30 L50 20 L59 30 L59 92 L41 92 Z" fill="#FFFCF5"/>
-    <path d="M70 44 L79 34 L88 44 L88 92 L70 92 Z" fill="#FFFCF5"/>
-    <rect x="6" y="60" width="88" height="7" rx="2" fill="#FFFCF5"/>
-    <circle cx="74.56" cy="10.56" r="8.64" fill="#C7323C"/>
-    <circle cx="89.44" cy="10.56" r="8.64" fill="#C7323C"/>
-    <circle cx="89.44" cy="25.44" r="8.64" fill="#C7323C"/>
-    <circle cx="74.56" cy="25.44" r="8.64" fill="#C7323C"/>
-    <circle cx="82" cy="18" r="4.08" fill="#221E1A"/>
+    <path d="M84 44 C86 36 86 28 83 20" stroke="#86B070" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M12 44 L21 34 L30 44 L30 92 L12 92 Z" fill="#FAF7F1"/>
+    <path d="M41 30 L50 20 L59 30 L59 92 L41 92 Z" fill="#FAF7F1"/>
+    <path d="M70 44 L79 34 L88 44 L88 92 L70 92 Z" fill="#FAF7F1"/>
+    <rect x="6" y="60" width="88" height="7" rx="2" fill="#FAF7F1"/>
+    <circle cx="74.56" cy="10.56" r="8.64" fill="#D4442A"/>
+    <circle cx="89.44" cy="10.56" r="8.64" fill="#D4442A"/>
+    <circle cx="89.44" cy="25.44" r="8.64" fill="#D4442A"/>
+    <circle cx="74.56" cy="25.44" r="8.64" fill="#D4442A"/>
+    <circle cx="82" cy="18" r="4.08" fill="#1D231B"/>
   </g>
 </svg>
