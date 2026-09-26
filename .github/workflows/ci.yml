@@ -99,6 +99,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Эмулятор — две трети оплачиваемых минут прогона. В PR он нужен,
+      # только если PR трогает приложение или сценарии показа; сервер
+      # и спеки проверяет гейт. APK для телефона собирается всегда.
+      - name: Нужен ли эмулятор
+        id: e2e
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo run=true >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files="$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')"
+          if grep -qE '^(mobile/|demo/|docker-compose\.demo\.yml$|Makefile$|\.github/workflows/ci\.yml$)' <<<"$files"; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          else
+            echo "PR не трогает приложение и сценарии показа — эмулятор пропускаем."
+            echo run=false >> "$GITHUB_OUTPUT"
+          fi
+
       # Джоб тащит на один раннер Flutter, Gradle, образы стенда и системный
       # образ эмулятора — вместе они не влезают. Выкидываем то, что на этом
       # раннере предустановлено и нам не нужно.
@@ -128,6 +146,7 @@ jobs:
       # Стенд поднимается сразу с данными сценария показа, который прогоняем
       # ниже: так проверяется и сам механизм сценариев, а не только e2e-путь.
       - name: Поднять демо-стенд рядом со сборкой
+        if: steps.e2e.outputs.run == 'true'
         env:
           DEMO_STORY: 000-status
         run: |
@@ -291,6 +310,7 @@ jobs:
           fi
 
       - name: Дождаться демо-стенда
+        if: steps.e2e.outputs.run == 'true'
         run: |
           deadline=$((SECONDS + 900))
           until [ -f "$RUNNER_TEMP/demo.status" ]; do
@@ -307,6 +327,7 @@ jobs:
       # Образы стенда уже собраны и запущены, APK собран — кэши сборки
       # больше не нужны, а места они занимают больше, чем сами образы.
       - name: Выбросить кэши сборки
+        if: steps.e2e.outputs.run == 'true'
         run: |
           docker builder prune --all --force
           # После сборки APK демон Gradle ещё жив и дописывает в свой кэш,
@@ -322,6 +343,7 @@ jobs:
 
       # Эмулятор без аппаратной виртуализации бесполезно медленный.
       - name: Разрешить KVM
+        if: steps.e2e.outputs.run == 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -330,6 +352,7 @@ jobs:
       # Стенд уже поднят (с данными сценария), APK уже собран — поэтому
       # --keep-stand и --no-apk. Локально это одна команда: make story.
       - name: Сценарий показа в эмуляторе
+        if: steps.e2e.outputs.run == 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -338,7 +361,7 @@ jobs:
           script: ./demo/story.sh 000-status --keep-stand --no-apk
 
       - name: Снимки экрана из эмулятора
-        if: always()
+        if: always() && steps.e2e.outputs.run == 'true'
         # Квота хранилища артефактов не повод краснеть всей сборке.
         continue-on-error: true
         uses: actions/upload-artifact@v4
@@ -349,9 +372,9 @@ jobs:
           if-no-files-found: warn
 
       - name: Логи стенда при падении
-        if: failure()
+        if: failure() && steps.e2e.outputs.run == 'true'
         run: docker compose -f docker-compose.demo.yml logs
 
       - name: Погасить стенд
-        if: always()
+        if: always() && steps.e2e.outputs.run == 'true'
         run: make demo-reset
