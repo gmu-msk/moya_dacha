@@ -234,6 +234,21 @@ jobs:
           echo "url=https://github.com/$REPO/releases/download/pr-$PR/$file" >> "$GITHUB_OUTPUT"
           echo "short=$short" >> "$GITHUB_OUTPUT"
 
+      # Владельцу в личку — ссылка на эту сборку (specs/018-telegram-bot.md,
+      # требование 19). Команда живёт в сервисе на VPS, то есть в main:
+      # в PR, который её только добавляет, шаг упадёт — поэтому он и не
+      # роняет прогон.
+      - name: Сборка владельцу в Telegram
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          URL: ${{ steps.release.outputs.url }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          [ -n "$VPS_SSH_KEY" ] || exit 0
+          ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a;
+            exec moya-dacha-server build-notify owner - $URL'" < mobile/assets/build_info.json
+
       # Комментарий один на весь PR: каждая следующая сборка переписывает
       # его, а не добавляет новый — иначе обсуждение тонет в ссылках.
       - name: Ссылка комментарием в PR

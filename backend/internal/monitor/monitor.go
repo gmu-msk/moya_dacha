@@ -113,3 +113,6 @@ func (m *Monitor) RecordError(method, path string, status int, message string) {
 		}
 	}()
 }
+
+// Uptime — сколько работает процесс сервиса.
+func Uptime() time.Duration { return time.Since(started) }
