@@ -183,6 +183,8 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AppErrorReport':
+          return AppErrorReport.fromJson(value);
         case 'AppSessionEnd':
           return AppSessionEnd.fromJson(value);
         case 'AppSessionStarted':

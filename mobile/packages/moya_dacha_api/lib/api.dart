@@ -38,6 +38,7 @@ part 'api/profile_api.dart';
 part 'api/usage_api.dart';
 part 'api/users_api.dart';
 
+part 'model/app_error_report.dart';
 part 'model/app_session_end.dart';
 part 'model/app_session_started.dart';
 part 'model/auth_code_accepted.dart';
