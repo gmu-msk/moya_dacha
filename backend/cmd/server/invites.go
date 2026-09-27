@@ -19,7 +19,7 @@ const usage = `команды:
   uninvite <номер>   отозвать приглашение
   invites            действующие приглашения
   alerts             текущие тревоги дашборда
-  build-notify <owner|group> <сведения.json|-> [<apk>|<ссылка>]
+  build-notify <owner|group> <сведения.json|-> [<apk>] [<ссылка>]
                      отправить сборку в Telegram
   telegram-check     состояние Telegram-бота
   dashboard-password адрес и пароль дашборда владельцу в Telegram`
@@ -38,7 +38,7 @@ func runCommand(args []string) error {
 		return dashboardPassword()
 	}
 	if args[0] == "build-notify" {
-		if len(args) < 3 || len(args) > 4 {
+		if len(args) < 3 || len(args) > 5 {
 			return errors.New(usage)
 		}
 		return buildNotify(args[1:])
