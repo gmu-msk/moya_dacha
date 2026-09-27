@@ -13,11 +13,17 @@ part of openapi.api;
 class CaptionUpdate {
   /// Returns a new [CaptionUpdate] instance.
   CaptionUpdate({
-    required this.caption,
+    this.caption,
   });
 
-  /// Новая подпись, до 1000 символов после обрезки краёв; может быть пустой (specs/003-posts.md) 
-  String caption;
+  /// Новая подпись, до 1000 символов после обрезки краёв; может быть пустой (specs/003-posts.md). Обязательна: тело без неё — `invalid_request`. 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? caption;
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is CaptionUpdate &&
@@ -26,14 +32,18 @@ class CaptionUpdate {
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (caption.hashCode);
+    (caption == null ? 0 : caption!.hashCode);
 
   @override
   String toString() => 'CaptionUpdate[caption=$caption]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+    if (this.caption != null) {
       json[r'caption'] = this.caption;
+    } else {
+      json[r'caption'] = null;
+    }
     return json;
   }
 
@@ -48,13 +58,11 @@ class CaptionUpdate {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'caption'), 'Required key "CaptionUpdate[caption]" is missing from JSON.');
-        assert(json[r'caption'] != null, 'Required key "CaptionUpdate[caption]" has a null value in JSON.');
         return true;
       }());
 
       return CaptionUpdate(
-        caption: mapValueOfType<String>(json, r'caption')!,
+        caption: mapValueOfType<String>(json, r'caption'),
       );
     }
     return null;
@@ -102,7 +110,6 @@ class CaptionUpdate {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
-    'caption',
   };
 }
 
