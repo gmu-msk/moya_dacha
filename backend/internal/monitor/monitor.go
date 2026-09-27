@@ -93,6 +93,9 @@ func (m *Monitor) sample(ctx context.Context, cpu float64) {
 		_, err = m.db.Exec(ctx, `DELETE FROM server_errors WHERE at < now() - make_interval(secs => $1)`,
 			errorsKeep.Seconds())
 	}
+	if err == nil {
+		err = m.forgetAppErrors(ctx)
+	}
 	if err != nil {
 		slog.Error("не удалось стереть старые измерения", "err", err)
 	}

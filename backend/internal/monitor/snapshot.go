@@ -20,6 +20,7 @@ type Snapshot struct {
 	Errors      Errors    `json:"errors"`
 	Feedback    Feedback  `json:"feedback"`
 	Usage       Usage     `json:"usage"`
+	AppErrors   AppErrors `json:"app_errors"`
 }
 
 // Feedback — отзывы разработчику (specs/019-feedback.md, требование 27).
@@ -104,7 +105,7 @@ type ServerError struct {
 func (m *Monitor) Collect(ctx context.Context) (Snapshot, error) {
 	snap := Snapshot{GeneratedAt: time.Now().UTC()}
 	steps := []func(context.Context, *Snapshot) error{
-		m.totals, m.activity, m.server, m.errors, m.feedback, m.usage,
+		m.totals, m.activity, m.server, m.errors, m.feedback, m.usage, m.appErrors,
 	}
 	for _, step := range steps {
 		if err := step(ctx, &snap); err != nil {

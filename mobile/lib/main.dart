@@ -8,6 +8,7 @@ import 'package:moya_dacha_api/api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
+import 'app_errors.dart';
 import 'app_scope.dart';
 import 'build_info.dart';
 import 'screens/about_screen.dart';
@@ -29,6 +30,9 @@ import 'widgets/loading_view.dart';
 const startScreen = String.fromEnvironment('START');
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Необработанные ошибки уходят на сервер (specs/021-app-errors.md).
+  appErrors.install();
   runApp(const MoyaDachaApp());
 }
 
@@ -169,6 +173,8 @@ class _MoyaDachaAppState extends State<MoyaDachaApp> {
   @override
   Widget build(BuildContext context) {
     final token = _token;
+    // Отчёт об ошибке уходит от имени того, кто вошёл сейчас.
+    appErrors.token = token;
 
     final Widget home;
     if (startScreen == 'gallery') {
