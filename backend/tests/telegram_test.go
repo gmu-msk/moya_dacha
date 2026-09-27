@@ -95,6 +95,23 @@ type fakeTelegram struct {
 	// (specs/019-feedback.md, ФТ-21); заполняет feedback_test.go.
 	files     map[string]tgFile // по file_id
 	fileAsked []string          // file_id из запросов getFile
+
+	// Вызовы setMyCommands (ФТ-23–25); заполняет serveSetMyCommands.
+	commands     []tgCommands
+	failCommands bool // отвечать {"ok": false} на setMyCommands
+}
+
+// tgCommand — одна команда меню бота.
+type tgCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+// tgCommands — один вызов setMyCommands.
+type tgCommands struct {
+	list        []tgCommand
+	scopeType   string // scope.type; пусто — scope не задан
+	scopeChatID int64  // scope.chat_id
 }
 
 func newFakeTelegram(t *testing.T) *fakeTelegram {
@@ -133,6 +150,19 @@ func (f *fakeTelegram) setFailSend(fail bool) {
 
 // push кладёт в очередь сообщение от человека в чат.
 func (f *fakeTelegram) push(fromID int64, username string, chatID int64, chatType, text string) {
+	f.pushFields(fromID, username, chatID, chatType, map[string]any{"text": text})
+}
+
+// pushContact — человек присылает в чат контакт из телефонной книги:
+// сообщение с contact.phone_number и без text (018, ФТ-27–28).
+func (f *fakeTelegram) pushContact(fromID int64, username string, chatID int64, chatType, phone string) {
+	f.pushFields(fromID, username, chatID, chatType, map[string]any{
+		"contact": map[string]any{"phone_number": phone, "first_name": "Сосед"},
+	})
+}
+
+// pushFields кладёт в очередь сообщение с этими полями (text, contact…).
+func (f *fakeTelegram) pushFields(fromID int64, username string, chatID int64, chatType string, fields map[string]any) {
 	f.mu.Lock()
 	f.nextID++
 	id := f.nextID
@@ -151,16 +181,16 @@ func (f *fakeTelegram) push(fromID int64, username string, chatID int64, chatTyp
 		chat["title"] = "Тестировщики МоейДачи"
 	}
 
-	f.updates = append(f.updates, map[string]any{
-		"update_id": id,
-		"message": map[string]any{
-			"message_id": id,
-			"from":       from,
-			"chat":       chat,
-			"date":       time.Now().Unix(),
-			"text":       text,
-		},
-	})
+	msg := map[string]any{
+		"message_id": id,
+		"from":       from,
+		"chat":       chat,
+		"date":       time.Now().Unix(),
+	}
+	for k, v := range fields {
+		msg[k] = v
+	}
+	f.updates = append(f.updates, map[string]any{"update_id": id, "message": msg})
 	f.mu.Unlock()
 
 	select {
@@ -237,6 +267,8 @@ func (f *fakeTelegram) serve(w http.ResponseWriter, r *http.Request) {
 		f.serveSendDocument(w, r)
 	case "getFile":
 		f.serveGetFile(w, r)
+	case "setMyCommands":
+		f.serveSetMyCommands(w, r)
 	case "getMe":
 		tgReply(w, map[string]any{"id": 999, "is_bot": true, "first_name": "МояДача", "username": "moya_dacha_bot"})
 	default:
@@ -349,6 +381,75 @@ func (f *fakeTelegram) serveSendDocument(w http.ResponseWriter, r *http.Request)
 	}
 
 	f.record(w, s)
+}
+
+func (f *fakeTelegram) serveSetMyCommands(w http.ResponseWriter, r *http.Request) {
+	var params struct {
+		Commands []tgCommand `json:"commands"`
+		Scope    *struct {
+			Type   string          `json:"type"`
+			ChatID json.RawMessage `json:"chat_id"`
+		} `json:"scope"`
+	}
+	body, _ := io.ReadAll(r.Body)
+	if err := json.Unmarshal(body, &params); err != nil {
+		f.mu.Lock()
+		f.wrong = append(f.wrong, fmt.Sprintf("setMyCommands: тело не JSON: %v", err))
+		f.mu.Unlock()
+		http.Error(w, `{"ok":false,"description":"bad json"}`, http.StatusBadRequest)
+		return
+	}
+
+	c := tgCommands{list: params.Commands}
+	if params.Scope != nil {
+		c.scopeType = params.Scope.Type
+		if len(params.Scope.ChatID) > 0 {
+			c.scopeChatID = f.chatID(string(params.Scope.ChatID))
+		}
+	}
+
+	f.mu.Lock()
+	f.commands = append(f.commands, c)
+	fail := f.failCommands
+	f.mu.Unlock()
+
+	if fail {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":false,"error_code":400,"description":"Bad Request: BOT_COMMANDS_TOO_MUCH"}`))
+		return
+	}
+	tgReply(w, true)
+}
+
+// setFailCommands — Telegram начинает отвечать ошибкой на setMyCommands.
+func (f *fakeTelegram) setFailCommands(fail bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failCommands = fail
+}
+
+// commandCalls — все вызовы setMyCommands по порядку.
+func (f *fakeTelegram) commandCalls() []tgCommands {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]tgCommands(nil), f.commands...)
+}
+
+// waitCommands ждёт, пока setMyCommands вызовут n раз, и возвращает вызовы.
+func (f *fakeTelegram) waitCommands(n int, what string) []tgCommands {
+	f.t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got := f.commandCalls()
+		if len(got) >= n {
+			return got
+		}
+		if time.Now().After(deadline) {
+			f.t.Fatalf("%s: за 5 секунд setMyCommands вызвали %d раз из %d ожидаемых", what, len(got), n)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // chatID разбирает chat_id: число или строка с числом.
@@ -1240,5 +1341,182 @@ func TestTelegramSendBuildTelegramError(t *testing.T) {
 				t.Fatalf("чат привязан — ошибка Telegram не должна быть ErrNotBound: %v", err)
 			}
 		})
+	}
+}
+
+// tgFileLimit — больше этого Telegram не принимает файл от бота (ФТ-16а).
+const tgFileLimit = 52428800
+
+// sparseAPK создаёт APK нужного размера, не занимая места на диске:
+// файл разреженный, внутри нули.
+func sparseAPK(t *testing.T, size int64) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "app-release.apk")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("не удалось создать APK: %v", err)
+	}
+	defer f.Close()
+	if err := f.Truncate(size); err != nil {
+		t.Fatalf("не удалось растянуть APK до %d байт: %v", size, err)
+	}
+	return path
+}
+
+// APK больше 50 МБ и есть ссылка — сборка уходит текстом со ссылкой,
+// файл не отправляется (ФТ-16а, ФТ-17).
+func TestTelegramSendBuildTooBigFileGoesAsLink(t *testing.T) {
+	pool := tgPool(t)
+	fake := newFakeTelegram(t)
+	bot := telegram.New(pool, tgConfig(t, fake))
+	bindChat(t, "group", tgGroupID)
+
+	apk := sparseAPK(t, tgFileLimit+1)
+	const link = "https://moya-dacha.example/app.apk"
+	if err := bot.SendBuild(context.Background(), "group", []byte(tgBuildInfo), apk, link); err != nil {
+		t.Fatalf("SendBuild с APK больше лимита и ссылкой: %v", err)
+	}
+
+	all := fake.allSent()
+	got := fake.sentTo(tgGroupID)
+	if len(all) != 1 || len(got) != 1 || got[0].method != "sendMessage" {
+		t.Fatalf("APK больше 50 МБ со ссылкой: в группу ожидался один sendMessage и никакого sendDocument, получено: %s",
+			describeSent(all))
+	}
+	requireBuildCaption(t, got[0].text)
+	if !strings.HasSuffix(strings.TrimSpace(got[0].text), "\n\nСкачать: "+link) {
+		t.Fatalf("текст должен кончаться строкой «Скачать: %s» после пустой строки:\n%s", link, got[0].text)
+	}
+}
+
+// APK больше 50 МБ, а ссылки нет — ошибка, в чат ничего не уходит (ФТ-16а).
+func TestTelegramSendBuildTooBigFileWithoutLinkFails(t *testing.T) {
+	pool := tgPool(t)
+	fake := newFakeTelegram(t)
+	bot := telegram.New(pool, tgConfig(t, fake))
+	bindChat(t, "group", tgGroupID)
+
+	apk := sparseAPK(t, tgFileLimit+1)
+	err := bot.SendBuild(context.Background(), "group", []byte(tgBuildInfo), apk, "")
+	if err == nil {
+		t.Fatal("APK больше 50 МБ без ссылки: SendBuild должен вернуть ошибку, а вернул nil")
+	}
+	if errors.Is(err, telegram.ErrNotBound) {
+		t.Fatalf("чат привязан — ошибка из-за размера APK не должна быть ErrNotBound: %v", err)
+	}
+	if got := fake.allSent(); len(got) != 0 {
+		t.Fatalf("APK больше 50 МБ без ссылки: в чат ничего не должно уходить, а ушло: %s", describeSent(got))
+	}
+}
+
+// APK в лимите уходит файлом, даже если ссылка задана, и строки
+// «Скачать:» в подписи нет (ФТ-16а). Ровно 52 428 800 байт — ещё в лимите.
+func TestTelegramSendBuildFileWithinLimitIgnoresLink(t *testing.T) {
+	small := filepath.Join(t.TempDir(), "small.apk")
+	if err := os.WriteFile(small, []byte("PK\x03\x04 будто бы APK"), 0o644); err != nil {
+		t.Fatalf("не удалось записать APK: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		apk  func(t *testing.T) string
+		size int
+	}{
+		{name: "маленький", apk: func(*testing.T) string { return small }, size: len("PK\x03\x04 будто бы APK")},
+		{name: "ровно 50 МБ", apk: func(t *testing.T) string { return sparseAPK(t, tgFileLimit) }, size: tgFileLimit},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			pool := tgPool(t)
+			fake := newFakeTelegram(t)
+			bot := telegram.New(pool, tgConfig(t, fake))
+			bindChat(t, "group", tgGroupID)
+
+			const link = "https://moya-dacha.example/app.apk"
+			if err := bot.SendBuild(context.Background(), "group", []byte(tgBuildInfo), c.apk(t), link); err != nil {
+				t.Fatalf("SendBuild: %v", err)
+			}
+
+			all := fake.allSent()
+			got := fake.sentTo(tgGroupID)
+			if len(all) != 1 || len(got) != 1 || got[0].method != "sendDocument" {
+				t.Fatalf("APK в лимите со ссылкой: в группу ожидался один sendDocument, получено: %s", describeSent(all))
+			}
+			if got[0].filename != "moya-dacha-386900.apk" {
+				t.Fatalf("файл должен называться moya-dacha-386900.apk, а называется %q", got[0].filename)
+			}
+			if len(got[0].content) != c.size {
+				t.Fatalf("в Telegram ушло %d байт APK вместо %d", len(got[0].content), c.size)
+			}
+			ls := requireBuildCaption(t, got[0].text)
+			if indexOfLine(ls, "Скачать:") >= 0 {
+				t.Fatalf("APK ушёл файлом — строки «Скачать:» в подписи быть не должно:\n%s", got[0].text)
+			}
+		})
+	}
+}
+
+// Подпись длиннее 1024 символов: файл уходит с первой строкой подписи,
+// полный текст — следом отдельным сообщением (ФТ-16б).
+func TestTelegramSendBuildLongCaptionFollowsFile(t *testing.T) {
+	pool := tgPool(t)
+	fake := newFakeTelegram(t)
+	bot := telegram.New(pool, tgConfig(t, fake))
+	bindChat(t, "group", tgGroupID)
+
+	// Первые две строки — как в tgBuildInfo, чтобы подошёл requireBuildCaption.
+	whatsNew := []string{"Лента друзей", "Починили лайки"}
+	for i := 1; i <= 20; i++ {
+		whatsNew = append(whatsNew, fmt.Sprintf(
+			"Пункт %d: длинное описание изменения, чтобы подпись к файлу вышла за предел Telegram", i))
+	}
+	info, err := json.Marshal(map[string]any{
+		"version":  "1.0.0",
+		"build":    386900,
+		"date":     "2026-09-26T12:00:00Z",
+		"commit":   "aa652ef",
+		"whatsNew": whatsNew,
+	})
+	if err != nil {
+		t.Fatalf("не удалось собрать сведения о сборке: %v", err)
+	}
+
+	apk := filepath.Join(t.TempDir(), "app-release.apk")
+	content := []byte("PK\x03\x04 будто бы APK")
+	if err := os.WriteFile(apk, content, 0o644); err != nil {
+		t.Fatalf("не удалось записать APK: %v", err)
+	}
+
+	if err := bot.SendBuild(context.Background(), "group", info, apk, ""); err != nil {
+		t.Fatalf("SendBuild с длинной подписью: %v", err)
+	}
+
+	all := fake.allSent()
+	got := fake.sentTo(tgGroupID)
+	if len(all) != 2 || len(got) != 2 || got[0].method != "sendDocument" || got[1].method != "sendMessage" {
+		t.Fatalf("длинная подпись: в группу ожидались sendDocument, затем sendMessage, получено: %s", describeSent(all))
+	}
+
+	doc := got[0]
+	if doc.filename != "moya-dacha-386900.apk" || string(doc.content) != string(content) {
+		t.Fatalf("ушёл не тот файл: %q, %d байт", doc.filename, len(doc.content))
+	}
+	if strings.TrimSpace(doc.text) != "МояДача 1.0.0, сборка 386900" {
+		t.Fatalf("подпись к файлу должна быть первой строкой «МояДача 1.0.0, сборка 386900», а она:\n%s", doc.text)
+	}
+
+	full := got[1].text
+	if n := len([]rune(full)); n <= 1024 {
+		t.Fatalf("тест неисправен: полная подпись должна быть длиннее 1024 символов, а в ней %d", n)
+	}
+	ls := requireBuildCaption(t, full)
+	for _, w := range whatsNew {
+		if indexOfLine(ls, "• "+w) < 0 {
+			t.Fatalf("в полном тексте подписи нет строки «• %s»:\n%s", w, full)
+		}
+	}
+	if indexOfLine(ls, "Скачать:") >= 0 {
+		t.Fatalf("без ссылки строки «Скачать:» быть не должно:\n%s", full)
 	}
 }

@@ -245,11 +245,15 @@ jobs:
             $sudo install -m 644 /tmp/moya-dacha.json /var/www/moya-dacha/moya-dacha.json'
           echo "APK: https://$DOMAIN/app.apk" >> "$GITHUB_STEP_SUMMARY"
 
-      # Сборка main — в группу тестировщиков файлом со «Что нового»
-      # (specs/018-telegram-bot.md, требование 19). Бот не настроен или
-      # группа не привязана — команда так и скажет, прогон не краснеет.
+      # Сборка main — в группу тестировщиков со «Что нового»: файлом, а
+      # если APK больше лимита Telegram 50 МБ — ссылкой (specs/018-telegram-bot.md,
+      # требования 16а и 19). Бот не настроен или группа не привязана —
+      # команда так и скажет. Ошибка Telegram видна жёлтым шагом, деплой
+      # из-за неё не краснеет.
       - name: Сборка в Telegram
+        continue-on-error: true
         run: |
+          set -o pipefail
           ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a;
-            exec moya-dacha-server build-notify group /var/www/moya-dacha/moya-dacha.json /var/www/moya-dacha/moya-dacha.apk'" |
+            exec moya-dacha-server build-notify group /var/www/moya-dacha/moya-dacha.json /var/www/moya-dacha/moya-dacha.apk https://$DOMAIN/app.apk'" |
             tee -a "$GITHUB_STEP_SUMMARY"
