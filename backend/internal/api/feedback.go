@@ -98,6 +98,9 @@ func (s *Server) SendFeedback(ctx context.Context, request gen.SendFeedbackReque
 	if errors.Is(err, media.ErrNotAnImage) {
 		return gen.SendFeedback400JSONResponse(errInvalidImage), nil
 	}
+	if errors.Is(err, media.ErrTooManyPixels) {
+		return gen.SendFeedback413JSONResponse(errTooManyPixels), nil
+	}
 	if err != nil {
 		return nil, err
 	}

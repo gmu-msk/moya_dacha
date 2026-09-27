@@ -491,6 +491,23 @@ func TestUploadPhotoRejectsPhotoLargerThanTenMegabytes(t *testing.T) {
 	}
 }
 
+// Маленький PNG, объявляющий больше 8192×8192 точек, — 413 image_too_large:
+// размеры проверяются по заголовку до распаковки (требование 5,
+// «Ограничения и edge cases»).
+func TestUploadPhotoRejectsImageDeclaringTooManyPixels(t *testing.T) {
+	for caseName, content := range bombCases(t) {
+		t.Run(caseName, func(t *testing.T) {
+			baseURL := startAPI(t)
+
+			token, _ := signIn(t, baseURL, phonePretty)
+
+			resp := uploadPhoto(t, baseURL, token, "photo.png", content)
+
+			requireError(t, resp, http.StatusRequestEntityTooLarge, "image_too_large")
+		})
+	}
+}
+
 // Загрузка без поля file — 400 invalid_request («Ограничения и edge cases»).
 func TestUploadPhotoRejectsUploadWithoutFileField(t *testing.T) {
 	fields := map[string]string{

@@ -46,6 +46,9 @@ func (s *Server) UploadMedia(ctx context.Context, request gen.UploadMediaRequest
 	if errors.Is(err, media.ErrNotAnImage) {
 		return gen.UploadMedia400JSONResponse(errInvalidImage), nil
 	}
+	if errors.Is(err, media.ErrTooManyPixels) {
+		return gen.UploadMedia413JSONResponse(errTooManyPixels), nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -338,6 +341,10 @@ var (
 	errPhotoTooLarge = gen.Error{
 		Code:    "image_too_large",
 		Message: "Фотография больше 10 МБ. Выберите поменьше",
+	}
+	errTooManyPixels = gen.Error{
+		Code:    "image_too_large",
+		Message: "Картинка слишком большая: больше 8192×8192 точек. Выберите поменьше",
 	}
 	errPostNotFound = gen.Error{
 		Code:    "post_not_found",

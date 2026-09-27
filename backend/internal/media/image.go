@@ -16,6 +16,19 @@ import (
 // ErrNotAnImage — прислали не картинку или не тот формат.
 var ErrNotAnImage = errors.New("файл не является картинкой JPEG или PNG")
 
+// ErrTooManyPixels — картинка объявляет больше пикселей, чем MaxPixels.
+var ErrTooManyPixels = errors.New("в картинке слишком много пикселей")
+
+// MaxPixels — сколько пикселей картинки сервис согласен распаковать:
+// 8192×8192. Вес файла ограничен, но PNG в 10 МБ может объявить
+// 30000×30000 и при распаковке съесть гигабайты — больше, чем есть
+// у сервера. Снимок телефона на 50 Мп (8160×6144) проходит.
+const MaxPixels = 8192 * 8192
+
+// decoding — сколько картинок распаковывается одновременно. Большая
+// картинка в памяти — сотни мегабайт, а загрузок бывает несколько разом.
+var decoding = make(chan struct{}, 2)
+
 // jpegQuality — с каким качеством пересохраняются картинки. 85 — та
 // точка, после которой разница видна только измерением, а вес растёт.
 const jpegQuality = 85
@@ -41,6 +54,22 @@ func Normalize(raw []byte, maxSide int) (Image, error) {
 	default:
 		return Image{}, ErrNotAnImage
 	}
+
+	// Размеры читаются из заголовка до распаковки: память выделяется
+	// уже под объявленные размеры.
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		return Image{}, ErrNotAnImage
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 {
+		return Image{}, ErrNotAnImage
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > MaxPixels {
+		return Image{}, ErrTooManyPixels
+	}
+
+	decoding <- struct{}{}
+	defer func() { <-decoding }()
 
 	src, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {

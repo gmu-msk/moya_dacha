@@ -45,6 +45,12 @@ func (s *Server) dashboardData(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
+	for i, f := range snap.Feedback.Recent {
+		if f.Screenshot != nil {
+			url := s.cfg.Media.URL(*f.Screenshot)
+			snap.Feedback.Recent[i].ScreenshotURL = &url
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(snap)
 }

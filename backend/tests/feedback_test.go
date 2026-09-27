@@ -944,6 +944,7 @@ func waitMyStatus(t *testing.T, baseURL, token string, id int64, status string) 
 
 // fbRow — строка feedback из базы.
 type fbRow struct {
+	id         int64
 	source     string
 	author     string
 	status     string
@@ -963,7 +964,7 @@ func feedbackRows(t *testing.T, where string, args ...any) []fbRow {
 	defer cancel()
 
 	rows, err := pool.Query(ctx, `
-		SELECT source, author, status, issue, issue_url, build, app_version, device, screenshot
+		SELECT id, source, author, status, issue, issue_url, build, app_version, device, screenshot
 		FROM feedback WHERE `+where+` ORDER BY id`, args...)
 	if err != nil {
 		t.Fatalf("не удалось прочитать feedback: %v", err)
@@ -973,7 +974,7 @@ func feedbackRows(t *testing.T, where string, args ...any) []fbRow {
 	var out []fbRow
 	for rows.Next() {
 		var r fbRow
-		if err := rows.Scan(&r.source, &r.author, &r.status, &r.issue, &r.issueURL, &r.build, &r.appVersion, &r.device, &r.screenshot); err != nil {
+		if err := rows.Scan(&r.id, &r.source, &r.author, &r.status, &r.issue, &r.issueURL, &r.build, &r.appVersion, &r.device, &r.screenshot); err != nil {
 			t.Fatalf("не удалось прочитать строку feedback: %v", err)
 		}
 		out = append(out, r)
@@ -1022,35 +1023,77 @@ func requireLabels(t *testing.T, issue ghIssue, want ...string) {
 	}
 }
 
-// requireIssueBody сверяет тело задачи с шаблоном ФТ-5 и возвращает ссылку
-// на скриншот. shotPrefix == "" — строки скриншота быть не должно.
-func requireIssueBody(t *testing.T, body, text, shotPrefix string, meta ...string) string {
+// fbRefLine — строка тела задачи со ссылкой на отзыв на дашборде (ФТ-5):
+// «Отзыв: №<id>[, есть скриншот] — автор и скриншот на дашборде
+// <PUBLIC_URL>/dashboard». publicURL пустой — без PUBLIC_URL.
+func fbRefLine(id int64, withShot bool, publicURL string) string {
+	shot := ""
+	if withShot {
+		shot = ", есть скриншот"
+	}
+	return fmt.Sprintf("Отзыв: №%d%s — автор и скриншот на дашборде %s/dashboard", id, shot, publicURL)
+}
+
+// requireIssueBody сверяет тело задачи с шаблоном ФТ-5: текст, пустая
+// строка, «---» и строки meta. Репозиторий задач публичный, поэтому ни
+// автора, ни ссылки на скриншот в теле быть не должно.
+func requireIssueBody(t *testing.T, body, text string, meta ...string) {
 	t.Helper()
 
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	if !strings.HasPrefix(body, text+"\n\n") {
 		t.Fatalf("тело задачи должно начинаться текстом отзыва и пустой строкой (ФТ-5):\n%s", body)
 	}
-	rest := strings.TrimPrefix(body, text+"\n\n")
-
-	var shot string
-	if shotPrefix != "" {
-		line, after, ok := strings.Cut(rest, "\n\n")
-		if !ok || !strings.HasPrefix(line, "![скриншот]("+shotPrefix) || !strings.HasSuffix(line, ")") {
-			t.Fatalf("после текста ожидалась строка «![скриншот](%s…)» и пустая строка (ФТ-5):\n%s", shotPrefix, body)
+	for _, banned := range []string{"Автор:", "![скриншот]", "/media/"} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("в теле задачи не должно быть %q: автор и скриншот только на дашборде (ФТ-5):\n%s", banned, body)
 		}
-		shot = strings.TrimSuffix(strings.TrimPrefix(line, "![скриншот]("), ")")
-		rest = after
-	} else if strings.Contains(body, "![скриншот]") {
-		t.Fatalf("скриншота нет — строки скриншота быть не должно (ФТ-5):\n%s", body)
 	}
+	rest := strings.TrimPrefix(body, text+"\n\n")
 
 	want := "---\n" + strings.Join(meta, "\n")
 	got := strings.TrimRight(rest, "\n ")
 	if got != want {
 		t.Fatalf("хвост тела задачи (ФТ-5):\n%s\nожидался:\n%s", got, want)
 	}
-	return shot
+}
+
+// dashboardShot — screenshot_url отзыва id из /dashboard/data (ФТ-27):
+// автор и скриншот теперь только там.
+func dashboardShot(t *testing.T, env fbEnv, id int64) string {
+	t.Helper()
+	var body struct {
+		Feedback struct {
+			Recent []struct {
+				ID            int64   `json:"id"`
+				ScreenshotURL *string `json:"screenshot_url"`
+			} `json:"recent"`
+		} `json:"feedback"`
+	}
+	if err := json.Unmarshal(dashboardRaw(t, env.root), &body); err != nil {
+		t.Fatalf("данные дашборда не разобрались: %v", err)
+	}
+	for _, item := range body.Feedback.Recent {
+		if item.ID != id {
+			continue
+		}
+		if item.ScreenshotURL == nil || !strings.HasPrefix(*item.ScreenshotURL, "/media/") {
+			t.Fatalf("у отзыва %d со скриншотом screenshot_url — ссылка хранилища «/media/…», а он %v", id, item.ScreenshotURL)
+		}
+		return *item.ScreenshotURL
+	}
+	t.Fatalf("отзыва %d нет в feedback.recent дашборда", id)
+	return ""
+}
+
+// onlyFeedbackID — номер единственного отзыва в базе.
+func onlyFeedbackID(t *testing.T) int64 {
+	t.Helper()
+	rows := feedbackRows(t, "TRUE")
+	if len(rows) != 1 {
+		t.Fatalf("в feedback ожидалась одна строка, их %d", len(rows))
+	}
+	return rows[0].id
 }
 
 // photoContent — картинка, которую «прислал» Telegram.
@@ -1216,7 +1259,8 @@ func TestFeedbackTextValidation(t *testing.T) {
 }
 
 // Скриншот не картинка (или не JPEG/PNG) — 400 invalid_image; больше
-// 10 МБ — 413 (ФТ-18). Отзыв при этом не записывается.
+// 10 МБ — 413; маленький PNG, объявляющий больше 8192×8192 точек, — 413
+// image_too_large (ФТ-18). Отзыв при этом не записывается.
 func TestFeedbackScreenshotValidation(t *testing.T) {
 	env := startFeedback(t, fbOptions{})
 	token, _ := fbUser(t, env.baseURL, 1, "", "tester_one")
@@ -1241,6 +1285,13 @@ func TestFeedbackScreenshotValidation(t *testing.T) {
 			t.Fatalf("на скриншот больше 10 МБ ожидался статус 413, получен %d", resp.StatusCode)
 		}
 	})
+
+	for name, content := range bombCases(t) {
+		t.Run("объявляет "+name, func(t *testing.T) {
+			resp := postFeedback(t, env.baseURL, token, map[string]string{"text": "скриншот"}, &fbShot{filename: "shot.png", content: content})
+			requireError(t, resp, http.StatusRequestEntityTooLarge, "image_too_large")
+		})
+	}
 
 	if n := countSQL(t, `SELECT count(*) FROM feedback`); n != 0 {
 		t.Fatalf("отвергнутый отзыв не должен записываться, а в feedback %d строк", n)
@@ -1334,9 +1385,10 @@ func TestFeedbackListOwnNewestFirst(t *testing.T) {
 // --- Задача GitHub --------------------------------------------------------
 
 // Отзыв из приложения со скриншотом сразу после приёма становится задачей:
-// заголовок, тело по шаблону, метки; скриншот — JPEG до 1600 по большей
-// стороне по ссылке PUBLIC_URL + ссылка хранилища. В приложении — accepted
-// с номером (ФТ-4–7, ФТ-18, ФТ-33).
+// заголовок, тело по шаблону (номер отзыва, «есть скриншот» и ссылка на
+// дашборд вместо автора и скриншота), метки; скриншот — JPEG до 1600 по
+// большей стороне в хранилище. В приложении — accepted с номером
+// (ФТ-4–7, ФТ-18, ФТ-33).
 func TestFeedbackAppIssueInBackground(t *testing.T) {
 	env := startFeedback(t, fbOptions{background: true})
 	token, _ := fbUser(t, env.baseURL, 1, "Анна", "anna_dacha")
@@ -1357,15 +1409,15 @@ func TestFeedbackAppIssueInBackground(t *testing.T) {
 		t.Fatalf("заголовок задачи %q, ожидался %q (ФТ-4)", issue.Title, "Отзыв: "+text)
 	}
 	requireLabels(t, issue, lblInbox, lblApp)
-	shot := requireIssueBody(t, issue.Body, text, fbPublicURL+"/media/",
+	requireIssueBody(t, issue.Body, text,
 		"Откуда: приложение",
-		"Автор: Анна (@anna_dacha)",
+		fbRefLine(fb.ID, true, fbPublicURL),
 		"Версия: 1.0.0 (386900)",
 		"Телефон: Google Pixel 7, Android 14",
 	)
 
 	// Скриншот открывается без входа и пересохранён как фото поста.
-	content := downloadFile(t, env.baseURL, strings.TrimPrefix(shot, fbPublicURL))
+	content := downloadFile(t, env.baseURL, dashboardShot(t, env, fb.ID))
 	cfg, format := photoConfig(t, content)
 	if format != "jpeg" || cfg.Width != 1600 || cfg.Height != 600 {
 		t.Fatalf("скриншот должен храниться JPEG 1600×600, а он %s %d×%d (ФТ-18)", format, cfg.Width, cfg.Height)
@@ -1391,8 +1443,8 @@ func TestFeedbackAppIssueInBackground(t *testing.T) {
 	}
 }
 
-// Задачу заводит и проход Sync; без PUBLIC_URL ссылка на скриншот — как
-// у хранилища; без версии и телефона нет их строк; без Repo — репозиторий
+// Задачу заводит и проход Sync; без PUBLIC_URL ссылка на дашборд —
+// «/dashboard»; без версии и телефона нет их строк; без Repo — репозиторий
 // по умолчанию (ФТ-3, ФТ-5, ФТ-30, ФТ-32).
 func TestFeedbackIssueViaSyncDefaults(t *testing.T) {
 	env := startFeedback(t, fbOptions{repo: "-", publicURL: "-"})
@@ -1412,11 +1464,11 @@ func TestFeedbackIssueViaSyncDefaults(t *testing.T) {
 		t.Fatalf("Sync должен завести одну задачу, заведено %d", len(issues))
 	}
 	requireLabels(t, issues[0], lblInbox, lblApp)
-	shot := requireIssueBody(t, issues[0].Body, "Кнопка «Опубликовать» уехала", "/media/",
+	requireIssueBody(t, issues[0].Body, "Кнопка «Опубликовать» уехала",
 		"Откуда: приложение",
-		"Автор: @petr_dacha",
+		fbRefLine(fb.ID, true, ""),
 	)
-	downloadFile(t, env.baseURL, shot)
+	downloadFile(t, env.baseURL, dashboardShot(t, env, fb.ID))
 
 	got := waitMyStatus(t, env.baseURL, token, fb.ID, "accepted")
 	if got.Issue == nil || *got.Issue != ghFirstIssue {
@@ -1715,9 +1767,9 @@ func TestFeedbackTelegramPrivate(t *testing.T) {
 				t.Fatalf("заголовок задачи %q", issue.Title)
 			}
 			requireLabels(t, issue, lblInbox, lblTelegram)
-			requireIssueBody(t, issue.Body, "Хочу сортировать посты по культурам", "",
+			requireIssueBody(t, issue.Body, "Хочу сортировать посты по культурам",
 				"Откуда: Telegram, личка",
-				"Автор: "+c.author,
+				fbRefLine(onlyFeedbackID(t), false, fbPublicURL),
 			)
 
 			got := env.fake.waitSent(c.msg.chatID, 1, "ответ автору")
@@ -1805,9 +1857,9 @@ func TestFeedbackTelegramTopic(t *testing.T) {
 
 	issue := env.gh.waitCreated(1, "задача из темы")[0]
 	requireLabels(t, issue, lblInbox, lblTelegram)
-	requireIssueBody(t, issue.Body, "Хочу сортировать посты по культурам", "",
+	requireIssueBody(t, issue.Body, "Хочу сортировать посты по культурам",
 		"Откуда: Telegram, тема группы",
-		"Автор: @tester_vasya",
+		fbRefLine(onlyFeedbackID(t), false, fbPublicURL),
 	)
 	got := env.fake.waitSent(tgGroupID, 1, "ответ в теме")
 	requireReply(t, got[0], fbAccepted(issue.Number), msgID, 7)
@@ -1882,11 +1934,8 @@ func TestFeedbackTelegramPhoto(t *testing.T) {
 			if issue.Title != "Отзыв: "+c.text {
 				t.Fatalf("заголовок задачи %q, ожидался %q", issue.Title, "Отзыв: "+c.text)
 			}
-			prefix := fbPublicURL + "/media/"
-			if c.missing {
-				prefix = ""
-			}
-			requireIssueBody(t, issue.Body, c.text, prefix, "Откуда: Telegram, личка", "Автор: @tester_vasya")
+			requireIssueBody(t, issue.Body, c.text, "Откуда: Telegram, личка",
+				fbRefLine(onlyFeedbackID(t), !c.missing, fbPublicURL))
 			requireReply(t, env.fake.waitSent(tgStrangerID, 1, "ответ автору")[0], fbAccepted(issue.Number), msgID, 0)
 
 			asked := env.fake.askedFiles()
@@ -2273,7 +2322,8 @@ func TestFeedbackTelegramNotifyFailureNoRetry(t *testing.T) {
 // --- Дашборд --------------------------------------------------------------
 
 // В /dashboard/data поле feedback: сколько за 7 дней и последние 10 —
-// время, откуда, автор, текст до 140 символов, статус, задача (ФТ-27).
+// номер, время, откуда, автор, текст до 140 символов, статус, задача,
+// ссылка на скриншот (ФТ-27).
 func TestFeedbackDashboard(t *testing.T) {
 	env := startFeedback(t, fbOptions{})
 	token, _ := fbUser(t, env.baseURL, 1, "Анна", "anna_dacha")
@@ -2293,7 +2343,8 @@ func TestFeedbackDashboard(t *testing.T) {
 		WHERE text = 'недавний 1'`)
 
 	long := strings.Repeat("д", 300)
-	sendText(t, env.baseURL, token, long)
+	fresh := sendFeedback(t, env.baseURL, token, map[string]string{"text": long},
+		&fbShot{filename: "screen.png", content: imageBytes(t, "png", 400, 300)})
 
 	var body struct {
 		Feedback *struct {
@@ -2316,10 +2367,13 @@ func TestFeedbackDashboard(t *testing.T) {
 	}
 
 	for i, item := range recent {
-		for _, key := range []string{"created_at", "source", "author", "text", "status", "issue", "issue_url"} {
+		for _, key := range []string{"id", "created_at", "source", "author", "text", "status", "issue", "issue_url", "screenshot_url"} {
 			if _, ok := item[key]; !ok {
 				t.Fatalf("в recent[%d] нет поля %q: %v", i, key, item)
 			}
+		}
+		if id, ok := item["id"].(float64); !ok || id <= 0 {
+			t.Fatalf("recent[%d].id должен быть номером отзыва, а он %v", i, item["id"])
 		}
 		if _, err := time.Parse(time.RFC3339, fmt.Sprint(item["created_at"])); err != nil {
 			t.Fatalf("recent[%d].created_at %q не время RFC 3339", i, item["created_at"])
@@ -2337,6 +2391,16 @@ func TestFeedbackDashboard(t *testing.T) {
 	if first["issue"] != nil || first["issue_url"] != nil {
 		t.Fatalf("пока задачи нет, issue и issue_url — null: %v", first)
 	}
+	if first["id"] != float64(fresh.ID) {
+		t.Fatalf("id на дашборде — номер отзыва %d, а он %v", fresh.ID, first["id"])
+	}
+	shotURL, ok := first["screenshot_url"].(string)
+	if !ok || !strings.HasPrefix(shotURL, "/media/") {
+		t.Fatalf("screenshot_url у отзыва со скриншотом — ссылка хранилища «/media/…», а он %v", first["screenshot_url"])
+	}
+	if _, _, err := image.DecodeConfig(bytes.NewReader(downloadFile(t, env.baseURL, shotURL))); err != nil {
+		t.Fatalf("по screenshot_url должна отдаваться картинка: %v", err)
+	}
 
 	withIssue := recent[1]
 	if withIssue["text"] != "недавний 1" || withIssue["source"] != "telegram" || withIssue["author"] != "@tester_1" || withIssue["status"] != "accepted" {
@@ -2344,6 +2408,9 @@ func TestFeedbackDashboard(t *testing.T) {
 	}
 	if withIssue["issue"] != float64(71) || withIssue["issue_url"] != "https://github.com/tester/dacha-feedback/issues/71" {
 		t.Fatalf("у отзыва с задачей — issue 71 и ссылка: %v", withIssue)
+	}
+	if withIssue["screenshot_url"] != nil {
+		t.Fatalf("без скриншота screenshot_url — null: %v", withIssue)
 	}
 	for i := 2; i < 10; i++ {
 		if want := fmt.Sprintf("недавний %d", i); recent[i]["text"] != want {
