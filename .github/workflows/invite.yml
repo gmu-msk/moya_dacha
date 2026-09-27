@@ -69,8 +69,8 @@ jobs:
             exit 1
           fi
           # sudo здесь нужен и под root: им команда уходит от имени сервиса.
-          # INVITE_PUBLIC_OUTPUT: код уходит в Telegram, номера под маской.
-          out="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; INVITE_PUBLIC_OUTPUT=1 exec moya-dacha-server \"\$@\"' _ $cmd ${PHONE:+\"$PHONE\"}")"
+          # PUBLIC_OUTPUT: код уходит в Telegram, номера под маской.
+          out="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; PUBLIC_OUTPUT=1 exec moya-dacha-server \"\$@\"' _ $cmd ${PHONE:+\"$PHONE\"}")"
           echo "$out"
           {
             echo '```'

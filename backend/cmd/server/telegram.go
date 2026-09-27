@@ -126,8 +126,10 @@ func buildNotify(args []string) error {
 
 // telegramCheck — команда telegram-check: состояние бота одним текстом
 // для итога деплоя. Проблема бота — не ошибка команды, деплой из-за неё
-// не краснеет.
+// не краснеет. С PUBLIC_OUTPUT в выводе нет ника владельца, пути до
+// Telegram и текстов ошибок (specs/018-telegram-bot.md, требование 3а).
 func telegramCheck() error {
+	public := publicOutput()
 	cfg, ok := telegramConfig()
 	if !ok {
 		fmt.Println("Бот: TELEGRAM_BOT_TOKEN не задан")
@@ -147,11 +149,15 @@ func telegramCheck() error {
 	bot := telegram.New(pool, cfg)
 
 	name, err := bot.Me(ctx)
-	if err != nil {
+	switch {
+	case err != nil && public:
+		fmt.Println("Бот: Telegram не принял токен или недоступен")
+		return nil
+	case err != nil:
 		fmt.Printf("Бот: Telegram не принял токен или недоступен: %v\n", err)
 		return nil
-	}
-	switch {
+	case public:
+		fmt.Printf("Бот: @%s\n", name)
 	case cfg.Proxy != "":
 		fmt.Printf("Бот: @%s, через туннель до второго VPS\n", name)
 	case cfg.APIURL != "":
@@ -159,9 +165,12 @@ func telegramCheck() error {
 	default:
 		fmt.Printf("Бот: @%s\n", name)
 	}
-	if cfg.Owner == "" {
+	switch {
+	case cfg.Owner == "":
 		fmt.Println("Владелец: TELEGRAM_OWNER не задан, /start никого не привяжет")
-	} else {
+	case public:
+		fmt.Println("Владелец: задан")
+	default:
 		fmt.Printf("Владелец: @%s\n", strings.TrimPrefix(cfg.Owner, "@"))
 	}
 	for _, role := range []string{telegram.RoleOwner, telegram.RoleGroup} {
@@ -175,21 +184,66 @@ func telegramCheck() error {
 		}
 		fmt.Printf("Чат %s: %s\n", role, state)
 	}
-	printGitHub(ctx, pool)
+	printGitHub(ctx, pool, public)
 	return nil
 }
 
 // printGitHub — строка про задачи GitHub (specs/019-feedback.md,
 // требование 29).
-func printGitHub(ctx context.Context, pool *pgxpool.Pool) {
+func printGitHub(ctx context.Context, pool *pgxpool.Pool, public bool) {
 	fb := feedback.New(pool, feedbackConfig(nil))
 	err := fb.Check(ctx)
 	switch {
 	case errors.Is(err, feedback.ErrNotConfigured):
 		fmt.Println("GitHub: FEEDBACK_GITHUB_TOKEN не задан — отзывы копятся в базе")
+	case err != nil && public:
+		fmt.Println("GitHub: не принял токен")
 	case err != nil:
 		fmt.Printf("GitHub: не принял токен: %v\n", err)
 	default:
 		fmt.Printf("GitHub: задачи в %s\n", fb.Repo())
 	}
+}
+
+// dashboardPassword — команда dashboard-password: адрес и пароль
+// дашборда владельцу в личку бота (specs/016-dashboard.md, требование 5).
+// Сама команда ничего секретного не печатает: её вывод — публичный лог
+// прогона «Дашборд».
+func dashboardPassword() error {
+	password := os.Getenv("DASHBOARD_PASSWORD")
+	if password == "" {
+		return errors.New("DASHBOARD_PASSWORD не задан: пароль появится после деплоя из main")
+	}
+	cfg, ok := telegramConfig()
+	if !ok {
+		return errors.New("бот не настроен: пароль некуда отправить")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		return errors.New("переменная окружения DATABASE_URL не задана")
+	}
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	text := "Дашборд МоейДачи\n"
+	if url := strings.TrimSpace(os.Getenv("PUBLIC_URL")); url != "" {
+		text += url + "/dashboard\n"
+	}
+	text += "Имя любое, пароль:\n" + password
+	err = telegram.New(pool, cfg).SendTo(ctx, telegram.RoleOwner, text)
+	if errors.Is(err, telegram.ErrNotBound) {
+		return errors.New("личка владельца в боте не привязана (/start): пароль некуда отправить")
+	}
+	if err != nil {
+		// Текст ошибки не печатается: в нём может оказаться адрес
+		// Bot API с токеном, а вывод виден всем.
+		return errors.New("пароль не отправлен: Telegram недоступен")
+	}
+	fmt.Println("Адрес и пароль дашборда отправлены владельцу в Telegram")
+	return nil
 }
