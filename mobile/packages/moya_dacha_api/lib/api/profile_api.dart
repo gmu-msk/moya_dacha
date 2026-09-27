@@ -65,6 +65,47 @@ class ProfileApi {
     return null;
   }
 
+  /// Удалить свой аккаунт
+  ///
+  /// Удаление жёсткое и сразу: уходят посты с фотографиями, комментарии, лайки, подписки, блокировки, уведомления и все сессии. Отзывы, жалобы и отчёты об ошибках остаются без имени (specs/022-edit-block-delete.md, docs/adr/0025-account-deleted-at-once.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> deleteMeWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/me';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Удалить свой аккаунт
+  ///
+  /// Удаление жёсткое и сразу: уходят посты с фотографиями, комментарии, лайки, подписки, блокировки, уведомления и все сессии. Отзывы, жалобы и отчёты об ошибках остаются без имени (specs/022-edit-block-delete.md, docs/adr/0025-account-deleted-at-once.md). 
+  Future<void> deleteMe({ Future<void>? abortTrigger, }) async {
+    final response = await deleteMeWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Мой профиль
   ///
   /// Note: This method returns the HTTP [Response].

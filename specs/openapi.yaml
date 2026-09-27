@@ -15,7 +15,8 @@ info:
     профиль пользователя для соседей (specs/009-user-profile.md),
     подписки и закрытые профили (specs/012-follows.md), видимость
     постов (specs/013-post-visibility.md), уведомления
-    (specs/014-notifications.md) и операционная проверка живости.
+    (specs/014-notifications.md), правка, блокировка и удаление
+    аккаунта (specs/022-edit-block-delete.md) и операционная проверка живости.
 
 servers:
   - url: /api
@@ -217,6 +218,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      operationId: deleteMe
+      summary: Удалить свой аккаунт
+      description: |
+        Удаление жёсткое и сразу: уходят посты с фотографиями, комментарии,
+        лайки, подписки, блокировки, уведомления и все сессии. Отзывы,
+        жалобы и отчёты об ошибках остаются без имени
+        (specs/022-edit-block-delete.md, docs/adr/0025-account-deleted-at-once.md).
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Аккаунт удалён; тела нет, токен больше не действует
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/blocked:
+    get:
+      operationId: getBlocked
+      summary: Мои блокировки
+      description: |
+        Кого смотрящий заблокировал, последние сверху, целиком: страниц
+        нет, `next_cursor` не бывает (specs/022-edit-block-delete.md).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Заблокированные
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorList"
         "401":
           description: Токена нет или он недействителен
           content:
@@ -512,6 +558,64 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /posts/{postId}/caption:
+    put:
+      operationId: editCaption
+      summary: Изменить подпись своего поста
+      description: |
+        Меняется только подпись: фотографии, видимость, лайки и
+        комментарии остаются. Проверки как у удаления, потом подпись —
+        как при создании поста (specs/022-edit-block-delete.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptionUpdate"
+      responses:
+        "200":
+          description: Пост после правки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          description: |
+            Подпись длиннее 1000 символов (`invalid_caption`), тело
+            запроса не разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Пост есть, но он чужой (`not_your_post`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /feed:
     get:
       operationId: getFeed
@@ -719,7 +823,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Пользователя нет или идентификатор не UUID (`user_not_found`)
+          description: Пользователя нет, он заблокировал смотрящего или идентификатор не UUID (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Смотрящий сам заблокировал этого пользователя (`user_blocked`)
           content:
             application/json:
               schema:
@@ -750,6 +860,68 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Пользователя нет или идентификатор не UUID (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /users/{userId}/block:
+    put:
+      operationId: blockUser
+      summary: Заблокировать
+      description: |
+        Разрывает подписки и заявки в обе стороны; пока блокировка есть,
+        двое не видят постов и комментариев друг друга, а для
+        заблокированного блокирующего нет вовсе. Идемпотентно
+        (specs/022-edit-block-delete.md).
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Пользователь заблокирован; тела нет
+        "400":
+          description: Блокировка самого себя (`cannot_block_self`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Пользователя нет, он заблокировал смотрящего или идентификатор не UUID (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: unblockUser
+      summary: Разблокировать
+      description: |
+        Снимает только блокировку: подписки сами не возвращаются.
+        Разблокировать незаблокированного — не ошибка.
+      tags: [follows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Блокировки нет; тела нет
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Пользователя нет, он заблокировал смотрящего или идентификатор не UUID (`user_not_found`)
           content:
             application/json:
               schema:
@@ -1474,6 +1646,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /posts/{postId}/comments/{commentId}:
+    put:
+      operationId: editComment
+      summary: Изменить свой комментарий
+      description: |
+        Проверки как у удаления: пост, комментарий под ним, «своё ли», и
+        только потом текст. Текст проверяется как у нового комментария.
+        Место в разговоре не меняется (specs/022-edit-block-delete.md).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+        - name: commentId
+          in: path
+          required: true
+          description: Идентификатор комментария (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentDraft"
+      responses:
+        "200":
+          description: Комментарий после правки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          description: |
+            Текста нет или он из одних пробелов (`empty_comment`), текст
+            длиннее 1000 символов (`invalid_comment`), тело запроса не
+            разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Комментарий есть, но он чужой (`not_your_comment`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: |
+            Поста нет или он не виден (`post_not_found`), комментария нет
+            либо он под другим постом (`comment_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       operationId: deleteComment
       summary: Удалить свой комментарий
@@ -1910,6 +2147,24 @@ components:
           example: 2
         visibility:
           $ref: "#/components/schemas/PostVisibility"
+        edited_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Когда подпись последний раз меняли; нет или `null`, если не
+            меняли (specs/022-edit-block-delete.md)
+
+    CaptionUpdate:
+      type: object
+      required: [caption]
+      properties:
+        caption:
+          type: string
+          description: |
+            Новая подпись, до 1000 символов после обрезки краёв; может быть
+            пустой (specs/003-posts.md)
+          example: "Первая клубника в этом году"
 
     PostVisibility:
       type: string
@@ -1980,6 +2235,13 @@ components:
           example: "И у нас такая же напасть, брызгали содой"
         author:
           $ref: "#/components/schemas/Author"
+        edited_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Когда текст последний раз меняли; нет или `null`, если не
+            меняли (specs/022-edit-block-delete.md)
 
     CommentDraft:
       type: object
@@ -2042,7 +2304,7 @@ components:
       description: |
         Пользователь, каким его видят соседи: публичное представление автора
         и то, что о себе рассказал он сам. Номера телефона нет — см. CONTEXT.md.
-      required: [id, nickname, name, about, created_at, posts, followers, following, closed]
+      required: [id, nickname, name, about, created_at, posts, followers, following, closed, blocked]
       properties:
         id:
           type: string
@@ -2089,6 +2351,12 @@ components:
         closed:
           type: boolean
           description: Закрыт ли профиль (specs/012-follows.md)
+          example: false
+        blocked:
+          type: boolean
+          description: |
+            Заблокировал ли смотрящий этого человека; в своём профиле
+            `false` (specs/022-edit-block-delete.md)
           example: false
         relation:
           $ref: "#/components/schemas/Relation"

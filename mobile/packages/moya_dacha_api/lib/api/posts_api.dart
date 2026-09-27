@@ -248,6 +248,141 @@ class PostsApi {
     }
   }
 
+  /// Изменить подпись своего поста
+  ///
+  /// Меняется только подпись: фотографии, видимость, лайки и комментарии остаются. Проверки как у удаления, потом подпись — как при создании поста (specs/022-edit-block-delete.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [CaptionUpdate] captionUpdate (required):
+  Future<Response> editCaptionWithHttpInfo(String postId, CaptionUpdate captionUpdate, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/caption'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = captionUpdate;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Изменить подпись своего поста
+  ///
+  /// Меняется только подпись: фотографии, видимость, лайки и комментарии остаются. Проверки как у удаления, потом подпись — как при создании поста (specs/022-edit-block-delete.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [CaptionUpdate] captionUpdate (required):
+  Future<Post?> editCaption(String postId, CaptionUpdate captionUpdate, { Future<void>? abortTrigger, }) async {
+    final response = await editCaptionWithHttpInfo(postId, captionUpdate, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
+  /// Изменить свой комментарий
+  ///
+  /// Проверки как у удаления: пост, комментарий под ним, «своё ли», и только потом текст. Текст проверяется как у нового комментария. Место в разговоре не меняется (specs/022-edit-block-delete.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [String] commentId (required):
+  ///   Идентификатор комментария (UUID)
+  ///
+  /// * [CommentDraft] commentDraft (required):
+  Future<Response> editCommentWithHttpInfo(String postId, String commentId, CommentDraft commentDraft, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/comments/{commentId}'
+      .replaceAll('{postId}', postId)
+      .replaceAll('{commentId}', commentId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = commentDraft;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Изменить свой комментарий
+  ///
+  /// Проверки как у удаления: пост, комментарий под ним, «своё ли», и только потом текст. Текст проверяется как у нового комментария. Место в разговоре не меняется (specs/022-edit-block-delete.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [String] commentId (required):
+  ///   Идентификатор комментария (UUID)
+  ///
+  /// * [CommentDraft] commentDraft (required):
+  Future<Comment?> editComment(String postId, String commentId, CommentDraft commentDraft, { Future<void>? abortTrigger, }) async {
+    final response = await editCommentWithHttpInfo(postId, commentId, commentDraft, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Comment',) as Comment;
+    
+    }
+    return null;
+  }
+
   /// Комментарии поста
   ///
   /// Комментарии поста от старого к новому: это разговор, и читается он сверху вниз. Приходят целиком, без страниц — под постом их столько, что курсор не нужен (specs/006-comments.md). 

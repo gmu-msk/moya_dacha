@@ -199,6 +199,8 @@ class ApiClient {
           return Author.fromJson(value);
         case 'AuthorList':
           return AuthorList.fromJson(value);
+        case 'CaptionUpdate':
+          return CaptionUpdate.fromJson(value);
         case 'Comment':
           return Comment.fromJson(value);
         case 'CommentDraft':

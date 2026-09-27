@@ -17,6 +17,7 @@ class Comment {
     required this.createdAt,
     required this.text,
     required this.author,
+    this.editedAt,
   });
 
   /// Идентификатор комментария (UUID)
@@ -30,12 +31,16 @@ class Comment {
 
   Author author;
 
+  /// Когда текст последний раз меняли; нет или `null`, если не меняли (specs/022-edit-block-delete.md) 
+  DateTime? editedAt;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Comment &&
     other.id == id &&
     other.createdAt == createdAt &&
     other.text == text &&
-    other.author == author;
+    other.author == author &&
+    other.editedAt == editedAt;
 
   @override
   int get hashCode =>
@@ -43,10 +48,11 @@ class Comment {
     (id.hashCode) +
     (createdAt.hashCode) +
     (text.hashCode) +
-    (author.hashCode);
+    (author.hashCode) +
+    (editedAt == null ? 0 : editedAt!.hashCode);
 
   @override
-  String toString() => 'Comment[id=$id, createdAt=$createdAt, text=$text, author=$author]';
+  String toString() => 'Comment[id=$id, createdAt=$createdAt, text=$text, author=$author, editedAt=$editedAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -54,6 +60,11 @@ class Comment {
       json[r'created_at'] = this.createdAt.toUtc().toIso8601String();
       json[r'text'] = this.text;
       json[r'author'] = this.author;
+    if (this.editedAt != null) {
+      json[r'edited_at'] = this.editedAt!.toUtc().toIso8601String();
+    } else {
+      json[r'edited_at'] = null;
+    }
     return json;
   }
 
@@ -84,6 +95,7 @@ class Comment {
         createdAt: mapDateTime(json, r'created_at', r'')!,
         text: mapValueOfType<String>(json, r'text')!,
         author: Author.fromJson(json[r'author'])!,
+        editedAt: mapDateTime(json, r'edited_at', r''),
       );
     }
     return null;
