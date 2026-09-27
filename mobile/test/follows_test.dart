@@ -58,6 +58,7 @@ void main() {
   UserProfile profile({
     required bool closed,
     RelationFollowingEnum? following,
+    bool blocked = false,
   }) => UserProfile(
     id: '00000000-0000-0000-0000-000000000002',
     nickname: 'nikolay_ogorod',
@@ -68,6 +69,7 @@ void main() {
     followers: 18,
     following: 12,
     closed: closed,
+    blocked: blocked,
     relation: following == null ? null : relation(following),
   );
 
@@ -95,6 +97,21 @@ void main() {
         mine: false,
       ),
       isTrue,
+    );
+  });
+
+  test('внутрь заблокированного не заглянуть, пока не разблокируешь', () {
+    // specs/022-edit-block-delete.md, требование 15.
+    expect(
+      UserScreenState.canSeeInside(
+        profile(
+          closed: false,
+          following: RelationFollowingEnum.none,
+          blocked: true,
+        ),
+        mine: false,
+      ),
+      isFalse,
     );
   });
 

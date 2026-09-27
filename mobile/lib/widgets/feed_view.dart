@@ -368,8 +368,7 @@ class FeedViewState extends State<FeedView> {
             return _footer();
           }
           final post = _posts[index];
-          final fresh =
-              DateTime.now().difference(_shownAt) < _entranceWindow;
+          final fresh = DateTime.now().difference(_shownAt) < _entranceWindow;
           return Entrance(
             key: ValueKey('${post.id}-$_generation'),
             animate: fresh,
@@ -531,6 +530,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
               author: post.author,
               when: post.createdAt,
               visibility: post.visibility,
+              edited: post.editedAt != null,
               onTap: widget.onOpenAuthor == null
                   ? null
                   : () => widget.onOpenAuthor!(post.author),
@@ -542,6 +542,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
             child: PostedLine(
               when: post.createdAt,
               visibility: post.visibility,
+              edited: post.editedAt != null,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
