@@ -91,14 +91,14 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
 	// только отвечает на вопрос «есть ли что-то дальше».
 	rows, err := s.db.Query(ctx, `
-		SELECT p.id, p.created_at, p.caption, p.visibility,
+		SELECT p.id, p.created_at, p.edited_at, p.caption, p.visibility,
 			u.id, u.nickname, u.name, u.avatar_key,
 			(SELECT count(*) FROM post_likes l WHERE l.post_id = p.id),
 			EXISTS (
 				SELECT 1 FROM post_likes l
 				WHERE l.post_id = p.id AND l.user_id = $4::uuid
 			),
-			(SELECT count(*) FROM comments c WHERE c.post_id = p.id)
+			`+commentCount("$4")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
 		WHERE ($5::uuid IS NULL OR p.author_id = $5::uuid)
 		  AND `+postVisibleTo("$4")+`
@@ -125,7 +125,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 			avatarKey *string
 		)
 		if err := rows.Scan(
-			&post.Id, &post.CreatedAt, &post.Caption, &post.Visibility,
+			&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption, &post.Visibility,
 			&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 			&post.Likes, &post.Liked, &post.Comments,
 		); err != nil {

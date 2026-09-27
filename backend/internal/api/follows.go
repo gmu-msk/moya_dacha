@@ -39,6 +39,23 @@ func (s *Server) FollowUser(ctx context.Context, request gen.FollowUserRequestOb
 		return gen.FollowUser400JSONResponse(errCannotFollowSelf), nil
 	}
 
+	// Того, кто заблокировал смотрящего, для него нет, а на того, кого
+	// заблокировал он сам, сначала надо разблокировать
+	// (specs/022-edit-block-delete.md, требования 14 и 15).
+	var theyBlocked, iBlocked bool
+	if err := s.db.QueryRow(ctx,
+		`SELECT `+blocks("$2::uuid", "$1::uuid")+`, `+blocks("$1::uuid", "$2::uuid"),
+		current.user.Id, request.UserId,
+	).Scan(&theyBlocked, &iBlocked); err != nil {
+		return nil, err
+	}
+	if theyBlocked {
+		return gen.FollowUser404JSONResponse(errUserNotFound), nil
+	}
+	if iBlocked {
+		return gen.FollowUser409JSONResponse(errUserBlocked), nil
+	}
+
 	// Закрыт ли профиль, решает база в той же вставке: между проверкой
 	// и записью хозяин мог бы профиль открыть или закрыть.
 	tag, err := s.db.Exec(ctx, `
@@ -103,7 +120,8 @@ func (s *Server) relation(ctx context.Context, viewerID, userID string) (gen.Rel
 		following string
 		relation  gen.Relation
 	)
-	err := s.db.QueryRow(ctx, `SELECT `+relationColumns+` FROM users u WHERE u.id = $1`,
+	err := s.db.QueryRow(ctx, `SELECT `+relationColumns+` FROM users u
+		WHERE u.id = $1 AND NOT `+blocks("u.id", "$2::uuid"),
 		userID, viewerID,
 	).Scan(&following, &relation.FollowedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -192,6 +210,7 @@ func (s *Server) followList(ctx context.Context, viewerID, userID string, follow
 		SELECT u.id, u.nickname, u.name, u.avatar_key, f.created_at, `+relationColumns+`
 		FROM follows f JOIN users u ON u.id = `+person+`
 		WHERE `+owner+` = $1 AND f.accepted
+		  AND NOT `+blockedBetween("$2::uuid", "u.id")+`
 		  AND ($3::timestamptz IS NULL OR (f.created_at, u.id) < ($3::timestamptz, $4::uuid))
 		ORDER BY f.created_at DESC, u.id DESC
 		LIMIT $5`, userID, viewerID, afterTime, afterID, limit+1)
@@ -259,7 +278,7 @@ func (s *Server) profileAccess(ctx context.Context, viewerID, userID string) (pr
 			SELECT 1 FROM follows f
 			WHERE f.follower_id = $2 AND f.followee_id = u.id AND f.accepted
 		)
-		FROM users u WHERE u.id = $1`, userID, viewerID,
+		FROM users u WHERE u.id = $1 AND NOT `+blocks("u.id", "$2::uuid"), userID, viewerID,
 	).Scan(&open)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return profileMissing, nil
@@ -337,6 +356,7 @@ func (s *Server) GetFollowRequests(ctx context.Context, request gen.GetFollowReq
 		SELECT u.id, u.nickname, u.name, u.avatar_key, f.created_at
 		FROM follows f JOIN users u ON u.id = f.follower_id
 		WHERE f.followee_id = $1 AND NOT f.accepted
+		  AND NOT `+blockedBetween("$1::uuid", "u.id")+`
 		  AND ($2::timestamptz IS NULL OR (f.created_at, u.id) < ($2::timestamptz, $3::uuid))
 		ORDER BY f.created_at DESC, u.id DESC
 		LIMIT $4`, current.user.Id, afterTime, afterID, limit+1)

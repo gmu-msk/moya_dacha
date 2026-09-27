@@ -14,11 +14,18 @@ import (
 // предела (specs/006-comments.md, требование 4).
 const MaxCommentLength = MaxCaptionLength
 
-// commentColumn — число комментариев под постом, как его считает любой
+// commentCount — число комментариев под постом p, как его считает любой
 // запрос поста. Счётчика в таблице постов нет по тем же причинам, что
-// и у лайков (specs/006-comments.md, требование 8).
-const commentColumn = `
-	(SELECT count(*) FROM comments c WHERE c.post_id = p.id) AS comments`
+// и у лайков (specs/006-comments.md, требование 8). Считается для
+// смотрящего: комментарии тех, с кем у него блокировка, в число не входят
+// (specs/022-edit-block-delete.md, требование 13).
+func commentCount(viewer string) string {
+	return `(SELECT count(*) FROM comments c WHERE c.post_id = p.id
+		AND NOT ` + blockedBetween(viewer+"::uuid", "c.author_id") + `)`
+}
+
+// commentFields — комментарий c и его автор u в порядке scanComment.
+const commentFields = `c.id, c.created_at, c.edited_at, c.text, u.id, u.nickname, u.name, u.avatar_key`
 
 // GetComments отдаёт разговор под постом целиком, от старого к новому:
 // страниц у него нет (specs/006-comments.md, требование 6).
@@ -36,7 +43,7 @@ func (s *Server) GetComments(ctx context.Context, request gen.GetCommentsRequest
 		return gen.GetComments404JSONResponse(errPostNotFound), nil
 	}
 
-	items, err := s.comments(ctx, request.PostId)
+	items, err := s.comments(ctx, request.PostId, current.user.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -81,9 +88,9 @@ func (s *Server) AddComment(ctx context.Context, request gen.AddCommentRequestOb
 		WITH added AS (
 			INSERT INTO comments (post_id, author_id, text)
 			VALUES ($1, $2, $3)
-			RETURNING id, created_at, author_id, text
+			RETURNING id, created_at, edited_at, author_id, text
 		)
-		SELECT c.id, c.created_at, c.text, u.id, u.nickname, u.name, u.avatar_key
+		SELECT `+commentFields+`
 		FROM added c JOIN users u ON u.id = c.author_id`,
 		request.PostId, current.user.Id, text)
 
@@ -115,13 +122,15 @@ func (s *Server) postExists(ctx context.Context, id, viewerID string) (bool, err
 
 // comments читает комментарии поста в их единственном порядке: от
 // старого к новому, а при одинаковом времени — по идентификатору
-// (specs/006-comments.md, требование 5).
-func (s *Server) comments(ctx context.Context, postID string) ([]gen.Comment, error) {
+// (specs/006-comments.md, требование 5). Комментарии тех, с кем у
+// смотрящего блокировка, ему не видны (specs/022-edit-block-delete.md,
+// требование 13).
+func (s *Server) comments(ctx context.Context, postID, viewerID string) ([]gen.Comment, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, c.created_at, c.text, u.id, u.nickname, u.name, u.avatar_key
+		SELECT `+commentFields+`
 		FROM comments c JOIN users u ON u.id = c.author_id
-		WHERE c.post_id = $1
-		ORDER BY c.created_at, c.id`, postID)
+		WHERE c.post_id = $1 AND NOT `+blockedBetween("$2::uuid", "c.author_id")+`
+		ORDER BY c.created_at, c.id`, postID, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +162,7 @@ func (s *Server) scanComment(row scannable) (gen.Comment, error) {
 		avatarKey *string
 	)
 	if err := row.Scan(
-		&comment.Id, &comment.CreatedAt, &comment.Text,
+		&comment.Id, &comment.CreatedAt, &comment.EditedAt, &comment.Text,
 		&comment.Author.Id, &comment.Author.Nickname, &comment.Author.Name, &avatarKey,
 	); err != nil {
 		return gen.Comment{}, err
