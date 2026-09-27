@@ -10,6 +10,7 @@ import '../api.dart';
 import '../theme.dart';
 import 'author_line.dart';
 import 'confirm.dart';
+import 'edit_text_dialog.dart';
 import 'error_view.dart';
 import 'loading_view.dart';
 import 'report_dialog.dart';
@@ -116,9 +117,8 @@ class _CommentsViewState extends State<CommentsView> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(errorMessage(error))));
     } finally {
       if (mounted) {
         setState(() => _sending = false);
@@ -156,10 +156,34 @@ class _CommentsViewState extends State<CommentsView> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(errorMessage(error))));
     }
+  }
+
+  /// Поправить свой комментарий: место в разговоре то же
+  /// (specs/022-edit-block-delete.md, требование 3).
+  Future<void> _edit(Comment comment) async {
+    final updated = await editText<Comment>(
+      context,
+      title: 'Изменить комментарий',
+      initial: comment.text,
+      label: 'Комментарий',
+      maxLength: maxCommentLength,
+      allowEmpty: false,
+      save: (text) =>
+          _api.editComment(widget.postId, comment.id, CommentDraft(text: text)),
+    );
+    if (!mounted || updated == null) {
+      return;
+    }
+    debugPrint('$logMarker comment=edited id=${comment.id}');
+    setState(
+      () => _comments = [
+        for (final item in _comments ?? const <Comment>[])
+          if (item.id == comment.id) updated else item,
+      ],
+    );
   }
 
   /// Пожаловаться на чужой комментарий. Комментарий остаётся на месте,
@@ -169,7 +193,8 @@ class _CommentsViewState extends State<CommentsView> {
     await askAndReport(
       context,
       title: 'Пожаловаться на комментарий?',
-      question: 'Жалобу посмотрит владелец сервиса. Комментарий '
+      question:
+          'Жалобу посмотрит владелец сервиса. Комментарий '
           'останется на месте, и автор о ней не узнает.',
       send: (reason) => _api.reportComment(
         widget.postId,
@@ -204,6 +229,7 @@ class _CommentsViewState extends State<CommentsView> {
             _CommentTile(
               comment: comment,
               mine: comment.author.id == widget.viewerId,
+              onEdit: () => _edit(comment),
               onDelete: () => _delete(comment),
               onReport: () => _report(comment),
               onOpenAuthor: widget.onOpenAuthor == null
@@ -222,6 +248,7 @@ class _CommentTile extends StatelessWidget {
   const _CommentTile({
     required this.comment,
     required this.mine,
+    required this.onEdit,
     required this.onDelete,
     required this.onReport,
     this.onOpenAuthor,
@@ -233,6 +260,7 @@ class _CommentTile extends StatelessWidget {
   /// никогда наоборот (specs/008-reports.md, требование 3).
   final bool mine;
 
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onReport;
   final VoidCallback? onOpenAuthor;
@@ -252,9 +280,16 @@ class _CommentTile extends StatelessWidget {
                 child: AuthorLine(
                   author: comment.author,
                   when: comment.createdAt,
+                  edited: comment.editedAt != null,
                   onTap: onOpenAuthor,
                 ),
               ),
+              if (mine)
+                IconButton(
+                  tooltip: 'Изменить комментарий',
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
               if (mine)
                 IconButton(
                   tooltip: 'Удалить комментарий',

@@ -13,6 +13,7 @@ import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
 import '../widgets/comments_view.dart';
 import '../widgets/confirm.dart';
+import '../widgets/edit_text_dialog.dart';
 import '../widgets/feed_view.dart';
 import '../widgets/like_button.dart';
 import '../widgets/report_dialog.dart';
@@ -94,6 +95,27 @@ class _PostScreenState extends State<PostScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(errorMessage(error))));
     }
+  }
+
+  /// Поправить подпись. Фотографии, лайки и комментарии остаются
+  /// (specs/022-edit-block-delete.md, требование 1).
+  Future<void> _editCaption() async {
+    final updated = await editText<Post>(
+      context,
+      title: 'Изменить подпись',
+      initial: post.caption,
+      label: 'Подпись',
+      maxLength: maxCaptionLength,
+      allowEmpty: true,
+      save: (text) =>
+          PostsApi(apiClient(token: widget.token))
+              .editCaption(post.id, CaptionUpdate(caption: text)),
+    );
+    if (!mounted || updated == null) {
+      return;
+    }
+    debugPrint('$logMarker post=caption_edited id=${post.id}');
+    _changed(updated);
   }
 
   Future<void> _changeVisibility() async {
@@ -189,6 +211,12 @@ class _PostScreenState extends State<PostScreen> {
           ),
         if (_mine)
           IconButton(
+            tooltip: 'Изменить подпись',
+            onPressed: _deleting ? null : _editCaption,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+        if (_mine)
+          IconButton(
             tooltip: 'Удалить пост',
             onPressed: _deleting ? null : _delete,
             icon: const Icon(Icons.delete_outline),
@@ -230,6 +258,7 @@ class _PostScreenState extends State<PostScreen> {
                   author: post.author,
                   when: post.createdAt,
                   visibility: post.visibility,
+                  edited: post.editedAt != null,
                   onTap: () => _openAuthor(post.author),
                 ),
                 if (post.caption.isNotEmpty) ...[

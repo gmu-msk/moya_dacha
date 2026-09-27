@@ -107,15 +107,19 @@ class UserScreenState extends State<UserScreen> {
   UserProfile? _profile;
   String? _error;
   bool _editing = false;
+  bool _blocking = false;
 
   bool get _mine => widget.userId == widget.viewerId;
 
   /// Видны ли смотрящему посты и списки: профиль открыт, свой или
   /// смотрящий подписан (specs/012-follows.md, требование 7).
+  /// Заблокированного не видно, пока не разблокируешь
+  /// (specs/022-edit-block-delete.md, требование 15).
   static bool canSeeInside(UserProfile profile, {required bool mine}) =>
       mine ||
-      !profile.closed ||
-      profile.relation?.following == RelationFollowingEnum.yes;
+      !profile.blocked &&
+          (!profile.closed ||
+              profile.relation?.following == RelationFollowingEnum.yes);
 
   @override
   void initState() {
@@ -312,8 +316,87 @@ class UserScreenState extends State<UserScreen> {
       // Профиль смотрят, а не проверяют связь.
       showServerStatus: false,
       padded: false,
+      actions: [
+        if (profile != null && !_mine)
+          PopupMenuButton<bool>(
+            tooltip: 'Ещё',
+            enabled: !_blocking,
+            onSelected: (block) => block ? _block(profile) : _unblock(),
+            itemBuilder: (_) => [
+              profile.blocked
+                  ? const PopupMenuItem(
+                      value: false,
+                      child: Text('Разблокировать'),
+                    )
+                  : const PopupMenuItem(
+                      value: true,
+                      child: Text('Заблокировать'),
+                    ),
+            ],
+          ),
+      ],
       child: body,
     );
+  }
+
+  /// Заблокировать после вопроса: подписки пропадут в обе стороны
+  /// (specs/022-edit-block-delete.md, требования 11 и 27).
+  Future<void> _block(UserProfile profile) async {
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Заблокировать @${profile.nickname}?'),
+        content: const Text(
+          'Он перестанет видеть ваши посты и комментарии, а вы — его. '
+          'Подписки между вами пропадут.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Заблокировать'),
+          ),
+        ],
+      ),
+    );
+    if (agreed != true || !mounted) {
+      return;
+    }
+    await _setBlocked(block: true);
+  }
+
+  Future<void> _unblock() => _setBlocked(block: false);
+
+  Future<void> _setBlocked({required bool block}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _blocking = true);
+    try {
+      final api = FollowsApi(apiClient(token: widget.token));
+      if (block) {
+        await api.blockUser(widget.userId);
+      } else {
+        await api.unblockUser(widget.userId);
+      }
+      debugPrint(
+        '$logMarker user=${block ? 'blocked' : 'unblocked'} id=${widget.userId}',
+      );
+      // Подписки могли пропасть, посты — спрятаться или открыться.
+      widget.onFollowChanged?.call();
+      await _load();
+    } on Exception catch (error) {
+      debugPrint('$logMarker user=block_failed error=$error');
+      messenger.showSnackBar(SnackBar(content: Text(errorMessage(error))));
+    } finally {
+      if (mounted) {
+        setState(() => _blocking = false);
+      }
+    }
   }
 
   Widget _content(UserProfile profile) {
@@ -347,7 +430,7 @@ class UserScreenState extends State<UserScreen> {
             ),
           ),
         ),
-        if (!_mine && relation != null)
+        if (!_mine && relation != null && !profile.blocked)
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: AppGap.medium),
             sliver: SliverToBoxAdapter(
@@ -375,7 +458,22 @@ class UserScreenState extends State<UserScreen> {
               ),
             ),
           ),
-        if (!inside)
+        if (profile.blocked && !_mine)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: const EdgeInsets.all(AppGap.large),
+              child: EmptyView(
+                icon: Icons.block_outlined,
+                title: 'Вы заблокировали этого человека',
+                action: OutlinedButton(
+                  onPressed: _blocking ? null : _unblock,
+                  child: const Text('Разблокировать'),
+                ),
+              ),
+            ),
+          )
+        else if (!inside)
           SliverFillRemaining(
             hasScrollBody: false,
             child: Padding(

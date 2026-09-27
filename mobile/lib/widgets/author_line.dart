@@ -15,6 +15,7 @@ class AuthorLine extends StatelessWidget {
     required this.author,
     required this.when,
     this.visibility,
+    this.edited = false,
     this.onTap,
   });
 
@@ -26,6 +27,10 @@ class AuthorLine extends StatelessWidget {
   /// Кто видит пост: у «друзьям» и «только мне» рядом со временем
   /// отметка (specs/013-post-visibility.md, требование 7).
   final PostVisibility? visibility;
+
+  /// Меняли ли текст: рядом со временем — «изменено»
+  /// (specs/022-edit-block-delete.md, требование 26).
+  final bool edited;
 
   /// Открыть профиль автора: имя и аватар ведут к нему
   /// (specs/009-user-profile.md, требование 9).
@@ -52,7 +57,7 @@ class AuthorLine extends StatelessWidget {
           color: theme.colorScheme.secondary,
         ),
       ),
-      subtitle: PostedLine(when: when, visibility: visibility),
+      subtitle: PostedLine(when: when, visibility: visibility, edited: edited),
     );
   }
 }
@@ -63,24 +68,27 @@ class PostedLine extends StatelessWidget {
     super.key,
     required this.when,
     this.visibility,
+    this.edited = false,
     this.style,
   });
 
   final DateTime when;
   final PostVisibility? visibility;
+  final bool edited;
   final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
     final visibility = this.visibility;
     final mark = visibility == null ? null : visibilityMark(visibility);
+    final posted = edited ? '${whenPosted(when)} · изменено' : whenPosted(when);
     if (visibility == null || mark == null) {
-      return Text(whenPosted(when), style: style);
+      return Text(posted, style: style);
     }
     final base = style ?? DefaultTextStyle.of(context).style;
     return Text.rich(
       TextSpan(
-        text: '${whenPosted(when)} · ',
+        text: '$posted · ',
         children: [
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,

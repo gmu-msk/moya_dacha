@@ -16,9 +16,11 @@ import '../api.dart';
 import '../theme.dart';
 import '../usage.dart';
 import '../widgets/app_screen.dart';
+import '../widgets/confirm.dart';
 import '../widgets/error_view.dart';
 import '../widgets/user_avatar.dart';
 import 'about_screen.dart';
+import 'blocked_screen.dart';
 import 'feedback_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -171,6 +173,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await widget.onSignedOut();
   }
 
+  /// Удалить аккаунт: два вопроса подряд, потом тот же путь, что у
+  /// выхода, — только сессии на сервисе уже нет
+  /// (specs/022-edit-block-delete.md, требования 20 и 28).
+  Future<void> _deleteAccount() async {
+    final first = await confirmDelete(
+      context,
+      title: 'Удалить аккаунт?',
+      question:
+          'Уйдут ваши посты с фотографиями, комментарии, лайки и '
+          'подписки. Вернуть их будет нельзя.',
+    );
+    if (!first || !mounted) {
+      return;
+    }
+    final second = await confirmDelete(
+      context,
+      title: 'Точно удалить?',
+      question: 'Точно удалить аккаунт @${_user.nickname} навсегда?',
+    );
+    if (!second || !mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await _api.deleteMe();
+      debugPrint('$logMarker account=deleted');
+    } on Exception catch (error) {
+      debugPrint('$logMarker account=delete_failed error=$error');
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+      messenger.showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      return;
+    }
+    // Токена на сервисе уже нет: заход в приложении закрывается здесь, а
+    // отправить его конец некуда (specs/020-app-sessions.md).
+    await usage.finish();
+    await widget.onSignedOut();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -270,6 +314,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'Новых подписчиков вы одобряете сами.',
               ),
             ),
+            // Свои блокировки (specs/022-edit-block-delete.md, требование 27).
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.block_outlined),
+              title: const Text('Заблокированные'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => BlockedScreen(token: widget.token),
+                ),
+              ),
+            ),
             const Divider(),
             const SizedBox(height: AppGap.medium),
             Text('Номер телефона', style: theme.textTheme.labelMedium),
@@ -298,6 +354,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 MaterialPageRoute<void>(builder: (_) => const AboutScreen()),
               ),
               child: const Text('О приложении'),
+            ),
+            const SizedBox(height: AppGap.large),
+            TextButton(
+              onPressed: _busy ? null : _deleteAccount,
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
+              child: const Text('Удалить аккаунт'),
             ),
           ],
         ),
