@@ -986,9 +986,9 @@ func TestCommentCannotBeChanged(t *testing.T) {
 		method string
 		url    string
 	}{
-		"правка комментария":            {http.MethodPut, baseURL + "/comments/" + comment.ID},
-		"частичная правка":              {http.MethodPatch, baseURL + "/posts/" + post.ID + "/comments/" + comment.ID},
-		"правка списка целиком":         {http.MethodPut, baseURL + "/posts/" + post.ID + "/comments"},
+		"правка комментария":    {http.MethodPut, baseURL + "/comments/" + comment.ID},
+		"частичная правка":      {http.MethodPatch, baseURL + "/posts/" + post.ID + "/comments/" + comment.ID},
+		"правка списка целиком": {http.MethodPut, baseURL + "/posts/" + post.ID + "/comments"},
 	}
 
 	for name, attempt := range attempts {
