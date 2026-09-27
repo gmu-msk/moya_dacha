@@ -51,11 +51,13 @@ func (s *Server) EditCaption(ctx context.Context, request gen.EditCaptionRequest
 	if author != current.user.Id {
 		return gen.EditCaption403JSONResponse(errNotYourPostEdit), nil
 	}
-	if request.Body == nil {
+	// Пустая подпись допустима, а тело без подписи — нет: иначе ошибка
+	// клиента молча стёрла бы подпись.
+	if request.Body == nil || request.Body.Caption == nil {
 		return gen.EditCaption400JSONResponse(errInvalidEdit), nil
 	}
 
-	caption := strings.TrimSpace(request.Body.Caption)
+	caption := strings.TrimSpace(*request.Body.Caption)
 	if utf8.RuneCountInString(caption) > MaxCaptionLength {
 		return gen.EditCaption400JSONResponse(errInvalidCaption), nil
 	}

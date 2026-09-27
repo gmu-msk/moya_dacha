@@ -2157,13 +2157,16 @@ components:
 
     CaptionUpdate:
       type: object
-      required: [caption]
+      # Поле нужно всегда, но в required его нет нарочно: пустая подпись
+      # допустима, а тело без подписи — 400 invalid_request, и серверу
+      # надо отличить «нет поля» от «пустая строка».
       properties:
         caption:
           type: string
           description: |
             Новая подпись, до 1000 символов после обрезки краёв; может быть
-            пустой (specs/003-posts.md)
+            пустой (specs/003-posts.md). Обязательна: тело без неё —
+            `invalid_request`.
           example: "Первая клубника в этом году"
 
     PostVisibility:
