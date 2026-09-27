@@ -26,13 +26,16 @@ func postVisibleTo(viewer string) string {
 		)`, from, to)
 	}
 	v := viewer + "::uuid"
+	// Блокировка в любую сторону прячет посты обоих друг от друга
+	// (specs/022-edit-block-delete.md, требование 12).
 	return `(p.author_id = ` + v + `
-		OR (p.visibility = 'all' AND (
-			NOT (SELECT pa.closed FROM users pa WHERE pa.id = p.author_id)
-			OR ` + follows(v, "p.author_id") + `))
-		OR (p.visibility = 'friends'
-			AND ` + follows(v, "p.author_id") + `
-			AND ` + follows("p.author_id", v) + `))`
+		OR (NOT ` + blockedBetween(v, "p.author_id") + ` AND (
+			(p.visibility = 'all' AND (
+				NOT (SELECT pa.closed FROM users pa WHERE pa.id = p.author_id)
+				OR ` + follows(v, "p.author_id") + `))
+			OR (p.visibility = 'friends'
+				AND ` + follows(v, "p.author_id") + `
+				AND ` + follows("p.author_id", v) + `))))`
 }
 
 // validVisibility — одна из трёх видимостей контракта.

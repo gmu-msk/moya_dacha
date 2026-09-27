@@ -243,14 +243,14 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		avatarKey *string
 	)
 	if err := s.db.QueryRow(ctx, `
-		SELECT p.id, p.created_at, p.caption, p.visibility,
+		SELECT p.id, p.created_at, p.edited_at, p.caption, p.visibility,
 			u.id, u.nickname, u.name, u.avatar_key,
 			`+likeColumns+`,
-			`+commentColumn+`
+			`+commentCount("$2")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
 		WHERE p.id = $1 AND `+postVisibleTo("$2"), id, viewerID,
 	).Scan(
-		&post.Id, &post.CreatedAt, &post.Caption, &post.Visibility,
+		&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption, &post.Visibility,
 		&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 		&post.Likes, &post.Liked, &post.Comments,
 	); err != nil {

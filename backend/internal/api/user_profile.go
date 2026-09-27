@@ -33,17 +33,21 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 	)
 	// Заявки в числа не входят (требование 12). Посты — только видимые
 	// смотрящему, а у закрытого профиля без подписки — те, что он увидит,
-	// когда подпишется: «Подписчикам» (требование 13).
+	// когда подпишется: «Подписчикам» (требование 13). При блокировке
+	// постов нет вовсе, а того, кто заблокировал смотрящего, нет для него
+	// самого (specs/022-edit-block-delete.md, требования 14 и 15).
 	err := s.db.QueryRow(ctx, `
 		SELECT u.id, u.nickname, u.name, u.about, u.avatar_key, u.created_at, u.closed,
 			(SELECT count(*) FROM posts p WHERE p.author_id = u.id
+				AND NOT `+blockedBetween("$2::uuid", "u.id")+`
 				AND (p.visibility = 'all' OR `+postVisibleTo("$2")+`)),
 			(SELECT count(*) FROM follows f WHERE f.followee_id = u.id AND f.accepted),
 			(SELECT count(*) FROM follows f WHERE f.follower_id = u.id AND f.accepted),
+			`+blocks("$2::uuid", "u.id")+`,
 			`+relationColumns+`
-		FROM users u WHERE u.id = $1`, request.UserId, current.user.Id,
+		FROM users u WHERE u.id = $1 AND NOT `+blocks("u.id", "$2::uuid"), request.UserId, current.user.Id,
 	).Scan(&user.Id, &user.Nickname, &user.Name, &user.About, &avatarKey, &user.CreatedAt,
-		&user.Closed, &user.Posts, &user.Followers, &user.Following,
+		&user.Closed, &user.Posts, &user.Followers, &user.Following, &user.Blocked,
 		&following, &relation.FollowedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.GetUser404JSONResponse(errUserNotFound), nil

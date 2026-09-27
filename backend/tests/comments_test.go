@@ -971,9 +971,9 @@ func TestFeedShowsCommentCountOfEveryPost(t *testing.T) {
 
 // --- Жизнь комментария ----------------------------------------------------
 
-// Комментарий неизменяем: исправить написанное нельзя, и ручки для
-// этого в контракте нет — любой такой запрос отвергается, а текст
-// остаётся прежним (ФТ-9).
+// Комментарий правится только по адресу своего поста
+// (specs/022-edit-block-delete.md): любой другой запрос на правку
+// отвергается, а текст остаётся прежним (ФТ-9).
 func TestCommentCannotBeChanged(t *testing.T) {
 	baseURL := startAPI(t)
 
@@ -987,7 +987,6 @@ func TestCommentCannotBeChanged(t *testing.T) {
 		url    string
 	}{
 		"правка комментария":            {http.MethodPut, baseURL + "/comments/" + comment.ID},
-		"правка комментария под постом": {http.MethodPut, baseURL + "/posts/" + post.ID + "/comments/" + comment.ID},
 		"частичная правка":              {http.MethodPatch, baseURL + "/posts/" + post.ID + "/comments/" + comment.ID},
 		"правка списка целиком":         {http.MethodPut, baseURL + "/posts/" + post.ID + "/comments"},
 	}
@@ -996,7 +995,7 @@ func TestCommentCannotBeChanged(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := do(t, attempt.method, attempt.url, token, map[string]any{"text": "передумал"})
 			if resp.StatusCode < 400 {
-				t.Fatalf("%s: комментарий неизменяем, а запрос принят со статусом %d", name, resp.StatusCode)
+				t.Fatalf("%s: правки по этому адресу нет, а запрос принят со статусом %d", name, resp.StatusCode)
 			}
 		})
 	}
