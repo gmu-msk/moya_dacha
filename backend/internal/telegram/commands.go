@@ -42,6 +42,10 @@ type message struct {
 	Photo           []struct {
 		FileID string `json:"file_id"`
 	} `json:"photo"`
+	// Contact — карточка из телефонной книги (требование 28).
+	Contact *struct {
+		PhoneNumber string `json:"phone_number"`
+	} `json:"contact"`
 	From *struct {
 		IsBot     bool   `json:"is_bot"`
 		Username  string `json:"username"`
@@ -56,6 +60,7 @@ type message struct {
 
 // Run читает обновления, пока не отменён ctx (требование 21).
 func (b *Bot) Run(ctx context.Context) {
+	b.syncMenu(ctx)
 	var offset int64
 	for ctx.Err() == nil {
 		var updates []update
@@ -104,11 +109,25 @@ func (b *Bot) isOwner(m *message) bool {
 
 func (b *Bot) handle(ctx context.Context, m *message) error {
 	cmd := command(m.Text)
+	private := m.Chat.Type == "private"
+	group := m.Chat.Type == "group" || m.Chat.Type == "supergroup"
+
+	// Номер для приглашения: контакт или ответ на /invite без номера
+	// (требования 27–28). Команда снимает ожидание.
+	if private && b.isOwner(m) {
+		if cmd != "" {
+			b.setAwaitPhone(false)
+		} else if phone, ok := b.phoneFromOwner(m); ok {
+			text, err := b.invite(ctx, phone)
+			if err != nil {
+				return err
+			}
+			return b.Send(ctx, m.Chat.ID, text)
+		}
+	}
 	if cmd == "" {
 		return b.takeFeedback(ctx, m)
 	}
-	private := m.Chat.Type == "private"
-	group := m.Chat.Type == "group" || m.Chat.Type == "supergroup"
 
 	if !b.isOwner(m) {
 		// В группе чужие команды молча пропускаются (требование 7).
@@ -123,6 +142,7 @@ func (b *Bot) handle(ctx context.Context, m *message) error {
 		if err := b.bind(ctx, RoleOwner, m.Chat.ID, nil); err != nil {
 			return err
 		}
+		b.syncMenu(ctx)
 		return b.Send(ctx, m.Chat.ID, textOwnerBound)
 	case (cmd == "/group" || cmd == "/группа") && group:
 		if err := b.bind(ctx, RoleGroup, m.Chat.ID, nil); err != nil {
@@ -138,6 +158,15 @@ func (b *Bot) handle(ctx context.Context, m *message) error {
 			return err
 		}
 		return b.reply(ctx, m, textIdeasBound)
+	case isInviteCommand(cmd) && private:
+		text, err := b.inviteCommand(ctx, cmd, m.Text)
+		if err != nil {
+			return err
+		}
+		return b.Send(ctx, m.Chat.ID, text)
+	case isInviteCommand(cmd):
+		// Код не должен попасть в группу (требование 32).
+		return b.reply(ctx, m, textInvitesGroup)
 	case cmd == "/inbox" || cmd == "/входящие":
 		return b.reply(ctx, m, b.inbox(ctx))
 	case cmd == "/approve" || cmd == "/одобрить":
