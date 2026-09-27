@@ -3,8 +3,9 @@
 //
 // Без аргументов бинарник запускает сервис. С аргументом — выполняет
 // команду владельца и выходит: invite, uninvite, invites
-// (specs/015-invites.md, требование 11), alerts (specs/016-dashboard.md,
-// требование 20) и build-notify (specs/018-telegram-bot.md, требование 16).
+// (specs/015-invites.md, требование 11), alerts и dashboard-password
+// (specs/016-dashboard.md, требования 20 и 5) и build-notify
+// (specs/018-telegram-bot.md, требование 16).
 package main
 
 import (

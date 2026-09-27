@@ -15,13 +15,14 @@ import (
 
 const usage = `команды:
   invite <номер>     выдать приглашение и напечатать код
-                     (с INVITE_PUBLIC_OUTPUT=1 — код в Telegram владельцу)
+                     (с PUBLIC_OUTPUT=1 — код в Telegram владельцу)
   uninvite <номер>   отозвать приглашение
   invites            действующие приглашения
   alerts             текущие тревоги дашборда
   build-notify <owner|group> <сведения.json|-> [<apk>|<ссылка>]
                      отправить сборку в Telegram
-  telegram-check     состояние Telegram-бота`
+  telegram-check     состояние Telegram-бота
+  dashboard-password адрес и пароль дашборда владельцу в Telegram`
 
 // runCommand выполняет команду владельца сервиса против той же базы,
 // с которой работает сервис (specs/015-invites.md, требование 11).
@@ -32,6 +33,9 @@ func runCommand(args []string) error {
 	// Отправка APK в Telegram идёт дольше 30 секунд на медленном канале.
 	if args[0] == "telegram-check" && len(args) == 1 {
 		return telegramCheck()
+	}
+	if args[0] == "dashboard-password" && len(args) == 1 {
+		return dashboardPassword()
 	}
 	if args[0] == "build-notify" {
 		if len(args) < 3 || len(args) > 4 {
@@ -61,7 +65,7 @@ func runCommand(args []string) error {
 
 	// Вывод прогона GitHub Actions виден всем: кода в нём нет, номера
 	// под маской (specs/015-invites.md, требование 18).
-	public := os.Getenv("INVITE_PUBLIC_OUTPUT") != ""
+	public := publicOutput()
 	show := func(phone string) string {
 		if public {
 			return maskPhone(phone)
@@ -138,6 +142,13 @@ func inviteViaTelegram(ctx context.Context, pool *pgxpool.Pool, phone string) er
 	}
 	fmt.Printf("%s\tкод отправлен владельцу в Telegram\n", maskPhone(normalized))
 	return nil
+}
+
+// publicOutput — вывод команды уйдёт в публичный лог прогона GitHub
+// Actions (specs/015-invites.md, требование 18): переменная PUBLIC_OUTPUT
+// с любым непустым значением.
+func publicOutput() bool {
+	return os.Getenv("PUBLIC_OUTPUT") != ""
 }
 
 // maskPhone прячет номер вида +79001234567 до +7 *** ***-45-67.

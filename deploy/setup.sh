@@ -69,7 +69,7 @@ fi
 # Пока нет SMS-провайдера, вход только по приглашениям (specs/015-invites.md).
 grep -q '^AUTH_INVITES=' /etc/moya-dacha.env || echo 'AUTH_INVITES=1' >> /etc/moya-dacha.env
 # Пароль дашборда владельца рождается один раз (specs/016-dashboard.md).
-# Посмотреть его — прогон «Дашборд» в GitHub Actions с действием «пароль».
+# Прислать его в Telegram — прогон «Дашборд» в GitHub Actions с действием «пароль».
 if ! grep -q '^DASHBOARD_PASSWORD=' /etc/moya-dacha.env; then
 	step "пароль дашборда"
 	echo "DASHBOARD_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -d '/+=')" >> /etc/moya-dacha.env

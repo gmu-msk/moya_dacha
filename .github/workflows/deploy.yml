@@ -2,7 +2,7 @@ name: Деплой
 
 # Прод — один VPS, деплой только отсюда и только с main (ADR-0004).
 # В PR, который трогает деплой, вместо деплоя идёт проверка доступа:
-# она только читает, что за машина, и ничего на ней не меняет.
+# она только входит на машину и ничего на ней не меняет.
 #
 # Секреты репозитория: VPS_HOST (IP), VPS_USER (root или пользователь
 # с sudo без пароля), VPS_SSH_KEY (приватный ключ). Переменная
@@ -37,17 +37,13 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-      - name: Что за машина
+      # Репозиторий публичный: итог и лог видят все, поэтому сведений
+      # о машине здесь нет — только есть ли вход и права для деплоя.
+      - name: Вход и sudo
         run: |
-          ssh vps 'set -e
-            . /etc/os-release; echo "ОС: $PRETTY_NAME"
-            echo "ядер: $(nproc)"
-            free -m | awk "/^Mem:/ {print \"память, МБ: \" \$2} /^Swap:/ {print \"подкачка, МБ: \" \$2}"
-            df -h / | awk "NR==2 {print \"диск: \" \$2 \", свободно \" \$4}"
-            echo "пользователь: $(id -un), sudo без пароля: $( [ "$(id -u)" = 0 ] && echo root || (sudo -n true 2>/dev/null && echo да || echo нет))"
-            echo "сервис уже стоит: $(test -f /etc/moya-dacha.env && echo да || echo нет)"
-            echo "занятые 80/443: $( (ss -ltnH "sport = :80" ; ss -ltnH "sport = :443") | awk "{print \$4}" | tr "\n" " ")"
-          ' | tee -a "$GITHUB_STEP_SUMMARY"
+          ssh vps '[ "$(id -u)" = 0 ] || sudo -n true' ||
+            { echo "Вход есть, но sudo без пароля нет: деплой не пройдёт" >&2; exit 1; }
+          echo "Доступ к VPS есть, sudo без пароля есть" | tee -a "$GITHUB_STEP_SUMMARY"
 
   deploy:
     name: Сервер
@@ -151,13 +147,14 @@ jobs:
         run: |
           # Состояние Telegram-бота (specs/018-telegram-bot.md): токен,
           # владелец, привязанные чаты. Из итога прогона его видно с телефона.
-          bot="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; exec moya-dacha-server telegram-check'" 2>&1 || true)"
+          # PUBLIC_OUTPUT: без ника владельца, пути до Telegram и ошибок.
+          bot="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; PUBLIC_OUTPUT=1 exec moya-dacha-server telegram-check'" 2>&1 || true)"
           {
             echo "Сервер: https://$DOMAIN/api"
             echo
             echo "Приложение для тестировщиков: https://$DOMAIN/app.apk"
             echo
-            echo "Дашборд: https://$DOMAIN/dashboard (пароль — прогон «Дашборд» с действием «пароль»)"
+            echo "Дашборд: https://$DOMAIN/dashboard (пароль пришлёт в Telegram прогон «Дашборд» с действием «пароль»)"
             echo
             printf '%s\n' "$bot" | sed 's/$/  /'
           } | tee -a "$GITHUB_STEP_SUMMARY"
