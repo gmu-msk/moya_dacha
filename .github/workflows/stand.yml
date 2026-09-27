@@ -84,6 +84,18 @@ jobs:
             "repos/$REPO/issues/comments/${{ github.event.comment.id }}/reactions" \
             -f content=eyes >/dev/null
 
+      # Репозиторий публичный: PR может прийти из чужого форка. Его код
+      # на стенде запустился бы с токеном этого прогона, который пишет
+      # в задачи и PR. Поэтому стенд — только для веток этого репозитория.
+      - name: Ветка PR из этого репозитория
+        run: |
+          set -euo pipefail
+          fork="$(gh pr view "$PR" --json isCrossRepository --jq .isCrossRepository)"
+          if [ "$fork" != "false" ]; then
+            gh pr comment "$PR" --body "Стенд поднимается только для веток этого репозитория, а этот PR — из форка."
+            exit 1
+          fi
+
       - name: Код из PR
         uses: actions/checkout@v4
         with:

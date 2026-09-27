@@ -248,6 +248,7 @@ function render(d) {
   $("feedback-list").innerHTML = d.feedback.recent.length
     ? d.feedback.recent.map((f) => `<div class="row"><div class="muted">${esc(new Date(f.created_at).toLocaleString("ru-RU"))}
         · ${esc(source[f.source] || f.source)} · ${esc(f.author)} · ${esc(status[f.status] || f.status)}
+        · №${f.id}${f.screenshot_url ? ` · <a href="${esc(f.screenshot_url)}">скриншот</a>` : ""}
         ${f.issue_url ? ` · <a href="${esc(f.issue_url)}">#${f.issue}</a>` : ""}</div>${esc(f.text)}</div>`).join("")
     : `<div class="row muted">Отзывов пока нет</div>`;
 }

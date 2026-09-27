@@ -122,6 +122,9 @@ func (s *Server) SetAvatar(ctx context.Context, request gen.SetAvatarRequestObje
 	if errors.Is(err, media.ErrNotAnImage) {
 		return gen.SetAvatar400JSONResponse(errInvalidImage), nil
 	}
+	if errors.Is(err, media.ErrTooManyPixels) {
+		return gen.SetAvatar413JSONResponse(errTooManyPixels), nil
+	}
 	if err != nil {
 		return nil, err
 	}

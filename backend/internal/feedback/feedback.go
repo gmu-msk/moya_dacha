@@ -76,8 +76,8 @@ type Config struct {
 	Repo string
 	// APIURL — адрес REST API GitHub. Пусто — DefaultAPIURL.
 	APIURL string
-	// PublicURL — адрес сервиса снаружи (PUBLIC_URL): ссылки на скриншоты
-	// в задаче должны открываться из GitHub.
+	// PublicURL — адрес сервиса снаружи (PUBLIC_URL): задача ссылается
+	// на дашборд, где лежат автор и скриншот.
 	PublicURL string
 	// Media — хранилище скриншотов. Пусто — временная папка.
 	Media media.Storage
@@ -157,7 +157,7 @@ func (s *Service) Enabled() bool { return s.cfg.Token != "" }
 func (s *Service) Repo() string { return s.cfg.Repo }
 
 // Add записывает отзыв в статусе sent. Скриншот не картинка —
-// media.ErrNotAnImage.
+// media.ErrNotAnImage, слишком много пикселей — media.ErrTooManyPixels.
 func (s *Service) Add(ctx context.Context, it Item) (Entry, error) {
 	var key *string
 	if len(it.Screenshot) > 0 {
@@ -274,17 +274,17 @@ func (s *Service) Submit(ctx context.Context, id int64, n Notifier) error {
 	defer tx.Rollback(ctx) //nolint:errcheck // после Commit — no-op
 
 	var (
-		source, author, text  string
+		source, text          string
 		screenshot, ver, dev  *string
 		private               bool
 		chat, thread, message *int64
 	)
 	err = tx.QueryRow(ctx, `
-		SELECT source, author, text, screenshot, app_version, device, tg_private,
+		SELECT source, text, screenshot, app_version, device, tg_private,
 		       tg_chat_id, tg_thread_id, tg_message_id
 		FROM feedback WHERE id = $1 AND status = 'sent'
 		FOR UPDATE SKIP LOCKED`, id).
-		Scan(&source, &author, &text, &screenshot, &ver, &dev, &private, &chat, &thread, &message)
+		Scan(&source, &text, &screenshot, &ver, &dev, &private, &chat, &thread, &message)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -296,7 +296,7 @@ func (s *Service) Submit(ctx context.Context, id int64, n Notifier) error {
 	if source == SourceTelegram {
 		labels = []string{labelInbox, labelTelegram}
 	}
-	issue, err := s.gh.create(ctx, Title(text), s.body(source, private, author, text, screenshot, ver, dev), labels)
+	issue, err := s.gh.create(ctx, Title(text), s.body(id, source, private, text, screenshot, ver, dev), labels)
 	if err != nil {
 		return fmt.Errorf("задача для отзыва %d: %w", id, err)
 	}
@@ -328,19 +328,13 @@ func Title(text string) string {
 	return "Отзыв: " + line
 }
 
-// body — тело задачи (требование 5).
-func (s *Service) body(source string, private bool, author, text string, screenshot, ver, dev *string) string {
+// body — тело задачи (требование 5). Задачи в публичном репозитории
+// видит кто угодно, поэтому автора и скриншота в них нет: они на
+// дашборде под номером отзыва.
+func (s *Service) body(id int64, source string, private bool, text string, screenshot, ver, dev *string) string {
 	var b strings.Builder
 	b.WriteString(text)
-	b.WriteString("\n\n")
-	if screenshot != nil {
-		link := s.cfg.Media.URL(*screenshot)
-		if strings.HasPrefix(link, "/") {
-			link = s.cfg.PublicURL + link
-		}
-		fmt.Fprintf(&b, "![скриншот](%s)\n\n", link)
-	}
-	b.WriteString("---\n")
+	b.WriteString("\n\n---\n")
 	from := "приложение"
 	if source == SourceTelegram {
 		from = "Telegram, тема группы"
@@ -348,7 +342,11 @@ func (s *Service) body(source string, private bool, author, text string, screens
 			from = "Telegram, личка"
 		}
 	}
-	fmt.Fprintf(&b, "Откуда: %s\nАвтор: %s", from, author)
+	fmt.Fprintf(&b, "Откуда: %s\nОтзыв: №%d", from, id)
+	if screenshot != nil {
+		b.WriteString(", есть скриншот")
+	}
+	fmt.Fprintf(&b, " — автор и скриншот на дашборде %s/dashboard", s.cfg.PublicURL)
 	if ver != nil {
 		fmt.Fprintf(&b, "\nВерсия: %s", *ver)
 	}

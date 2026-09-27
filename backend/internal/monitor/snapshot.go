@@ -29,6 +29,7 @@ type Feedback struct {
 }
 
 type FeedbackEntry struct {
+	ID        int64     `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	Source    string    `json:"source"`
 	Author    string    `json:"author"`
@@ -36,6 +37,9 @@ type FeedbackEntry struct {
 	Status    string    `json:"status"`
 	Issue     *int32    `json:"issue"`
 	IssueURL  *string   `json:"issue_url"`
+	// Screenshot — ключ хранилища; ссылку из него делает дашборд.
+	Screenshot    *string `json:"-"`
+	ScreenshotURL *string `json:"screenshot_url"`
 }
 
 type Alert struct {
@@ -134,16 +138,16 @@ func (m *Monitor) feedback(ctx context.Context, s *Snapshot) error {
 		return err
 	}
 	rows, err := m.db.Query(ctx, `
-		SELECT created_at, source, author,
+		SELECT id, created_at, source, author,
 		       CASE WHEN char_length(text) > 140 THEN left(text, 140) || '…' ELSE text END,
-		       status, issue, issue_url
+		       status, issue, issue_url, screenshot
 		FROM feedback ORDER BY created_at DESC, id DESC LIMIT 10`)
 	if err != nil {
 		return err
 	}
 	s.Feedback.Recent, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (FeedbackEntry, error) {
 		var e FeedbackEntry
-		err := row.Scan(&e.CreatedAt, &e.Source, &e.Author, &e.Text, &e.Status, &e.Issue, &e.IssueURL)
+		err := row.Scan(&e.ID, &e.CreatedAt, &e.Source, &e.Author, &e.Text, &e.Status, &e.Issue, &e.IssueURL, &e.Screenshot)
 		return e, err
 	})
 	if s.Feedback.Recent == nil {

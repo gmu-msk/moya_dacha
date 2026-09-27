@@ -2,6 +2,9 @@ package tests
 
 import (
 	"bytes"
+	"compress/zlib"
+	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/gif"
@@ -143,6 +146,59 @@ func imageBytes(t *testing.T, format string, width, height int) []byte {
 	}
 
 	return buf.Bytes()
+}
+
+// bombPNG собирает PNG, заголовок которого объявляет картинку width×height,
+// а данных в нём — одна строка нулей: файл в сотни байт, который при
+// распаковке занял бы гигабайты. Сервер должен отказать по заголовку,
+// не распаковывая (specs/002-profile.md, требование 5).
+func bombPNG(t *testing.T, width, height uint32) []byte {
+	t.Helper()
+
+	var out bytes.Buffer
+	out.WriteString("\x89PNG\r\n\x1a\n")
+	chunk := func(kind string, data []byte) {
+		var head [8]byte
+		binary.BigEndian.PutUint32(head[:4], uint32(len(data)))
+		copy(head[4:], kind)
+		out.Write(head[:])
+		out.Write(data)
+		crc := crc32.NewIEEE()
+		crc.Write([]byte(kind))
+		crc.Write(data)
+		var sum [4]byte
+		binary.BigEndian.PutUint32(sum[:], crc.Sum32())
+		out.Write(sum[:])
+	}
+
+	ihdr := make([]byte, 13)
+	binary.BigEndian.PutUint32(ihdr[0:4], width)
+	binary.BigEndian.PutUint32(ihdr[4:8], height)
+	ihdr[8] = 8 // бит на канал
+	ihdr[9] = 2 // RGB
+	chunk("IHDR", ihdr)
+
+	var idat bytes.Buffer
+	zw := zlib.NewWriter(&idat)
+	if _, err := zw.Write(make([]byte, 1+3*int(width))); err != nil {
+		t.Fatalf("не удалось сжать строку картинки: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("не удалось сжать строку картинки: %v", err)
+	}
+	chunk("IDAT", idat.Bytes())
+	chunk("IEND", nil)
+
+	return out.Bytes()
+}
+
+// bombCases — картинки больше 8192×8192 точек по произведению сторон:
+// квадратная и узкая длинная, у которой каждая сторона меньше 65536.
+func bombCases(t *testing.T) map[string][]byte {
+	return map[string][]byte{
+		"30000×30000": bombPNG(t, 30000, 30000),
+		"65000×1100":  bombPNG(t, 65000, 1100),
+	}
 }
 
 // downloadFile скачивает файл по ссылке из профиля.
@@ -904,6 +960,31 @@ func TestSetAvatarRejectsImageLargerThanFiveMegabytes(t *testing.T) {
 
 			if resp.StatusCode != http.StatusRequestEntityTooLarge {
 				t.Fatalf("ожидался статус 413, получен %d", resp.StatusCode)
+			}
+			if code := errorCode(t, resp); code != "image_too_large" {
+				t.Fatalf("ожидалась ошибка image_too_large, получена %q", code)
+			}
+
+			profile := profileOK(t, getProfile(t, baseURL, token))
+			requireNoAvatar(t, profile.AvatarURL)
+		})
+	}
+}
+
+// Маленький PNG, объявляющий картинку больше 8192×8192 точек, — 413
+// image_too_large: размеры проверяются по заголовку до распаковки
+// (требование 5, «Ограничения и edge cases»).
+func TestSetAvatarRejectsImageDeclaringTooManyPixels(t *testing.T) {
+	for caseName, content := range bombCases(t) {
+		t.Run(caseName, func(t *testing.T) {
+			baseURL := startAPI(t)
+
+			token, _ := signIn(t, baseURL, phonePretty)
+
+			resp := putAvatar(t, baseURL, token, "avatar.png", content)
+
+			if resp.StatusCode != http.StatusRequestEntityTooLarge {
+				t.Fatalf("на PNG в %d байт, объявляющий %s, ожидался статус 413, получен %d", len(content), caseName, resp.StatusCode)
 			}
 			if code := errorCode(t, resp); code != "image_too_large" {
 				t.Fatalf("ожидалась ошибка image_too_large, получена %q", code)

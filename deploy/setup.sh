@@ -138,4 +138,20 @@ ufw allow 80/tcp >/dev/null
 ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 
+# Вход по SSH — только ключом: пароль root подбирают боты со всего
+# интернета. Деплой сам входит ключом, так что включается это, только
+# когда ключ у root есть, — иначе на машину было бы не попасть. Файл
+# с номером 10 читается раньше 50-cloud-init.conf, а в sshd побеждает
+# первое значение.
+if [ -s /root/.ssh/authorized_keys ]; then
+	step "ssh: вход только по ключу"
+	cat > /etc/ssh/sshd_config.d/10-moya-dacha.conf <<-'CONF'
+		PasswordAuthentication no
+		KbdInteractiveAuthentication no
+		PermitRootLogin prohibit-password
+	CONF
+	sshd -t
+	systemctl reload ssh 2>/dev/null || systemctl reload sshd
+fi
+
 echo "== настройка готова"
