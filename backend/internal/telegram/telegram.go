@@ -1,6 +1,6 @@
 // Package telegram — служебный бот сервиса (specs/018-telegram-bot.md):
 // тревоги и тестовые сборки владельцу в личку, сборки main — в группу,
-// сводка по /status. Отдельного процесса нет, бот живёт в сервисе
+// сводка по /status, коды приглашений по /invite. Отдельного процесса нет, бот живёт в сервисе
 // (ADR-0022).
 package telegram
 
@@ -68,6 +68,9 @@ type Bot struct {
 	// (требование 13). Только в памяти.
 	mu         sync.Mutex
 	sentAlerts string
+	// awaitPhone — владелец написал /invite без номера и следующим
+	// сообщением пришлёт номер (требование 27). Только в памяти.
+	awaitPhone bool
 }
 
 func New(db *pgxpool.Pool, cfg Config) *Bot {

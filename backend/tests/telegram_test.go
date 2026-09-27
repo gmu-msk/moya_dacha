@@ -95,6 +95,23 @@ type fakeTelegram struct {
 	// (specs/019-feedback.md, ФТ-21); заполняет feedback_test.go.
 	files     map[string]tgFile // по file_id
 	fileAsked []string          // file_id из запросов getFile
+
+	// Вызовы setMyCommands (ФТ-23–25); заполняет serveSetMyCommands.
+	commands     []tgCommands
+	failCommands bool // отвечать {"ok": false} на setMyCommands
+}
+
+// tgCommand — одна команда меню бота.
+type tgCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+// tgCommands — один вызов setMyCommands.
+type tgCommands struct {
+	list        []tgCommand
+	scopeType   string // scope.type; пусто — scope не задан
+	scopeChatID int64  // scope.chat_id
 }
 
 func newFakeTelegram(t *testing.T) *fakeTelegram {
@@ -133,6 +150,19 @@ func (f *fakeTelegram) setFailSend(fail bool) {
 
 // push кладёт в очередь сообщение от человека в чат.
 func (f *fakeTelegram) push(fromID int64, username string, chatID int64, chatType, text string) {
+	f.pushFields(fromID, username, chatID, chatType, map[string]any{"text": text})
+}
+
+// pushContact — человек присылает в чат контакт из телефонной книги:
+// сообщение с contact.phone_number и без text (018, ФТ-27–28).
+func (f *fakeTelegram) pushContact(fromID int64, username string, chatID int64, chatType, phone string) {
+	f.pushFields(fromID, username, chatID, chatType, map[string]any{
+		"contact": map[string]any{"phone_number": phone, "first_name": "Сосед"},
+	})
+}
+
+// pushFields кладёт в очередь сообщение с этими полями (text, contact…).
+func (f *fakeTelegram) pushFields(fromID int64, username string, chatID int64, chatType string, fields map[string]any) {
 	f.mu.Lock()
 	f.nextID++
 	id := f.nextID
@@ -151,16 +181,16 @@ func (f *fakeTelegram) push(fromID int64, username string, chatID int64, chatTyp
 		chat["title"] = "Тестировщики МоейДачи"
 	}
 
-	f.updates = append(f.updates, map[string]any{
-		"update_id": id,
-		"message": map[string]any{
-			"message_id": id,
-			"from":       from,
-			"chat":       chat,
-			"date":       time.Now().Unix(),
-			"text":       text,
-		},
-	})
+	msg := map[string]any{
+		"message_id": id,
+		"from":       from,
+		"chat":       chat,
+		"date":       time.Now().Unix(),
+	}
+	for k, v := range fields {
+		msg[k] = v
+	}
+	f.updates = append(f.updates, map[string]any{"update_id": id, "message": msg})
 	f.mu.Unlock()
 
 	select {
@@ -237,6 +267,8 @@ func (f *fakeTelegram) serve(w http.ResponseWriter, r *http.Request) {
 		f.serveSendDocument(w, r)
 	case "getFile":
 		f.serveGetFile(w, r)
+	case "setMyCommands":
+		f.serveSetMyCommands(w, r)
 	case "getMe":
 		tgReply(w, map[string]any{"id": 999, "is_bot": true, "first_name": "МояДача", "username": "moya_dacha_bot"})
 	default:
@@ -349,6 +381,75 @@ func (f *fakeTelegram) serveSendDocument(w http.ResponseWriter, r *http.Request)
 	}
 
 	f.record(w, s)
+}
+
+func (f *fakeTelegram) serveSetMyCommands(w http.ResponseWriter, r *http.Request) {
+	var params struct {
+		Commands []tgCommand `json:"commands"`
+		Scope    *struct {
+			Type   string          `json:"type"`
+			ChatID json.RawMessage `json:"chat_id"`
+		} `json:"scope"`
+	}
+	body, _ := io.ReadAll(r.Body)
+	if err := json.Unmarshal(body, &params); err != nil {
+		f.mu.Lock()
+		f.wrong = append(f.wrong, fmt.Sprintf("setMyCommands: тело не JSON: %v", err))
+		f.mu.Unlock()
+		http.Error(w, `{"ok":false,"description":"bad json"}`, http.StatusBadRequest)
+		return
+	}
+
+	c := tgCommands{list: params.Commands}
+	if params.Scope != nil {
+		c.scopeType = params.Scope.Type
+		if len(params.Scope.ChatID) > 0 {
+			c.scopeChatID = f.chatID(string(params.Scope.ChatID))
+		}
+	}
+
+	f.mu.Lock()
+	f.commands = append(f.commands, c)
+	fail := f.failCommands
+	f.mu.Unlock()
+
+	if fail {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":false,"error_code":400,"description":"Bad Request: BOT_COMMANDS_TOO_MUCH"}`))
+		return
+	}
+	tgReply(w, true)
+}
+
+// setFailCommands — Telegram начинает отвечать ошибкой на setMyCommands.
+func (f *fakeTelegram) setFailCommands(fail bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failCommands = fail
+}
+
+// commandCalls — все вызовы setMyCommands по порядку.
+func (f *fakeTelegram) commandCalls() []tgCommands {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]tgCommands(nil), f.commands...)
+}
+
+// waitCommands ждёт, пока setMyCommands вызовут n раз, и возвращает вызовы.
+func (f *fakeTelegram) waitCommands(n int, what string) []tgCommands {
+	f.t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got := f.commandCalls()
+		if len(got) >= n {
+			return got
+		}
+		if time.Now().After(deadline) {
+			f.t.Fatalf("%s: за 5 секунд setMyCommands вызвали %d раз из %d ожидаемых", what, len(got), n)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // chatID разбирает chat_id: число или строка с числом.
