@@ -56,6 +56,8 @@
   .errors code { font-size: 13px; }
   .screen { display: flex; justify-content: space-between; gap: 8px; }
   .screen .n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  details summary { color: var(--muted); font-size: 13px; cursor: pointer; margin-top: 4px; }
+  details pre { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -84,6 +86,10 @@
   <h2>Ошибки сервера</h2>
   <div class="tiles" id="error-counts"></div>
   <div class="errors" id="error-list" style="margin-top:8px"></div>
+
+  <h2>Ошибки приложения</h2>
+  <div class="tiles" id="app-error-counts"></div>
+  <div class="errors" id="app-error-list" style="margin-top:8px"></div>
 
   <h2>Отзывы</h2>
   <div class="tiles" id="feedback-counts"></div>
@@ -178,6 +184,14 @@ function chart(parent, title, points, { kind = "bar", fmt = num, max } = {}) {
   show(points.length - 1);
 }
 
+// plural — число со словом в нужной форме: 1 отчёт, 2 отчёта, 5 отчётов.
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  const word = m10 === 1 && m100 !== 11 ? one
+    : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+  return num(n) + " " + word;
+}
+
 function render(d) {
   $("updated").textContent = "Обновлено в " + timeLabel(d.generated_at);
 
@@ -239,6 +253,26 @@ function render(d) {
     ? d.errors.recent.map((e) => `<div class="row"><div class="muted">${esc(new Date(e.at).toLocaleString("ru-RU"))} · ${e.status}</div>
         <code>${esc(e.method)} ${esc(e.path)}</code>${e.message ? `<div class="muted">${esc(e.message)}</div>` : ""}</div>`).join("")
     : `<div class="row muted">Ошибок не было</div>`;
+
+  // Ошибки приложения (specs/021-app-errors.md, требование 14). Раскрытый
+  // стек остаётся раскрытым после обновления раз в минуту.
+  const ae = d.app_errors, list = $("app-error-list");
+  const opened = new Set([...list.querySelectorAll("details[open]")].map((x) => x.dataset.key));
+  tiles($("app-error-counts"), [["за сутки", num(ae.last_day)], ["за неделю", num(ae.last_week)],
+    ["новых за неделю", num(ae.new_week)]]);
+  list.innerHTML = ae.groups.length
+    ? ae.groups.map((g) => {
+        const key = g.first_at + g.error;
+        const build = g.version ? `${esc(g.version)} (${g.build})` : "сборка ?";
+        return `<div class="row"><div class="muted">${esc(new Date(g.last_at).toLocaleString("ru-RU"))} · ${build}
+          ${g.screen ? ` · ${esc(screenTitle[g.screen] || g.screen)}` : ""}
+          · ${[plural(g.reports, "отчёт", "отчёта", "отчётов"),
+            g.users ? plural(g.users, "человек", "человека", "человек") : "",
+            g.anonymous ? "без входа " + num(g.anonymous) : ""].filter(Boolean).join(", ")}</div>
+          ${esc(g.error)}${g.where ? `<div><code>${esc(g.where)}</code></div>` : ""}
+          ${g.stack ? `<details data-key="${esc(key)}"${opened.has(key) ? " open" : ""}><summary>Стек</summary><pre>${esc(g.stack)}</pre></details>` : ""}</div>`;
+      }).join("")
+    : `<div class="row muted">Ошибок приложения нет</div>`;
 
   // Отзывы (specs/019-feedback.md, требование 27).
   const source = { app: "приложение", telegram: "Telegram" };

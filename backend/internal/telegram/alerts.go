@@ -10,8 +10,8 @@ import (
 	"github.com/gmu-msk/moya_dacha/backend/internal/monitor"
 )
 
-// RunAlerts проверяет тревоги раз в минуту, пока не отменён ctx
-// (требование 10).
+// RunAlerts проверяет тревоги (требование 10) и новые ошибки приложения
+// (specs/021-app-errors.md, требование 8) раз в минуту, пока не отменён ctx.
 func (b *Bot) RunAlerts(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -23,6 +23,9 @@ func (b *Bot) RunAlerts(ctx context.Context) {
 		}
 		if err := b.CheckAlerts(ctx); err != nil {
 			logError("не удалось проверить тревоги", err)
+		}
+		if err := b.CheckAppErrors(ctx); err != nil {
+			logError("не удалось проверить ошибки приложения", err)
 		}
 	}
 }

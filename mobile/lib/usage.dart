@@ -30,6 +30,11 @@ class UsageTracker {
   /// считается открытым (требование 10).
   String _tab = 'feed';
 
+  /// Последний открытый экран — для отчёта об ошибке
+  /// (specs/021-app-errors.md, требование 18). Помнится и без входа.
+  String? get lastScreen => _last;
+  String? _last;
+
   bool get _active => _token != null;
 
   void begin(String token, {String tab = 'feed'}) {
@@ -60,6 +65,7 @@ class UsageTracker {
 
   /// Показан экран поверх раздела.
   void screen(String name) {
+    _last = name;
     if (!_active) {
       return;
     }
