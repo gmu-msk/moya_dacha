@@ -1242,3 +1242,180 @@ func TestTelegramSendBuildTelegramError(t *testing.T) {
 		})
 	}
 }
+
+// tgFileLimit — больше этого Telegram не принимает файл от бота (ФТ-16а).
+const tgFileLimit = 52428800
+
+// sparseAPK создаёт APK нужного размера, не занимая места на диске:
+// файл разреженный, внутри нули.
+func sparseAPK(t *testing.T, size int64) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "app-release.apk")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("не удалось создать APK: %v", err)
+	}
+	defer f.Close()
+	if err := f.Truncate(size); err != nil {
+		t.Fatalf("не удалось растянуть APK до %d байт: %v", size, err)
+	}
+	return path
+}
+
+// APK больше 50 МБ и есть ссылка — сборка уходит текстом со ссылкой,
+// файл не отправляется (ФТ-16а, ФТ-17).
+func TestTelegramSendBuildTooBigFileGoesAsLink(t *testing.T) {
+	pool := tgPool(t)
+	fake := newFakeTelegram(t)
+	bot := telegram.New(pool, tgConfig(t, fake))
+	bindChat(t, "group", tgGroupID)
+
+	apk := sparseAPK(t, tgFileLimit+1)
+	const link = "https://moya-dacha.example/app.apk"
+	if err := bot.SendBuild(context.Background(), "group", []byte(tgBuildInfo), apk, link); err != nil {
+		t.Fatalf("SendBuild с APK больше лимита и ссылкой: %v", err)
+	}
+
+	all := fake.allSent()
+	got := fake.sentTo(tgGroupID)
+	if len(all) != 1 || len(got) != 1 || got[0].method != "sendMessage" {
+		t.Fatalf("APK больше 50 МБ со ссылкой: в группу ожидался один sendMessage и никакого sendDocument, получено: %s",
+			describeSent(all))
+	}
+	requireBuildCaption(t, got[0].text)
+	if !strings.HasSuffix(strings.TrimSpace(got[0].text), "\n\nСкачать: "+link) {
+		t.Fatalf("текст должен кончаться строкой «Скачать: %s» после пустой строки:\n%s", link, got[0].text)
+	}
+}
+
+// APK больше 50 МБ, а ссылки нет — ошибка, в чат ничего не уходит (ФТ-16а).
+func TestTelegramSendBuildTooBigFileWithoutLinkFails(t *testing.T) {
+	pool := tgPool(t)
+	fake := newFakeTelegram(t)
+	bot := telegram.New(pool, tgConfig(t, fake))
+	bindChat(t, "group", tgGroupID)
+
+	apk := sparseAPK(t, tgFileLimit+1)
+	err := bot.SendBuild(context.Background(), "group", []byte(tgBuildInfo), apk, "")
+	if err == nil {
+		t.Fatal("APK больше 50 МБ без ссылки: SendBuild должен вернуть ошибку, а вернул nil")
+	}
+	if errors.Is(err, telegram.ErrNotBound) {
+		t.Fatalf("чат привязан — ошибка из-за размера APK не должна быть ErrNotBound: %v", err)
+	}
+	if got := fake.allSent(); len(got) != 0 {
+		t.Fatalf("APK больше 50 МБ без ссылки: в чат ничего не должно уходить, а ушло: %s", describeSent(got))
+	}
+}
+
+// APK в лимите уходит файлом, даже если ссылка задана, и строки
+// «Скачать:» в подписи нет (ФТ-16а). Ровно 52 428 800 байт — ещё в лимите.
+func TestTelegramSendBuildFileWithinLimitIgnoresLink(t *testing.T) {
+	small := filepath.Join(t.TempDir(), "small.apk")
+	if err := os.WriteFile(small, []byte("PK\x03\x04 будто бы APK"), 0o644); err != nil {
+		t.Fatalf("не удалось записать APK: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		apk  func(t *testing.T) string
+		size int
+	}{
+		{name: "маленький", apk: func(*testing.T) string { return small }, size: len("PK\x03\x04 будто бы APK")},
+		{name: "ровно 50 МБ", apk: func(t *testing.T) string { return sparseAPK(t, tgFileLimit) }, size: tgFileLimit},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			pool := tgPool(t)
+			fake := newFakeTelegram(t)
+			bot := telegram.New(pool, tgConfig(t, fake))
+			bindChat(t, "group", tgGroupID)
+
+			const link = "https://moya-dacha.example/app.apk"
+			if err := bot.SendBuild(context.Background(), "group", []byte(tgBuildInfo), c.apk(t), link); err != nil {
+				t.Fatalf("SendBuild: %v", err)
+			}
+
+			all := fake.allSent()
+			got := fake.sentTo(tgGroupID)
+			if len(all) != 1 || len(got) != 1 || got[0].method != "sendDocument" {
+				t.Fatalf("APK в лимите со ссылкой: в группу ожидался один sendDocument, получено: %s", describeSent(all))
+			}
+			if got[0].filename != "moya-dacha-386900.apk" {
+				t.Fatalf("файл должен называться moya-dacha-386900.apk, а называется %q", got[0].filename)
+			}
+			if len(got[0].content) != c.size {
+				t.Fatalf("в Telegram ушло %d байт APK вместо %d", len(got[0].content), c.size)
+			}
+			ls := requireBuildCaption(t, got[0].text)
+			if indexOfLine(ls, "Скачать:") >= 0 {
+				t.Fatalf("APK ушёл файлом — строки «Скачать:» в подписи быть не должно:\n%s", got[0].text)
+			}
+		})
+	}
+}
+
+// Подпись длиннее 1024 символов: файл уходит с первой строкой подписи,
+// полный текст — следом отдельным сообщением (ФТ-16б).
+func TestTelegramSendBuildLongCaptionFollowsFile(t *testing.T) {
+	pool := tgPool(t)
+	fake := newFakeTelegram(t)
+	bot := telegram.New(pool, tgConfig(t, fake))
+	bindChat(t, "group", tgGroupID)
+
+	// Первые две строки — как в tgBuildInfo, чтобы подошёл requireBuildCaption.
+	whatsNew := []string{"Лента друзей", "Починили лайки"}
+	for i := 1; i <= 20; i++ {
+		whatsNew = append(whatsNew, fmt.Sprintf(
+			"Пункт %d: длинное описание изменения, чтобы подпись к файлу вышла за предел Telegram", i))
+	}
+	info, err := json.Marshal(map[string]any{
+		"version":  "1.0.0",
+		"build":    386900,
+		"date":     "2026-09-26T12:00:00Z",
+		"commit":   "aa652ef",
+		"whatsNew": whatsNew,
+	})
+	if err != nil {
+		t.Fatalf("не удалось собрать сведения о сборке: %v", err)
+	}
+
+	apk := filepath.Join(t.TempDir(), "app-release.apk")
+	content := []byte("PK\x03\x04 будто бы APK")
+	if err := os.WriteFile(apk, content, 0o644); err != nil {
+		t.Fatalf("не удалось записать APK: %v", err)
+	}
+
+	if err := bot.SendBuild(context.Background(), "group", info, apk, ""); err != nil {
+		t.Fatalf("SendBuild с длинной подписью: %v", err)
+	}
+
+	all := fake.allSent()
+	got := fake.sentTo(tgGroupID)
+	if len(all) != 2 || len(got) != 2 || got[0].method != "sendDocument" || got[1].method != "sendMessage" {
+		t.Fatalf("длинная подпись: в группу ожидались sendDocument, затем sendMessage, получено: %s", describeSent(all))
+	}
+
+	doc := got[0]
+	if doc.filename != "moya-dacha-386900.apk" || string(doc.content) != string(content) {
+		t.Fatalf("ушёл не тот файл: %q, %d байт", doc.filename, len(doc.content))
+	}
+	if strings.TrimSpace(doc.text) != "МояДача 1.0.0, сборка 386900" {
+		t.Fatalf("подпись к файлу должна быть первой строкой «МояДача 1.0.0, сборка 386900», а она:\n%s", doc.text)
+	}
+
+	full := got[1].text
+	if n := len([]rune(full)); n <= 1024 {
+		t.Fatalf("тест неисправен: полная подпись должна быть длиннее 1024 символов, а в ней %d", n)
+	}
+	ls := requireBuildCaption(t, full)
+	for _, w := range whatsNew {
+		if indexOfLine(ls, "• "+w) < 0 {
+			t.Fatalf("в полном тексте подписи нет строки «• %s»:\n%s", w, full)
+		}
+	}
+	if indexOfLine(ls, "Скачать:") >= 0 {
+		t.Fatalf("без ссылки строки «Скачать:» быть не должно:\n%s", full)
+	}
+}

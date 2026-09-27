@@ -72,11 +72,11 @@ func buildNotify(args []string) error {
 	}
 
 	var apk, link string
-	if len(args) == 3 {
-		if strings.HasPrefix(args[2], "https://") {
-			link = args[2]
+	for _, a := range args[2:] {
+		if strings.HasPrefix(a, "https://") {
+			link = a
 		} else {
-			apk = args[2]
+			apk = a
 		}
 	}
 

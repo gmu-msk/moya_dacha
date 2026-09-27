@@ -63,6 +63,8 @@ type Bot struct {
 	db   *pgxpool.Pool
 	cfg  Config
 	http *http.Client
+	// upload — тот же клиент без общего таймаута, для файлов.
+	upload *http.Client
 
 	// sentAlerts — набор видов тревог, о котором владелец уже знает
 	// (требование 13). Только в памяти.
@@ -91,9 +93,10 @@ func New(db *pgxpool.Pool, cfg Config) *Bot {
 		}
 	}
 	return &Bot{
-		db:   db,
-		cfg:  cfg,
-		http: &http.Client{Timeout: cfg.PollTimeout + 30*time.Second, Transport: transport},
+		db:     db,
+		cfg:    cfg,
+		http:   &http.Client{Timeout: cfg.PollTimeout + 30*time.Second, Transport: transport},
+		upload: &http.Client{Transport: transport},
 	}
 }
 
@@ -135,13 +138,17 @@ type apiResponse struct {
 }
 
 func (b *Bot) call(ctx context.Context, method, contentType string, body io.Reader, result any) error {
+	return b.callWith(ctx, b.http, method, contentType, body, result)
+}
+
+func (b *Bot) callWith(ctx context.Context, client *http.Client, method, contentType string, body io.Reader, result any) error {
 	url := b.cfg.APIURL + "/bot" + b.cfg.Token + "/" + method
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", contentType)
-	resp, err := b.http.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		// В ошибке net/http есть адрес, а в адресе — токен.
 		return fmt.Errorf("telegram %s: %w", method, redact(err, b.cfg.Token))
@@ -261,7 +268,9 @@ func (b *Bot) sendDocument(ctx context.Context, chatID int64, path, name, captio
 		}()
 		pw.CloseWithError(err)
 	}()
-	return b.call(ctx, "sendDocument", form.FormDataContentType(), pr, nil)
+	// Десятки мегабайт через туннель идут дольше таймаута клиента для
+	// опроса: загрузку ограничивает только ctx (требование 16в).
+	return b.callWith(ctx, b.upload, "sendDocument", form.FormDataContentType(), pr, nil)
 }
 
 // logError — неудача бота видна в логе сервиса, но сервис из-за неё не
