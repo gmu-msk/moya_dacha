@@ -9,6 +9,8 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -1183,4 +1185,110 @@ func TestProfileChangesOfOneUserDoNotTouchAnother(t *testing.T) {
 		t.Errorf("имя соседа должно было остаться %q, получено %q", "Пётр", other.Name)
 	}
 	requireNoAvatar(t, other.AvatarURL)
+}
+
+// --- /media/: раздаются файлы, а не папки -----------------------------------
+
+// mediaFolders — адреса папок хранилища, которые ФТ-13 называет прямо:
+// со слешем на конце и без.
+var mediaFolders = []string{
+	"/media", "/media/",
+	"/media/avatars", "/media/avatars/",
+	"/media/posts", "/media/posts/",
+}
+
+// foldersOf добавляет к списку папок все папки, в которых лежат файлы по
+// ссылкам: если хранилище раскладывает файлы глубже, чем /media/avatars/,
+// промежуточные папки тоже не должны отдавать список.
+func foldersOf(t *testing.T, baseURL string, links ...string) []string {
+	t.Helper()
+
+	folders := append([]string(nil), mediaFolders...)
+	seen := map[string]bool{}
+	for _, folder := range folders {
+		seen[folder] = true
+	}
+	add := func(folder string) {
+		if !seen[folder] {
+			seen[folder] = true
+			folders = append(folders, folder)
+		}
+	}
+	for _, link := range links {
+		parsed, err := url.Parse(fileURL(t, baseURL, link))
+		if err != nil {
+			t.Fatalf("ссылка %q не разбирается: %v", link, err)
+		}
+		for dir := path.Dir(parsed.Path); dir != "/" && dir != "."; dir = path.Dir(dir) {
+			add(dir)
+			add(dir + "/")
+		}
+	}
+
+	return folders
+}
+
+// requireNoListing требует, чтобы по адресу папки отдавался 404 и в ответе
+// не было имён сохранённых файлов. Клиент ходит по редиректам (например,
+// /media/avatars → /media/avatars/), поэтому проверяется итоговый ответ.
+func requireNoListing(t *testing.T, baseURL, folder string, links []string) {
+	t.Helper()
+
+	resp := get(t, fileURL(t, baseURL, folder))
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("не удалось прочитать ответ на %q: %v", folder, err)
+	}
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("на адрес папки %q ожидался статус 404, получен %d (итоговый адрес %s)",
+			folder, resp.StatusCode, resp.Request.URL)
+	}
+	for _, link := range links {
+		name := path.Base(link)
+		stem := strings.TrimSuffix(name, path.Ext(name))
+		if strings.Contains(string(body), stem) {
+			t.Errorf("в ответе на адрес папки %q видно имя сохранённого файла %q", folder, name)
+		}
+	}
+}
+
+// Список файлов хранилища не отдаётся никому: на адреса папок со слешем
+// и без — 404, имён файлов в ответе нет, а сам аватар по своей ссылке
+// скачивается (ФТ-13, ФТ-10).
+func TestMediaFoldersAreNotListedButAvatarIsServed(t *testing.T) {
+	baseURL := startAPI(t)
+
+	token, _ := signIn(t, baseURL, phonePretty)
+	link := avatarOf(t, baseURL, token, imageBytes(t, "png", 200, 200))
+
+	for _, folder := range foldersOf(t, baseURL, link) {
+		t.Run(folder, func(t *testing.T) {
+			requireNoListing(t, baseURL, folder, []string{link})
+		})
+	}
+
+	downloadFile(t, baseURL, link)
+}
+
+// То же, когда в хранилище лежат и аватар, и фотография поста: папка
+// с фотографиями не выдаёт их списком — иначе закрытые видимостью фото
+// ушли бы к кому угодно (ФТ-13; specs/013-post-visibility.md).
+func TestMediaFoldersDoNotListAvatarsOrPostPhotos(t *testing.T) {
+	baseURL := startAPI(t)
+
+	token, _ := signIn(t, baseURL, phonePretty)
+	avatar := avatarOf(t, baseURL, token, imageBytes(t, "png", 200, 200))
+	photo := photoOf(t, baseURL, token, 400, 300)
+	createdPost(t, createPostOf(t, baseURL, token, photo.ID))
+
+	links := []string{avatar, photo.URL}
+	for _, folder := range foldersOf(t, baseURL, links...) {
+		t.Run(folder, func(t *testing.T) {
+			requireNoListing(t, baseURL, folder, links)
+		})
+	}
+
+	downloadFile(t, baseURL, avatar)
+	downloadFile(t, baseURL, photo.URL)
 }

@@ -91,9 +91,30 @@ func (d *Disk) URL(key string) string {
 
 // FileHandler раздаёт файлы хранилища по тем же адресам, которые
 // возвращает URL.
+//
+// Адрес папки отвечает 404: http.FileServer отдал бы на него список
+// файлов, а случайные имена защищают фото, только пока их нельзя
+// прочитать списком (specs/002-profile.md, требование 13).
 func (d *Disk) FileHandler() (string, http.Handler) {
 	prefix := d.baseURL + "/"
-	return prefix, http.StripPrefix(prefix, http.FileServer(http.Dir(d.dir)))
+	files := http.StripPrefix(prefix, http.FileServer(http.Dir(d.dir)))
+	return prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") || d.isDir(strings.TrimPrefix(r.URL.Path, prefix)) {
+			http.NotFound(w, r)
+			return
+		}
+		files.ServeHTTP(w, r)
+	})
+}
+
+// isDir — ведёт ли ключ в папку хранилища, а не в файл.
+func (d *Disk) isDir(key string) bool {
+	name, err := d.path(key)
+	if err != nil {
+		return true
+	}
+	info, err := os.Stat(name)
+	return err == nil && info.IsDir()
 }
 
 // path переводит ключ в путь на диске, не давая выйти за пределы папки.
