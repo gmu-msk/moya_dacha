@@ -23,6 +23,7 @@ class UserProfile {
     required this.followers,
     required this.following,
     required this.closed,
+    required this.blocked,
     this.relation,
   });
 
@@ -56,6 +57,9 @@ class UserProfile {
   /// Закрыт ли профиль (specs/012-follows.md)
   bool closed;
 
+  /// Заблокировал ли смотрящий этого человека; в своём профиле `false` (specs/022-edit-block-delete.md) 
+  bool blocked;
+
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -76,6 +80,7 @@ class UserProfile {
     other.followers == followers &&
     other.following == following &&
     other.closed == closed &&
+    other.blocked == blocked &&
     other.relation == relation;
 
   @override
@@ -91,10 +96,11 @@ class UserProfile {
     (followers.hashCode) +
     (following.hashCode) +
     (closed.hashCode) +
+    (blocked.hashCode) +
     (relation == null ? 0 : relation!.hashCode);
 
   @override
-  String toString() => 'UserProfile[id=$id, nickname=$nickname, name=$name, about=$about, avatarUrl=$avatarUrl, createdAt=$createdAt, posts=$posts, followers=$followers, following=$following, closed=$closed, relation=$relation]';
+  String toString() => 'UserProfile[id=$id, nickname=$nickname, name=$name, about=$about, avatarUrl=$avatarUrl, createdAt=$createdAt, posts=$posts, followers=$followers, following=$following, closed=$closed, blocked=$blocked, relation=$relation]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -112,6 +118,7 @@ class UserProfile {
       json[r'followers'] = this.followers;
       json[r'following'] = this.following;
       json[r'closed'] = this.closed;
+      json[r'blocked'] = this.blocked;
     if (this.relation != null) {
       json[r'relation'] = this.relation;
     } else {
@@ -149,6 +156,8 @@ class UserProfile {
         assert(json[r'following'] != null, 'Required key "UserProfile[following]" has a null value in JSON.');
         assert(json.containsKey(r'closed'), 'Required key "UserProfile[closed]" is missing from JSON.');
         assert(json[r'closed'] != null, 'Required key "UserProfile[closed]" has a null value in JSON.');
+        assert(json.containsKey(r'blocked'), 'Required key "UserProfile[blocked]" is missing from JSON.');
+        assert(json[r'blocked'] != null, 'Required key "UserProfile[blocked]" has a null value in JSON.');
         return true;
       }());
 
@@ -163,6 +172,7 @@ class UserProfile {
         followers: mapValueOfType<int>(json, r'followers')!,
         following: mapValueOfType<int>(json, r'following')!,
         closed: mapValueOfType<bool>(json, r'closed')!,
+        blocked: mapValueOfType<bool>(json, r'blocked')!,
         relation: Relation.fromJson(json[r'relation']),
       );
     }
@@ -220,6 +230,7 @@ class UserProfile {
     'followers',
     'following',
     'closed',
+    'blocked',
   };
 }
 

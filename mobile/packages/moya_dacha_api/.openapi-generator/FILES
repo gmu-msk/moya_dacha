@@ -25,6 +25,7 @@ lib/model/auth_code_request.dart
 lib/model/auth_code_too_soon.dart
 lib/model/author.dart
 lib/model/author_list.dart
+lib/model/caption_update.dart
 lib/model/comment.dart
 lib/model/comment_draft.dart
 lib/model/comments.dart

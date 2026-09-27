@@ -22,6 +22,7 @@ class Post {
     required this.liked,
     required this.comments,
     required this.visibility,
+    this.editedAt,
   });
 
   /// Идентификатор поста (UUID)
@@ -49,6 +50,9 @@ class Post {
 
   PostVisibility visibility;
 
+  /// Когда подпись последний раз меняли; нет или `null`, если не меняли (specs/022-edit-block-delete.md) 
+  DateTime? editedAt;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Post &&
     other.id == id &&
@@ -59,7 +63,8 @@ class Post {
     other.likes == likes &&
     other.liked == liked &&
     other.comments == comments &&
-    other.visibility == visibility;
+    other.visibility == visibility &&
+    other.editedAt == editedAt;
 
   @override
   int get hashCode =>
@@ -72,10 +77,11 @@ class Post {
     (likes.hashCode) +
     (liked.hashCode) +
     (comments.hashCode) +
-    (visibility.hashCode);
+    (visibility.hashCode) +
+    (editedAt == null ? 0 : editedAt!.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -88,6 +94,11 @@ class Post {
       json[r'liked'] = this.liked;
       json[r'comments'] = this.comments;
       json[r'visibility'] = this.visibility;
+    if (this.editedAt != null) {
+      json[r'edited_at'] = this.editedAt!.toUtc().toIso8601String();
+    } else {
+      json[r'edited_at'] = null;
+    }
     return json;
   }
 
@@ -133,6 +144,7 @@ class Post {
         liked: mapValueOfType<bool>(json, r'liked')!,
         comments: mapValueOfType<int>(json, r'comments')!,
         visibility: PostVisibility.fromJson(json[r'visibility'])!,
+        editedAt: mapDateTime(json, r'edited_at', r''),
       );
     }
     return null;

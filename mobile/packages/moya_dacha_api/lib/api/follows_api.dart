@@ -68,6 +68,58 @@ class FollowsApi {
     }
   }
 
+  /// Заблокировать
+  ///
+  /// Разрывает подписки и заявки в обе стороны; пока блокировка есть, двое не видят постов и комментариев друг друга, а для заблокированного блокирующего нет вовсе. Идемпотентно (specs/022-edit-block-delete.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] userId (required):
+  ///   Идентификатор пользователя (UUID)
+  Future<Response> blockUserWithHttpInfo(String userId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/users/{userId}/block'
+      .replaceAll('{userId}', userId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Заблокировать
+  ///
+  /// Разрывает подписки и заявки в обе стороны; пока блокировка есть, двое не видят постов и комментариев друг друга, а для заблокированного блокирующего нет вовсе. Идемпотентно (specs/022-edit-block-delete.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] userId (required):
+  ///   Идентификатор пользователя (UUID)
+  Future<void> blockUser(String userId, { Future<void>? abortTrigger, }) async {
+    final response = await blockUserWithHttpInfo(userId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Отклонить заявку
   ///
   /// Заявка исчезает молча: заявитель снова видит «Подписаться» (specs/012-follows.md, требование 10). 
@@ -175,6 +227,55 @@ class FollowsApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Relation',) as Relation;
+    
+    }
+    return null;
+  }
+
+  /// Мои блокировки
+  ///
+  /// Кого смотрящий заблокировал, последние сверху, целиком: страниц нет, `next_cursor` не бывает (specs/022-edit-block-delete.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> getBlockedWithHttpInfo({ Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/me/blocked';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Мои блокировки
+  ///
+  /// Кого смотрящий заблокировал, последние сверху, целиком: страниц нет, `next_cursor` не бывает (specs/022-edit-block-delete.md). 
+  Future<AuthorList?> getBlocked({ Future<void>? abortTrigger, }) async {
+    final response = await getBlockedWithHttpInfo(abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'AuthorList',) as AuthorList;
     
     }
     return null;
@@ -465,6 +566,58 @@ class FollowsApi {
     
     }
     return null;
+  }
+
+  /// Разблокировать
+  ///
+  /// Снимает только блокировку: подписки сами не возвращаются. Разблокировать незаблокированного — не ошибка. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] userId (required):
+  ///   Идентификатор пользователя (UUID)
+  Future<Response> unblockUserWithHttpInfo(String userId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/users/{userId}/block'
+      .replaceAll('{userId}', userId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Разблокировать
+  ///
+  /// Снимает только блокировку: подписки сами не возвращаются. Разблокировать незаблокированного — не ошибка. 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] userId (required):
+  ///   Идентификатор пользователя (UUID)
+  Future<void> unblockUser(String userId, { Future<void>? abortTrigger, }) async {
+    final response = await unblockUserWithHttpInfo(userId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
   }
 
   /// Отписаться или отменить заявку
