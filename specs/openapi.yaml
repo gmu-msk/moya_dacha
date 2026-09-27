@@ -1213,6 +1213,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /app-errors:
+    post:
+      operationId: reportAppError
+      summary: Отчёт о необработанной ошибке приложения
+      description: |
+        Приложение поймало ошибку, которую никто не обработал, и молча
+        сообщает о ней. Сервис склеивает повторы одной ошибки в группу
+        (specs/021-app-errors.md, требования 1–7). Токен не обязателен:
+        без него или с недействительным отчёт записывается как отчёт
+        без входа, `401` ручка не отвечает.
+      tags: [usage]
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppErrorReport"
+      responses:
+        "204":
+          description: Отчёт записан
+        "400":
+          description: |
+            Поле не по правилам (`invalid_report`); запрос не разобрался
+            (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: |
+            Больше 100 отчётов за час от человека или от всех без входа
+            вместе (`too_many_reports`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /posts/{postId}/visibility:
     put:
       operationId: setPostVisibility
@@ -2228,6 +2268,38 @@ components:
             type: integer
             format: int32
           example: {"feed": 3, "post": 5}
+
+    AppErrorReport:
+      type: object
+      description: Отчёт о необработанной ошибке (specs/021-app-errors.md, требование 1)
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Текст ошибки, от 1 до 2000 символов
+          example: Null check operator used on a null value
+        stack:
+          type: string
+          description: Стек, до 20000 символов
+        version:
+          type: string
+          description: Версия приложения, до 32 символов
+          example: 1.0.0
+        build:
+          type: integer
+          format: int64
+          description: Номер сборки, от 0
+          example: 386900
+        screen:
+          type: string
+          description: |
+            Последний открытый экран, 1–32 символа `a-z` и `_`
+            (specs/020-app-sessions.md, требование 10)
+          example: post
+        os:
+          type: string
+          description: Система телефона, до 100 символов
+          example: android 14
 
     NotificationPost:
       type: object

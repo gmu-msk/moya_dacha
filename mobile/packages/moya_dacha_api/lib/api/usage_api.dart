@@ -70,6 +70,55 @@ class UsageApi {
     }
   }
 
+  /// Отчёт о необработанной ошибке приложения
+  ///
+  /// Приложение поймало ошибку, которую никто не обработал, и молча сообщает о ней. Сервис склеивает повторы одной ошибки в группу (specs/021-app-errors.md, требования 1–7). Токен не обязателен: без него или с недействительным отчёт записывается как отчёт без входа, `401` ручка не отвечает. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [AppErrorReport] appErrorReport (required):
+  Future<Response> reportAppErrorWithHttpInfo(AppErrorReport appErrorReport, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/app-errors';
+
+    // ignore: prefer_final_locals
+    Object? postBody = appErrorReport;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Отчёт о необработанной ошибке приложения
+  ///
+  /// Приложение поймало ошибку, которую никто не обработал, и молча сообщает о ней. Сервис склеивает повторы одной ошибки в группу (specs/021-app-errors.md, требования 1–7). Токен не обязателен: без него или с недействительным отчёт записывается как отчёт без входа, `401` ручка не отвечает. 
+  ///
+  /// Parameters:
+  ///
+  /// * [AppErrorReport] appErrorReport (required):
+  Future<void> reportAppError(AppErrorReport appErrorReport, { Future<void>? abortTrigger, }) async {
+    final response = await reportAppErrorWithHttpInfo(appErrorReport, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Начало сессии в приложении
   ///
   /// Приложение вышло на экран у вошедшего человека. Сервис заводит сессию со временем начала по своим часам (specs/020-app-sessions.md, требования 1–4). 
