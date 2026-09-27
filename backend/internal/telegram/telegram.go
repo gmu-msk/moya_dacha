@@ -181,6 +181,15 @@ func (b *Bot) Send(ctx context.Context, chatID int64, text string) error {
 	return b.callJSON(ctx, "sendMessage", map[string]any{"chat_id": chatID, "text": text}, nil)
 }
 
+// SendTo пишет текст в чат роли. Не привязанный чат — ErrNotBound.
+func (b *Bot) SendTo(ctx context.Context, role, text string) error {
+	chat, err := b.chat(ctx, role)
+	if err != nil {
+		return err
+	}
+	return b.Send(ctx, chat, text)
+}
+
 // Notify отвечает автору отзыва: в его теме и на его сообщение
 // (specs/019-feedback.md, требование 31).
 func (b *Bot) Notify(ctx context.Context, to feedback.Recipient, text string) error {

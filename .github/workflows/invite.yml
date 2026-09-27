@@ -2,8 +2,9 @@ name: Приглашение
 
 # Выдать, отозвать или посмотреть приглашения на проде с телефона:
 # Actions → «Приглашение» → Run workflow (specs/015-invites.md).
-# Код приходит в итог прогона. Репозиторий приватный, итог видят только
-# те, у кого есть доступ к нему.
+# Репозиторий публичный, лог и итог прогона видят все. Поэтому код
+# приглашения сюда не попадает — он приходит владельцу в личку бота, а
+# номера печатаются под маской (specs/015-invites.md, требование 18).
 
 on:
   workflow_dispatch:
@@ -23,6 +24,23 @@ jobs:
     name: Приглашение
     runs-on: ubuntu-latest
     steps:
+      # Номер берётся из события, а не из env шага: env шага печатается
+      # в лог до того, как маска успела бы сработать.
+      - name: Спрятать номер
+        run: |
+          phone="$(jq -r '.inputs.phone // ""' "$GITHUB_EVENT_PATH")"
+          if [ -n "$phone" ]; then
+            digits="$(printf '%s' "$phone" | tr -cd '0-9')"
+            echo "::add-mask::$phone"
+            [ -n "$digits" ] && echo "::add-mask::$digits"
+            [ "${#digits}" -ge 10 ] && echo "::add-mask::${digits: -10}"
+          fi
+          {
+            echo 'PHONE<<__PHONE__'
+            printf '%s\n' "$phone"
+            echo '__PHONE__'
+          } >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - name: Ключ SSH
@@ -35,7 +53,6 @@ jobs:
       - name: Команда на сервере
         env:
           ACTION: ${{ inputs.action }}
-          PHONE: ${{ inputs.phone }}
         run: |
           case "$ACTION" in
             выдать) cmd=invite ;;
@@ -52,7 +69,8 @@ jobs:
             exit 1
           fi
           # sudo здесь нужен и под root: им команда уходит от имени сервиса.
-          out="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; exec moya-dacha-server \"\$@\"' _ $cmd ${PHONE:+\"$PHONE\"}")"
+          # INVITE_PUBLIC_OUTPUT: код уходит в Telegram, номера под маской.
+          out="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; INVITE_PUBLIC_OUTPUT=1 exec moya-dacha-server \"\$@\"' _ $cmd ${PHONE:+\"$PHONE\"}")"
           echo "$out"
           {
             echo '```'
