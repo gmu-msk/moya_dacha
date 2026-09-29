@@ -39,17 +39,20 @@ func (s *Server) DeletePost(ctx context.Context, request gen.DeletePostRequestOb
 		return nil, err
 	}
 
-	// Файлы убираются после транзакции: база — источник истины, и она не
-	// должна ждать хранилище. Ошибка здесь не отменяет удаления — человеку
-	// уже сказано «удалено», — но осиротевший файл попадает в лог
-	// (specs/007-deletion.md, требование 5).
+	s.deleteFiles(ctx, keys)
+	return gen.DeletePost204Response{}, nil
+}
+
+// deleteFiles убирает файлы удалённого поста. Зовётся после транзакции:
+// база — источник истины, и она не должна ждать хранилище. Ошибка здесь
+// не отменяет удаления — человеку уже сказано «удалено», — но
+// осиротевший файл попадает в лог (specs/007-deletion.md, требование 5).
+func (s *Server) deleteFiles(ctx context.Context, keys []string) {
 	for _, key := range keys {
 		if err := s.cfg.Media.Delete(ctx, key); err != nil {
 			slog.Error("не удалось удалить файл фотографии удалённого поста", "key", key, "err", err)
 		}
 	}
-
-	return gen.DeletePost204Response{}, nil
 }
 
 // DeleteComment удаляет свой комментарий. Чужой не удаляется даже

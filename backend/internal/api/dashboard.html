@@ -58,6 +58,17 @@
   .screen .n { font-variant-numeric: tabular-nums; white-space: nowrap; }
   details summary { color: var(--muted); font-size: 13px; cursor: pointer; margin-top: 4px; }
   details pre { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  h3 { font-size: 15px; margin: 14px 0 8px; }
+  .item { display: flex; gap: 10px; align-items: flex-start; }
+  .item img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; flex: none; background: var(--line); }
+  .item .body { min-width: 0; flex: 1; }
+  .item .reasons { margin: 4px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+  .acts { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .acts button { font: inherit; font-size: 14px; border-radius: 8px; padding: 6px 14px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-height: 36px; }
+  .acts button.del { border-color: var(--bad); color: var(--bad); }
+  .acts button:disabled { opacity: .5; cursor: default; }
+  .acts .fail { color: var(--bad); font-size: 13px; align-self: center; }
 </style>
 </head>
 <body>
@@ -70,6 +81,12 @@
 
   <h2>Итоги</h2>
   <div class="tiles" id="totals"></div>
+
+  <h2>Модерация</h2>
+  <h3>Жалобы</h3>
+  <div class="errors" id="mod-reported"></div>
+  <h3>Свежее</h3>
+  <div class="errors" id="mod-recent"></div>
 
   <h2>Активность за 30 дней</h2>
   <div class="charts" id="activity"></div>
@@ -203,6 +220,8 @@ function render(d) {
   tiles($("totals"), [["людей", num(t.users)], ["постов", num(t.posts)], ["лайков", num(t.likes)],
     ["комментариев", num(t.comments)], ["жалоб", num(t.reports)]]);
 
+  renderModeration(d.moderation);
+
   const act = $("activity");
   act.innerHTML = "";
   const series = [["Активные люди", "active_users"], ["Новые люди", "new_users"], ["Посты", "posts"],
@@ -286,6 +305,50 @@ function render(d) {
         ${f.issue_url ? ` · <a href="${esc(f.issue_url)}">#${f.issue}</a>` : ""}</div>${esc(f.text)}</div>`).join("")
     : `<div class="row muted">Отзывов пока нет</div>`;
 }
+
+// Модерация (specs/023-moderation.md, требования 13–15). Действия —
+// DELETE на адреса дашборда; после ответа 204 или 404 (уже удалено)
+// данные берутся заново, иначе элемент остаётся с «Не удалось».
+const kindTitle = { post: "Пост", comment: "Комментарий" };
+const kindWord = { post: "пост", comment: "комментарий" };
+
+function modItem(it) {
+  const id = it.kind === "post" ? it.post_id : it.comment_id;
+  const path = `dashboard/${it.kind === "post" ? "posts" : "comments"}/${encodeURIComponent(id)}`;
+  const reports = it.reports ? ` · ${plural(it.reports, "жалоба", "жалобы", "жалоб")}` : "";
+  return `<div class="row item">
+    ${it.photo_url ? `<img src="${esc(it.photo_url)}" alt="" loading="lazy">` : ""}
+    <div class="body">
+      <div class="muted">${kindTitle[it.kind]} · @${esc(it.author.nickname)} · ${esc(new Date(it.created_at).toLocaleString("ru-RU"))}${reports}</div>
+      <div>${it.text ? esc(it.text) : `<span class="muted">без подписи</span>`}</div>
+      ${it.reasons.length ? `<ul class="reasons">${it.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+      <div class="acts">
+        <button class="del" data-path="${esc(path)}" data-ask="Удалить ${kindWord[it.kind]} @${esc(it.author.nickname)} навсегда? Вернуть будет нельзя">Удалить</button>
+        ${it.reports ? `<button data-path="${esc(path)}/reports">Оставить</button>` : ""}
+      </div>
+    </div></div>`;
+}
+
+function renderModeration(m) {
+  $("mod-reported").innerHTML = m.reported.length ? m.reported.map(modItem).join("") : `<div class="row muted">Жалоб нет</div>`;
+  $("mod-recent").innerHTML = m.recent.length ? m.recent.map(modItem).join("") : `<div class="row muted">Пока пусто</div>`;
+}
+
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest(".acts button");
+  if (!b || (b.dataset.ask && !confirm(b.dataset.ask))) return;
+  const acts = b.parentElement;
+  acts.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+  acts.querySelector(".fail")?.remove();
+  try {
+    const r = await fetch(b.dataset.path, { method: "DELETE", credentials: "same-origin" });
+    if (r.status !== 204 && r.status !== 404) throw new Error(r.status);
+    await load();
+  } catch (e) {
+    acts.querySelectorAll("button").forEach((x) => { x.disabled = false; });
+    acts.insertAdjacentHTML("beforeend", `<span class="fail">Не удалось, попробуйте ещё раз</span>`);
+  }
+});
 
 async function load() {
   try {

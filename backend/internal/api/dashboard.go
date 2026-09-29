@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gmu-msk/moya_dacha/backend/api/gen"
+	"github.com/gmu-msk/moya_dacha/backend/internal/monitor"
 )
 
 // Дашборд владельца (specs/016-dashboard.md). Он не часть контракта
@@ -29,7 +30,7 @@ func (s *Server) mountDashboard(mux *http.ServeMux) {
 	// (требование 1).
 	if s.cfg.DashboardPassword == "" {
 		mux.HandleFunc(dashboardPath, http.NotFound)
-		mux.HandleFunc(dashboardPath+"/data", http.NotFound)
+		mux.HandleFunc(dashboardPath+"/", http.NotFound)
 		return
 	}
 	mux.Handle("GET "+dashboardPath, s.dashboardAuth(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -37,6 +38,7 @@ func (s *Server) mountDashboard(mux *http.ServeMux) {
 		_, _ = w.Write(dashboardPage)
 	})))
 	mux.Handle("GET "+dashboardPath+"/data", s.dashboardAuth(http.HandlerFunc(s.dashboardData)))
+	s.mountModeration(mux)
 }
 
 func (s *Server) dashboardData(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +51,14 @@ func (s *Server) dashboardData(w http.ResponseWriter, r *http.Request) {
 		if f.Screenshot != nil {
 			url := s.cfg.Media.URL(*f.Screenshot)
 			snap.Feedback.Recent[i].ScreenshotURL = &url
+		}
+	}
+	for _, list := range [][]monitor.ModerationItem{snap.Moderation.Reported, snap.Moderation.Recent} {
+		for i, it := range list {
+			if it.Photo != nil {
+				url := s.cfg.Media.URL(*it.Photo)
+				list[i].PhotoURL = &url
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
