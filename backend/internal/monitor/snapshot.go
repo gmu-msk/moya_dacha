@@ -12,15 +12,16 @@ import (
 
 // Snapshot — ответ /dashboard/data (specs/016-dashboard.md, «API»).
 type Snapshot struct {
-	GeneratedAt time.Time `json:"generated_at"`
-	Alerts      []Alert   `json:"alerts"`
-	Totals      Totals    `json:"totals"`
-	Activity    []Day     `json:"activity"`
-	Server      Server    `json:"server"`
-	Errors      Errors    `json:"errors"`
-	Feedback    Feedback  `json:"feedback"`
-	Usage       Usage     `json:"usage"`
-	AppErrors   AppErrors `json:"app_errors"`
+	GeneratedAt time.Time  `json:"generated_at"`
+	Alerts      []Alert    `json:"alerts"`
+	Totals      Totals     `json:"totals"`
+	Activity    []Day      `json:"activity"`
+	Server      Server     `json:"server"`
+	Errors      Errors     `json:"errors"`
+	Feedback    Feedback   `json:"feedback"`
+	Usage       Usage      `json:"usage"`
+	AppErrors   AppErrors  `json:"app_errors"`
+	Moderation  Moderation `json:"moderation"`
 }
 
 // Feedback — отзывы разработчику (specs/019-feedback.md, требование 27).
@@ -110,6 +111,7 @@ func (m *Monitor) Collect(ctx context.Context) (Snapshot, error) {
 	snap := Snapshot{GeneratedAt: time.Now().UTC()}
 	steps := []func(context.Context, *Snapshot) error{
 		m.totals, m.activity, m.server, m.errors, m.feedback, m.usage, m.appErrors,
+		m.moderation,
 	}
 	for _, step := range steps {
 		if err := step(ctx, &snap); err != nil {
