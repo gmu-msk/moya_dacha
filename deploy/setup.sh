@@ -75,12 +75,13 @@ if ! grep -q '^DASHBOARD_PASSWORD=' /etc/moya-dacha.env; then
 	echo "DASHBOARD_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -d '/+=')" >> /etc/moya-dacha.env
 fi
 # Telegram-бот (specs/018-telegram-bot.md): токен, ник владельца и адрес
-# посредника, а с ними токен GitHub для отзывов (specs/019-feedback.md) деплой кладёт рядом с собой из настроек репозитория. Пустое
-# значение строку не трогает.
+# посредника, а с ними токен GitHub для отзывов (specs/019-feedback.md)
+# и ключ Firebase для пушей в base64 (specs/024-push.md) деплой кладёт
+# рядом с собой из настроек репозитория. Пустое значение строку не трогает.
 if [ -f "$here/telegram.env" ]; then
 	while IFS= read -r line; do
 		key="${line%%=*}" value="${line#*=}"
-		case "$key" in TELEGRAM_BOT_TOKEN | TELEGRAM_OWNER | TELEGRAM_API_URL | FEEDBACK_GITHUB_TOKEN) ;; *) continue ;; esac
+		case "$key" in TELEGRAM_BOT_TOKEN | TELEGRAM_OWNER | TELEGRAM_API_URL | FEEDBACK_GITHUB_TOKEN | FCM_CREDENTIALS) ;; *) continue ;; esac
 		[ -n "$value" ] || continue
 		sed -i "/^$key=/d" /etc/moya-dacha.env
 		printf '%s=%s\n' "$key" "$value" >> /etc/moya-dacha.env
@@ -108,6 +109,10 @@ if [ -f /tmp/moya-dacha-relay/relay.env ]; then
 	systemctl restart moya-dacha-relay.service
 	sed -i '/^TELEGRAM_PROXY=/d' /etc/moya-dacha.env
 	echo 'TELEGRAM_PROXY=socks5://127.0.0.1:1080' >> /etc/moya-dacha.env
+	# Пуши идут в Google напрямую, а туннелем — только если напрямую
+	# соединение не открылось (specs/024-push.md, требование 15).
+	sed -i '/^PUSH_PROXY=/d' /etc/moya-dacha.env
+	echo 'PUSH_PROXY=socks5://127.0.0.1:1080' >> /etc/moya-dacha.env
 fi
 chown root:moya-dacha /etc/moya-dacha.env
 chmod 640 /etc/moya-dacha.env

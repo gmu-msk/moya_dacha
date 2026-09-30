@@ -209,6 +209,9 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          # Настройки Firebase для пушей (specs/024-push.md, требование 17).
+          # Эмуляторная сборка идёт без них: в эмуляторе нет Google Play.
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           set -euo pipefail
           apk=mobile/build/app/outputs/flutter-apk/app-debug.apk
@@ -223,10 +226,12 @@ jobs:
             echo "::warning::Нет доступа к VPS: APK подписан debug-ключом и поверх не встанет"
           fi
           build=$(WHATS_NEW="$PR_TITLE" COMMIT="$SHA" mobile/tool/stamp-build.sh)
+          mobile/tool/firebase-config.sh
           make app-apk \
             APP_DART_DEFINE="--dart-define=API_BASE_URL=https://$domain/api" \
             APP_BUILD_ARGS="--build-number=$build"
-          rm -f mobile/android/key.properties "$RUNNER_TEMP/moya-dacha-release.jks"
+          rm -f mobile/android/key.properties "$RUNNER_TEMP/moya-dacha-release.jks" \
+            mobile/android/app/google-services.json
           cp "$apk" "$RUNNER_TEMP/phone.apk"
           cp "$RUNNER_TEMP/emulator.apk" "$apk"
 

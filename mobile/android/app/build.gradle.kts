@@ -15,6 +15,34 @@ val keyProperties = Properties().apply {
 }
 val hasReleaseKey = !keyProperties.isEmpty
 
+// Настройки Firebase для пушей (specs/024-push.md, ADR-0027).
+// google-services.json кладёт на CI mobile/tool/firebase-config.sh из
+// секрета, в git его нет. Из него в ресурсы идут ровно те строки, по
+// которым Firebase поднимается сам, — то же, что сделал бы плагин
+// com.google.gms.google-services, но без него: без файла сборка просто
+// идёт без пушей, а не падает.
+@Suppress("UNCHECKED_CAST")
+val firebaseValues: Map<String, String> = run {
+    val file = file("google-services.json")
+    if (!file.exists()) return@run emptyMap()
+    val json = groovy.json.JsonSlurper().parse(file) as Map<String, Any?>
+    val project = json["project_info"] as Map<String, Any?>
+    val clients = json["client"] as List<Map<String, Any?>>
+    val client = clients.firstOrNull {
+        val info = it["client_info"] as Map<String, Any?>
+        val android = info["android_client_info"] as Map<String, Any?>
+        android["package_name"] == "ru.moyadacha.app"
+    } ?: error("В google-services.json нет приложения ru.moyadacha.app")
+    val info = client["client_info"] as Map<String, Any?>
+    val keys = client["api_key"] as List<Map<String, Any?>>
+    mapOf(
+        "google_app_id" to info["mobilesdk_app_id"] as String,
+        "gcm_defaultSenderId" to project["project_number"] as String,
+        "project_id" to project["project_id"] as String,
+        "google_api_key" to keys.first()["current_key"] as String,
+    )
+}
+
 android {
     namespace = "ru.moyadacha.app"
     compileSdk = flutter.compileSdkVersion
@@ -37,6 +65,13 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        firebaseValues.forEach { (name, value) -> resValue("string", name, value) }
+    }
+
+    // Строки Firebase выше идут через resValue, а в AGP 9 оно по
+    // умолчанию выключено.
+    buildFeatures {
+        resValues = true
     }
 
     signingConfigs {

@@ -69,6 +69,7 @@ part 'model/post_visibility.dart';
 part 'model/post_visibility_update.dart';
 part 'model/privacy_update.dart';
 part 'model/profile_update.dart';
+part 'model/push_token.dart';
 part 'model/relation.dart';
 part 'model/report_draft.dart';
 part 'model/session_created.dart';

@@ -1229,6 +1229,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /me/push-token:
+    put:
+      operationId: setPushToken
+      summary: Токен FCM этого телефона
+      description: |
+        Телефон отдаёт токен Firebase Cloud Messaging, на него сервис шлёт
+        пуши о новых уведомлениях и заявках (specs/024-push.md). Токен
+        привязан к сессии: у сессии один токен, новый заменяет старый, тот
+        же токен с другой сессии переезжает к ней. Выход из аккаунта
+        забывает токен.
+      tags: [notifications]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushToken"
+      responses:
+        "204":
+          description: Токен запомнен
+        "400":
+          description: |
+            Токена нет, он пустой или длиннее 4096 символов
+            (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена сессии нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /me/feedback:
     get:
       operationId: getMyFeedback
@@ -2611,6 +2648,17 @@ components:
           format: int32
           description: Сколько заявок на подписку ждут ответа
           example: 1
+
+    PushToken:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: |
+            Токен Firebase Cloud Messaging. Пробелы по краям не считаются;
+            после них — от 1 до 4096 символов.
+          example: "dQw4w9WgXcQ:APA91bH…"
 
     PrivacyUpdate:
       type: object

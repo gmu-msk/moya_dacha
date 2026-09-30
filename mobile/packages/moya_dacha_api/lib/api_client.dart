@@ -245,6 +245,8 @@ class ApiClient {
           return PrivacyUpdate.fromJson(value);
         case 'ProfileUpdate':
           return ProfileUpdate.fromJson(value);
+        case 'PushToken':
+          return PushToken.fromJson(value);
         case 'Relation':
           return Relation.fromJson(value);
         case 'ReportDraft':

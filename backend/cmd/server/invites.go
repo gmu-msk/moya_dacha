@@ -22,6 +22,7 @@ const usage = `команды:
   build-notify <owner|group> <сведения.json|-> [<apk>] [<ссылка>]
                      отправить сборку в Telegram
   telegram-check     состояние Telegram-бота
+  push-check         состояние пушей Firebase
   dashboard-password адрес и пароль дашборда владельцу в Telegram`
 
 // runCommand выполняет команду владельца сервиса против той же базы,
@@ -33,6 +34,9 @@ func runCommand(args []string) error {
 	// Отправка APK в Telegram идёт дольше 30 секунд на медленном канале.
 	if args[0] == "telegram-check" && len(args) == 1 {
 		return telegramCheck()
+	}
+	if args[0] == "push-check" && len(args) == 1 {
+		return pushCheck()
 	}
 	if args[0] == "dashboard-password" && len(args) == 1 {
 		return dashboardPassword()

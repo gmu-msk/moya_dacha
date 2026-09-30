@@ -63,6 +63,11 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Пуши о новых уведомлениях через Firebase Cloud Messaging
+  # (specs/024-push.md, ADR-0027). Настройки Firebase кладёт в сборку CI.
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
