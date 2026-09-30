@@ -4,8 +4,9 @@
 // Без аргументов бинарник запускает сервис. С аргументом — выполняет
 // команду владельца и выходит: invite, uninvite, invites
 // (specs/015-invites.md, требование 11), alerts и dashboard-password
-// (specs/016-dashboard.md, требования 20 и 5) и build-notify
-// (specs/018-telegram-bot.md, требование 16).
+// (specs/016-dashboard.md, требования 20 и 5), build-notify
+// (specs/018-telegram-bot.md, требование 16) и push-check
+// (specs/024-push.md, требование 16).
 package main
 
 import (
@@ -24,6 +25,7 @@ import (
 	"github.com/gmu-msk/moya_dacha/backend/internal/api"
 	"github.com/gmu-msk/moya_dacha/backend/internal/feedback"
 	"github.com/gmu-msk/moya_dacha/backend/internal/media"
+	"github.com/gmu-msk/moya_dacha/backend/internal/push"
 	"github.com/gmu-msk/moya_dacha/backend/internal/telegram"
 )
 
@@ -123,6 +125,23 @@ func run() error {
 		slog.Info("TELEGRAM_BOT_TOKEN не задан: бота нет")
 	}
 	go fb.Run(ctx, notifier)
+
+	// Пуши о новых уведомлениях (specs/024-push.md). Без ключа Firebase
+	// отправки нет, но очередь всё равно разбирается, чтобы не копиться.
+	// Негодный ключ сервис не роняет: без пушей он живёт как раньше.
+	pushCfg, err := pushConfig()
+	if err == nil {
+		_, err = push.New(nil, pushCfg)
+	}
+	if err != nil {
+		slog.Error("пуши выключены: ключ Firebase не разобран", "err", err)
+		pushCfg.Credentials = nil
+	}
+	sender, _ := push.New(pool, pushCfg)
+	if !sender.Enabled() {
+		slog.Info("FCM_CREDENTIALS не задан: пушей нет")
+	}
+	go sender.Run(ctx)
 
 	srv := &http.Server{
 		Addr:              addr,

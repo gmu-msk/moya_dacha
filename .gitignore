@@ -34,3 +34,6 @@ demo/out/
 # Python
 __pycache__/
 *.pyc
+
+# Настройки Firebase: кладёт CI из секрета (specs/024-push.md)
+mobile/android/app/google-services.json

@@ -48,6 +48,7 @@ lib/model/post_visibility.dart
 lib/model/post_visibility_update.dart
 lib/model/privacy_update.dart
 lib/model/profile_update.dart
+lib/model/push_token.dart
 lib/model/relation.dart
 lib/model/report_draft.dart
 lib/model/session_created.dart

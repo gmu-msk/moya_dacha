@@ -100,6 +100,9 @@ jobs:
           # Отзывы становятся задачами этого репозитория (specs/019-feedback.md):
           # fine-grained токен, только Issues: read and write.
           FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
+          # Ключ сервисного аккаунта Firebase для пушей (specs/024-push.md,
+          # требование 18): JSON целиком, на сервер — в base64 одной строкой.
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           # С прода api.telegram.org не открывается: бот ходит в Telegram
           # через SSH-туннель до второго VPS (specs/018-telegram-bot.md, 3б).
           # RELAY_HOST может быть и «адрес:порт».
@@ -119,8 +122,10 @@ jobs:
               ssh vps '(umask 077; mkdir /tmp/moya-dacha-relay; cat > /tmp/moya-dacha-relay/relay.env)'
             printf '%s\n' "$RELAY_SSH_KEY" | ssh vps '(umask 077; cat > /tmp/moya-dacha-relay/key)'
           fi
-          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\nFEEDBACK_GITHUB_TOKEN=%s\n' \
-            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" "$TELEGRAM_API_URL" "$FEEDBACK_GITHUB_TOKEN" |
+          fcm=""
+          [ -z "$FIREBASE_SERVICE_ACCOUNT" ] || fcm=$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | base64 -w0)
+          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\nFEEDBACK_GITHUB_TOKEN=%s\nFCM_CREDENTIALS=%s\n' \
+            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" "$TELEGRAM_API_URL" "$FEEDBACK_GITHUB_TOKEN" "$fcm" |
           ssh vps "set -e
             sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
             rm -rf /tmp/moya-dacha-release && mkdir /tmp/moya-dacha-release
@@ -149,6 +154,8 @@ jobs:
           # владелец, привязанные чаты. Из итога прогона его видно с телефона.
           # PUBLIC_OUTPUT: без ника владельца, пути до Telegram и ошибок.
           bot="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; PUBLIC_OUTPUT=1 exec moya-dacha-server telegram-check'" 2>&1 || true)"
+          # Пуши (specs/024-push.md, требование 16): принял ли Firebase ключ.
+          push="$(ssh vps "sudo -u moya-dacha bash -c 'set -a; . /etc/moya-dacha.env; set +a; exec moya-dacha-server push-check'" 2>&1 || true)"
           {
             echo "Сервер: https://$DOMAIN/api"
             echo
@@ -157,6 +164,7 @@ jobs:
             echo "Дашборд: https://$DOMAIN/dashboard (пароль пришлёт в Telegram прогон «Дашборд» с действием «пароль»)"
             echo
             printf '%s\n' "$bot" | sed 's/$/  /'
+            printf '%s\n' "$push" | sed 's/$/  /'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
   # APK для тестировщиков: адрес сервера зашит, экран «Сервер» его только
@@ -212,9 +220,14 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
+      # Настройки Firebase для пушей (specs/024-push.md, требование 17):
+      # без секрета приложение собирается без пушей.
       - name: Сборка
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           set -euo pipefail
+          mobile/tool/firebase-config.sh
           since=$(curl -fsS "https://$DOMAIN/app.json" | jq -r '.commit // empty' || true)
           build=$(SINCE="$since" mobile/tool/stamp-build.sh)
           echo "Сборка $build, что нового:"

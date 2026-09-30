@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
+import '../push.dart';
 import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/bottom_bar.dart';
@@ -65,6 +66,11 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Есть ли непрочитанное — точка на колокольчике.
   bool _unread = false;
 
+  /// Пуши (specs/024-push.md). Запускаются, когда человек уже на главном
+  /// экране, а не на знакомстве: там вопрос о разрешении не к месту.
+  final PushClient _push = PushClient();
+  bool _pushStarted = false;
+
   @override
   void initState() {
     super.initState();
@@ -75,7 +81,50 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     usage.finish();
+    _push.stop();
     super.dispose();
+  }
+
+  /// Пуши — один раз за вход, когда человек знаком (требование 1).
+  void _startPush(CurrentUser user) {
+    if (_pushStarted || !user.nicknameChosen) {
+      return;
+    }
+    _pushStarted = true;
+    _push.start(
+      token: widget.token,
+      onOpen: _openPush,
+      onForeground: _checkUnread,
+    );
+  }
+
+  /// Касание пуша открывает, о чём он, в разделе «Уведомления», как
+  /// касание его строки (specs/024-push.md, требование 4).
+  Future<void> _openPush(PushTarget target) async {
+    debugPrint('$logMarker push=opened kind=${target.kind}');
+    if (!mounted || _user == null) {
+      return;
+    }
+    if (_tab != HomeTab.notifications) {
+      _select(HomeTab.notifications);
+    } else {
+      _notificationsStack.popUntil((route) => route.isFirst);
+    }
+    // Стопка раздела появляется только со следующим кадром.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+    final postId = target.postId;
+    final userId = target.userId;
+    switch (target.kind) {
+      case 'like' || 'comment' when postId != null:
+        await _openNotificationPost(postId);
+      case 'follow' || 'follow_accepted' when userId != null:
+        await _openNotificationProfile(userId);
+      default:
+      // Заявка — в самом разделе, сверху.
+    }
   }
 
   Future<void> _load() async {
@@ -90,6 +139,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       setState(() => _user = user);
       _checkUnread();
+      if (user != null) {
+        _startPush(user);
+      }
     } on Exception catch (error) {
       debugPrint('$logMarker screen=home error=$error');
       // Сессии больше нет — значит, человек не вошёл, что бы ни лежало
@@ -373,7 +425,10 @@ class _HomeScreenState extends State<HomeScreen> {
       return IntroScreen(
         token: widget.token,
         user: user,
-        onDone: (introduced) => setState(() => _user = introduced),
+        onDone: (introduced) {
+          setState(() => _user = introduced);
+          _startPush(introduced);
+        },
       );
     }
 

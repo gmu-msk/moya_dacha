@@ -177,4 +177,53 @@ class NotificationsApi {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
   }
+
+  /// Токен FCM этого телефона
+  ///
+  /// Телефон отдаёт токен Firebase Cloud Messaging, на него сервис шлёт пуши о новых уведомлениях и заявках (specs/024-push.md). Токен привязан к сессии: у сессии один токен, новый заменяет старый, тот же токен с другой сессии переезжает к ней. Выход из аккаунта забывает токен. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [PushToken] pushToken (required):
+  Future<Response> setPushTokenWithHttpInfo(PushToken pushToken, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/me/push-token';
+
+    // ignore: prefer_final_locals
+    Object? postBody = pushToken;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Токен FCM этого телефона
+  ///
+  /// Телефон отдаёт токен Firebase Cloud Messaging, на него сервис шлёт пуши о новых уведомлениях и заявках (specs/024-push.md). Токен привязан к сессии: у сессии один токен, новый заменяет старый, тот же токен с другой сессии переезжает к ней. Выход из аккаунта забывает токен. 
+  ///
+  /// Parameters:
+  ///
+  /// * [PushToken] pushToken (required):
+  Future<void> setPushToken(PushToken pushToken, { Future<void>? abortTrigger, }) async {
+    final response = await setPushTokenWithHttpInfo(pushToken, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
 }
