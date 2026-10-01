@@ -22,6 +22,7 @@ import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
 import '../widgets/follow_button.dart';
 import '../widgets/loading_view.dart';
+import '../widgets/place_field.dart';
 import '../widgets/user_avatar.dart';
 import 'follow_list_screen.dart';
 import 'profile_screen.dart';
@@ -613,6 +614,10 @@ class _Header extends StatelessWidget {
         if (profile.about.isNotEmpty) ...[
           const SizedBox(height: AppGap.medium),
           Text(profile.about, style: theme.textTheme.bodyLarge),
+        ],
+        if (profile.place case final place?) ...[
+          const SizedBox(height: AppGap.small),
+          PlaceLine(place: place),
         ],
       ],
     );

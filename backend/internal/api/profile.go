@@ -18,11 +18,20 @@ import (
 
 // userColumns — поля, из которых собирается профиль. Порядок совпадает
 // с scanUser: читать их из базы нужно везде одинаково.
-const userColumns = `id, phone, created_at, nickname, nickname_chosen, name, about, avatar_key, closed`
+var userColumns = `id, phone, created_at, nickname, nickname_chosen, name, about, avatar_key, closed, ` + placeColumns("users")
 
 // userColumnsPrefixed — те же поля, когда в запросе несколько таблиц
 // и users названа u.
-const userColumnsPrefixed = `u.id, u.phone, u.created_at, u.nickname, u.nickname_chosen, u.name, u.about, u.avatar_key, u.closed`
+var userColumnsPrefixed = `u.id, u.phone, u.created_at, u.nickname, u.nickname_chosen, u.name, u.about, u.avatar_key, u.closed, ` + placeColumns("u")
+
+// placeColumns — пункт человека (specs/025-places.md): идентификатор,
+// название и уточнение. Подзапросами, а не JOIN: эти поля читаются и в
+// RETURNING после UPDATE и INSERT.
+func placeColumns(users string) string {
+	return users + `.place_id, ` +
+		`(SELECT pl.name FROM places pl WHERE pl.id = ` + users + `.place_id), ` +
+		`(SELECT pl.area FROM places pl WHERE pl.id = ` + users + `.place_id)`
+}
 
 // GetMe отдаёт профиль владельца токена.
 func (s *Server) GetMe(ctx context.Context, _ gen.GetMeRequestObject) (gen.GetMeResponseObject, error) {
@@ -206,14 +215,16 @@ func (s *Server) scanUser(row pgx.Row) (gen.CurrentUser, error) {
 	var (
 		user      gen.CurrentUser
 		avatarKey *string
+		place     placeScan
 	)
 	if err := row.Scan(
 		&user.Id, &user.Phone, &user.CreatedAt,
 		&user.Nickname, &user.NicknameChosen, &user.Name, &user.About, &avatarKey,
-		&user.Closed,
+		&user.Closed, &place.id, &place.name, &place.area,
 	); err != nil {
 		return gen.CurrentUser{}, err
 	}
+	user.Place = place.value()
 
 	if avatarKey != nil {
 		url := s.cfg.Media.URL(*avatarKey)

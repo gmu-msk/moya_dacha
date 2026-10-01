@@ -1,6 +1,6 @@
-// Правка своего профиля: никнейм, полное имя, «о себе», аватар
-// и закрытый профиль (specs/002-profile.md, specs/010-nicknames.md,
-// specs/012-follows.md).
+// Правка своего профиля: никнейм, полное имя, «о себе», населённый пункт,
+// аватар и закрытый профиль (specs/002-profile.md, specs/010-nicknames.md,
+// specs/012-follows.md, specs/025-places.md).
 //
 // Всё, что здесь видно, принадлежит владельцу токена, и номер телефона
 // показывается только здесь. Открывается кнопкой «Изменить профиль» из
@@ -18,6 +18,7 @@ import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/confirm.dart';
 import '../widgets/error_view.dart';
+import '../widgets/place_field.dart';
 import '../widgets/user_avatar.dart';
 import 'about_screen.dart';
 import 'blocked_screen.dart';
@@ -53,6 +54,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _about = TextEditingController(
     text: _user.about,
   );
+
+  /// Выбранный пункт: уходит на сервис вместе с «Сохранить».
+  late Place? _place = _user.place;
 
   /// Ошибка никнейма — под его полем, остальные — под кнопкой.
   String? _nicknameError;
@@ -103,6 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _nickname.text = user.nickname;
         _name.text = user.name;
         _about.text = user.about;
+        _place = user.place;
         _busy = false;
         _saved = done;
       });
@@ -129,7 +134,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_nickname.text.trim() != _user.nickname) {
       await _api.setNickname(NicknameUpdate(nickname: _nickname.text));
     }
-    return _api.updateMe(ProfileUpdate(name: _name.text, about: _about.text));
+    final user = await _api.updateMe(
+      ProfileUpdate(name: _name.text, about: _about.text),
+    );
+    // Пункт — отдельной операцией и только если он правда другой
+    // (specs/025-places.md, требование 17).
+    if (_place?.id != _user.place?.id) {
+      return _api.setPlace(PlaceUpdate(placeId: _place?.id));
+    }
+    return user;
   }, 'Сохранено');
 
   Future<void> _pickAvatar() async {
@@ -287,6 +300,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               enabled: !_busy,
               inputFormatters: [LengthLimitingTextInputFormatter(200)],
               decoration: const InputDecoration(labelText: 'О себе'),
+            ),
+            const SizedBox(height: AppGap.medium),
+            PlaceField(
+              token: widget.token,
+              place: _place,
+              enabled: !_busy,
+              onChanged: (place) => setState(() => _place = place),
             ),
             const SizedBox(height: AppGap.medium),
             FilledButton(

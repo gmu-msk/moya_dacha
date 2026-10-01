@@ -22,6 +22,7 @@ class CurrentUser {
     required this.about,
     this.avatarUrl,
     required this.closed,
+    this.place,
   });
 
   /// Идентификатор пользователя (UUID)
@@ -51,6 +52,14 @@ class CurrentUser {
   /// Закрыт ли профиль: посты и списки подписок видят только подписчики, новые подписываются по заявке (specs/012-follows.md) 
   bool closed;
 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  Place? place;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is CurrentUser &&
     other.id == id &&
@@ -61,7 +70,8 @@ class CurrentUser {
     other.name == name &&
     other.about == about &&
     other.avatarUrl == avatarUrl &&
-    other.closed == closed;
+    other.closed == closed &&
+    other.place == place;
 
   @override
   int get hashCode =>
@@ -74,10 +84,11 @@ class CurrentUser {
     (name.hashCode) +
     (about.hashCode) +
     (avatarUrl == null ? 0 : avatarUrl!.hashCode) +
-    (closed.hashCode);
+    (closed.hashCode) +
+    (place == null ? 0 : place!.hashCode);
 
   @override
-  String toString() => 'CurrentUser[id=$id, nickname=$nickname, nicknameChosen=$nicknameChosen, phone=$phone, createdAt=$createdAt, name=$name, about=$about, avatarUrl=$avatarUrl, closed=$closed]';
+  String toString() => 'CurrentUser[id=$id, nickname=$nickname, nicknameChosen=$nicknameChosen, phone=$phone, createdAt=$createdAt, name=$name, about=$about, avatarUrl=$avatarUrl, closed=$closed, place=$place]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -94,6 +105,11 @@ class CurrentUser {
       json[r'avatar_url'] = null;
     }
       json[r'closed'] = this.closed;
+    if (this.place != null) {
+      json[r'place'] = this.place;
+    } else {
+      json[r'place'] = null;
+    }
     return json;
   }
 
@@ -137,6 +153,7 @@ class CurrentUser {
         about: mapValueOfType<String>(json, r'about')!,
         avatarUrl: mapValueOfType<String>(json, r'avatar_url'),
         closed: mapValueOfType<bool>(json, r'closed')!,
+        place: Place.fromJson(json[r'place']),
       );
     }
     return null;

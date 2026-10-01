@@ -42,6 +42,9 @@ lib/model/nickname_update.dart
 lib/model/notification.dart
 lib/model/notification_list.dart
 lib/model/notification_post.dart
+lib/model/place.dart
+lib/model/place_list.dart
+lib/model/place_update.dart
 lib/model/post.dart
 lib/model/post_draft.dart
 lib/model/post_visibility.dart

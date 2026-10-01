@@ -384,6 +384,88 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /me/place:
+    put:
+      operationId: setPlace
+      summary: Выбрать или убрать населённый пункт
+      description: |
+        Ставит пункт из тех, что сервер уже отдавал в подсказках
+        `GET /places`; `null` или пустая строка убирает пункт. Пункт у
+        человека один (specs/025-places.md).
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceUpdate"
+      responses:
+        "200":
+          description: Пункт поставлен или убран
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "400":
+          description: |
+            Такого пункта сервер не отдавал в подсказках (`unknown_place`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /places:
+    get:
+      operationId: getPlaces
+      summary: Подсказки населённых пунктов
+      description: |
+        До 10 пунктов из справочника ФИАС (через DaData) по набранному
+        тексту: города, сёла и деревни, СНТ (specs/025-places.md).
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Набранный текст, от 2 до 100 символов после обрезки пробелов
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Подсказки, может быть пусто
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaceList"
+        "400":
+          description: Текст короче 2 или длиннее 100 символов (`invalid_query`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: |
+            Справочник не настроен или не ответил (`places_unavailable`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /media:
     post:
       operationId: uploadMedia
@@ -2117,6 +2199,48 @@ components:
             Закрыт ли профиль: посты и списки подписок видят только
             подписчики, новые подписываются по заявке (specs/012-follows.md)
           example: false
+        place:
+          $ref: "#/components/schemas/Place"
+
+    Place:
+      type: object
+      description: |
+        Населённый пункт из справочника ФИАС: город, село, деревня, СНТ
+        (specs/025-places.md). В профиле поля нет, если пункт не выбран.
+      required: [id, name, area]
+      properties:
+        id:
+          type: string
+          description: Идентификатор объекта в ФИАС
+          example: "5f4a3b2c-1d0e-4f9a-8b7c-6d5e4f3a2b1c"
+        name:
+          type: string
+          description: Название с типом, как его дал справочник
+          example: "снт Андрейково"
+        area:
+          type: string
+          description: |
+            Что выше пункта, от ближнего к дальнему, через «, »; может быть
+            пустым
+          example: "Дмитровский р-н, Московская обл"
+
+    PlaceList:
+      type: object
+      required: [places]
+      properties:
+        places:
+          type: array
+          items:
+            $ref: "#/components/schemas/Place"
+
+    PlaceUpdate:
+      type: object
+      properties:
+        place_id:
+          type: string
+          nullable: true
+          description: Идентификатор пункта из подсказок; `null` или пусто — убрать
+          example: "5f4a3b2c-1d0e-4f9a-8b7c-6d5e4f3a2b1c"
 
     NicknameUpdate:
       type: object
@@ -2398,6 +2522,8 @@ components:
             Заблокировал ли смотрящий этого человека; в своём профиле
             `false` (specs/022-edit-block-delete.md)
           example: false
+        place:
+          $ref: "#/components/schemas/Place"
         relation:
           $ref: "#/components/schemas/Relation"
 
