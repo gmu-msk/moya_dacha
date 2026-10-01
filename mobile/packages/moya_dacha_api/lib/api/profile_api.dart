@@ -151,6 +151,67 @@ class ProfileApi {
     return null;
   }
 
+  /// Подсказки населённых пунктов
+  ///
+  /// До 10 пунктов из справочника ФИАС (через DaData) по набранному тексту: города, сёла и деревни, СНТ (specs/025-places.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] q (required):
+  ///   Набранный текст, от 2 до 100 символов после обрезки пробелов
+  Future<Response> getPlacesWithHttpInfo(String q, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/places';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+      queryParams.addAll(_queryParams('', 'q', q));
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Подсказки населённых пунктов
+  ///
+  /// До 10 пунктов из справочника ФИАС (через DaData) по набранному тексту: города, сёла и деревни, СНТ (specs/025-places.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] q (required):
+  ///   Набранный текст, от 2 до 100 символов после обрезки пробелов
+  Future<PlaceList?> getPlaces(String q, { Future<void>? abortTrigger, }) async {
+    final response = await getPlacesWithHttpInfo(q, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'PlaceList',) as PlaceList;
+    
+    }
+    return null;
+  }
+
   /// Поставить аватар
   ///
   /// Картинка JPEG или PNG не больше 5 МБ. Сервис уменьшает её до 512×512 и пересохраняет в JPEG; новый аватар заменяет прежний. 
@@ -264,6 +325,63 @@ class ProfileApi {
   /// * [NicknameUpdate] nicknameUpdate (required):
   Future<CurrentUser?> setNickname(NicknameUpdate nicknameUpdate, { Future<void>? abortTrigger, }) async {
     final response = await setNicknameWithHttpInfo(nicknameUpdate, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'CurrentUser',) as CurrentUser;
+    
+    }
+    return null;
+  }
+
+  /// Выбрать или убрать населённый пункт
+  ///
+  /// Ставит пункт из тех, что сервер уже отдавал в подсказках `GET /places`; `null` или пустая строка убирает пункт. Пункт у человека один (specs/025-places.md). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [PlaceUpdate] placeUpdate (required):
+  Future<Response> setPlaceWithHttpInfo(PlaceUpdate placeUpdate, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/me/place';
+
+    // ignore: prefer_final_locals
+    Object? postBody = placeUpdate;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Выбрать или убрать населённый пункт
+  ///
+  /// Ставит пункт из тех, что сервер уже отдавал в подсказках `GET /places`; `null` или пустая строка убирает пункт. Пункт у человека один (specs/025-places.md). 
+  ///
+  /// Parameters:
+  ///
+  /// * [PlaceUpdate] placeUpdate (required):
+  Future<CurrentUser?> setPlace(PlaceUpdate placeUpdate, { Future<void>? abortTrigger, }) async {
+    final response = await setPlaceWithHttpInfo(placeUpdate, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

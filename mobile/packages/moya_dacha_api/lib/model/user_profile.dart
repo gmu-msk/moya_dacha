@@ -24,6 +24,7 @@ class UserProfile {
     required this.following,
     required this.closed,
     required this.blocked,
+    this.place,
     this.relation,
   });
 
@@ -66,6 +67,14 @@ class UserProfile {
   /// source code must fall back to having a nullable type.
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
+  Place? place;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
   Relation? relation;
 
   @override
@@ -81,6 +90,7 @@ class UserProfile {
     other.following == following &&
     other.closed == closed &&
     other.blocked == blocked &&
+    other.place == place &&
     other.relation == relation;
 
   @override
@@ -97,10 +107,11 @@ class UserProfile {
     (following.hashCode) +
     (closed.hashCode) +
     (blocked.hashCode) +
+    (place == null ? 0 : place!.hashCode) +
     (relation == null ? 0 : relation!.hashCode);
 
   @override
-  String toString() => 'UserProfile[id=$id, nickname=$nickname, name=$name, about=$about, avatarUrl=$avatarUrl, createdAt=$createdAt, posts=$posts, followers=$followers, following=$following, closed=$closed, blocked=$blocked, relation=$relation]';
+  String toString() => 'UserProfile[id=$id, nickname=$nickname, name=$name, about=$about, avatarUrl=$avatarUrl, createdAt=$createdAt, posts=$posts, followers=$followers, following=$following, closed=$closed, blocked=$blocked, place=$place, relation=$relation]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -119,6 +130,11 @@ class UserProfile {
       json[r'following'] = this.following;
       json[r'closed'] = this.closed;
       json[r'blocked'] = this.blocked;
+    if (this.place != null) {
+      json[r'place'] = this.place;
+    } else {
+      json[r'place'] = null;
+    }
     if (this.relation != null) {
       json[r'relation'] = this.relation;
     } else {
@@ -173,6 +189,7 @@ class UserProfile {
         following: mapValueOfType<int>(json, r'following')!,
         closed: mapValueOfType<bool>(json, r'closed')!,
         blocked: mapValueOfType<bool>(json, r'blocked')!,
+        place: Place.fromJson(json[r'place']),
         relation: Relation.fromJson(json[r'relation']),
       );
     }

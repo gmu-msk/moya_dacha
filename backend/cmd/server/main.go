@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -97,6 +98,12 @@ func run() error {
 	cfg.DashboardPassword = os.Getenv("DASHBOARD_PASSWORD")
 	if cfg.DashboardPassword == "" {
 		slog.Info("DASHBOARD_PASSWORD не задан: дашборда нет")
+	}
+	// Подсказки населённых пунктов из ФИАС через DaData (specs/025-places.md).
+	cfg.PlacesURL = strings.TrimSpace(os.Getenv("DADATA_URL"))
+	cfg.PlacesKey = strings.TrimSpace(os.Getenv("DADATA_API_KEY"))
+	if cfg.PlacesKey == "" {
+		slog.Info("DADATA_API_KEY не задан: подсказок населённых пунктов нет")
 	}
 	// Отзывы разработчику и задачи GitHub (specs/019-feedback.md).
 	fb := feedback.New(pool, feedbackConfig(cfg.Media))

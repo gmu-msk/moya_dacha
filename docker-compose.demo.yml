@@ -86,6 +86,10 @@ services:
       # любое, пароль этот (specs/016-dashboard.md). Данные стенда
       # выдуманные, пароль прятать незачем; на VPS он случайный.
       DASHBOARD_PASSWORD: dacha
+      # Подсказки населённых пунктов (specs/025-places.md): ключ DaData из
+      # окружения того, кто поднимает стенд. Без ключа подсказок нет, но
+      # пункты из данных сценария видны.
+      DADATA_API_KEY: "${DADATA_API_KEY:-}"
     volumes:
       - demo-media-data:/var/lib/moya-dacha/media
     ports:

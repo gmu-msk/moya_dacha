@@ -233,6 +233,12 @@ class ApiClient {
           return NotificationList.fromJson(value);
         case 'NotificationPost':
           return NotificationPost.fromJson(value);
+        case 'Place':
+          return Place.fromJson(value);
+        case 'PlaceList':
+          return PlaceList.fromJson(value);
+        case 'PlaceUpdate':
+          return PlaceUpdate.fromJson(value);
         case 'Post':
           return Post.fromJson(value);
         case 'PostDraft':

@@ -103,6 +103,8 @@ jobs:
           # Ключ сервисного аккаунта Firebase для пушей (specs/024-push.md,
           # требование 18): JSON целиком, на сервер — в base64 одной строкой.
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # Ключ подсказок населённых пунктов DaData (specs/025-places.md).
+          DADATA_API_KEY: ${{ secrets.DADATA_API_KEY }}
           # С прода api.telegram.org не открывается: бот ходит в Telegram
           # через SSH-туннель до второго VPS (specs/018-telegram-bot.md, 3б).
           # RELAY_HOST может быть и «адрес:порт».
@@ -124,8 +126,8 @@ jobs:
           fi
           fcm=""
           [ -z "$FIREBASE_SERVICE_ACCOUNT" ] || fcm=$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | base64 -w0)
-          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\nFEEDBACK_GITHUB_TOKEN=%s\nFCM_CREDENTIALS=%s\n' \
-            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" "$TELEGRAM_API_URL" "$FEEDBACK_GITHUB_TOKEN" "$fcm" |
+          printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_OWNER=%s\nTELEGRAM_API_URL=%s\nFEEDBACK_GITHUB_TOKEN=%s\nFCM_CREDENTIALS=%s\nDADATA_API_KEY=%s\n' \
+            "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_OWNER" "$TELEGRAM_API_URL" "$FEEDBACK_GITHUB_TOKEN" "$fcm" "$DADATA_API_KEY" |
           ssh vps "set -e
             sudo=\$( [ \"\$(id -u)\" = 0 ] || echo sudo )
             rm -rf /tmp/moya-dacha-release && mkdir /tmp/moya-dacha-release

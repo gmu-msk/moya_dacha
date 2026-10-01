@@ -67,6 +67,13 @@ type Config struct {
 	// DASHBOARD_PASSWORD, specs/016-dashboard.md). Пустой — дашборда нет.
 	DashboardPassword string
 
+	// PlacesURL и PlacesKey — адрес и ключ подсказок DaData для
+	// населённого пункта (переменные окружения DADATA_URL и DADATA_API_KEY,
+	// specs/025-places.md). Пустой адрес — адрес по умолчанию, пустой
+	// ключ — подсказок нет.
+	PlacesURL string
+	PlacesKey string
+
 	// DiskPath — где дашборд меряет диск: там, где лежат файлы
 	// пользователей. Пустой — корень файловой системы.
 	DiskPath string

@@ -76,12 +76,13 @@ if ! grep -q '^DASHBOARD_PASSWORD=' /etc/moya-dacha.env; then
 fi
 # Telegram-бот (specs/018-telegram-bot.md): токен, ник владельца и адрес
 # посредника, а с ними токен GitHub для отзывов (specs/019-feedback.md)
-# и ключ Firebase для пушей в base64 (specs/024-push.md) деплой кладёт
+# ключ Firebase для пушей в base64 (specs/024-push.md) и ключ DaData
+# (specs/025-places.md) деплой кладёт
 # рядом с собой из настроек репозитория. Пустое значение строку не трогает.
 if [ -f "$here/telegram.env" ]; then
 	while IFS= read -r line; do
 		key="${line%%=*}" value="${line#*=}"
-		case "$key" in TELEGRAM_BOT_TOKEN | TELEGRAM_OWNER | TELEGRAM_API_URL | FEEDBACK_GITHUB_TOKEN | FCM_CREDENTIALS) ;; *) continue ;; esac
+		case "$key" in TELEGRAM_BOT_TOKEN | TELEGRAM_OWNER | TELEGRAM_API_URL | FEEDBACK_GITHUB_TOKEN | FCM_CREDENTIALS | DADATA_API_KEY) ;; *) continue ;; esac
 		[ -n "$value" ] || continue
 		sed -i "/^$key=/d" /etc/moya-dacha.env
 		printf '%s=%s\n' "$key" "$value" >> /etc/moya-dacha.env

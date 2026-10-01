@@ -30,6 +30,7 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 		avatarKey *string
 		following string
 		relation  gen.Relation
+		place     placeScan
 	)
 	// Заявки в числа не входят (требование 12). Посты — только видимые
 	// смотрящему, а у закрытого профиля без подписки — те, что он увидит,
@@ -38,6 +39,7 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 	// самого (specs/022-edit-block-delete.md, требования 14 и 15).
 	err := s.db.QueryRow(ctx, `
 		SELECT u.id, u.nickname, u.name, u.about, u.avatar_key, u.created_at, u.closed,
+			`+placeColumns("u")+`,
 			(SELECT count(*) FROM posts p WHERE p.author_id = u.id
 				AND NOT `+blockedBetween("$2::uuid", "u.id")+`
 				AND (p.visibility = 'all' OR `+postVisibleTo("$2")+`)),
@@ -47,7 +49,7 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 			`+relationColumns+`
 		FROM users u WHERE u.id = $1 AND NOT `+blocks("u.id", "$2::uuid"), request.UserId, current.user.Id,
 	).Scan(&user.Id, &user.Nickname, &user.Name, &user.About, &avatarKey, &user.CreatedAt,
-		&user.Closed, &user.Posts, &user.Followers, &user.Following, &user.Blocked,
+		&user.Closed, &place.id, &place.name, &place.area, &user.Posts, &user.Followers, &user.Following, &user.Blocked,
 		&following, &relation.FollowedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.GetUser404JSONResponse(errUserNotFound), nil
@@ -59,6 +61,7 @@ func (s *Server) GetUser(ctx context.Context, request gen.GetUserRequestObject) 
 		url := s.cfg.Media.URL(*avatarKey)
 		user.AvatarUrl = &url
 	}
+	user.Place = place.value()
 	// К себе отношения нет: в своём профиле нет и кнопки.
 	if user.Id != current.user.Id {
 		relation.Following = gen.RelationFollowing(following)
