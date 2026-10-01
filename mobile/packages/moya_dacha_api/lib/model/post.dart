@@ -25,6 +25,7 @@ class Post {
     this.editedAt,
     this.place,
     this.distanceKm,
+    this.tags = const [],
   });
 
   /// Идентификатор поста (UUID)
@@ -66,6 +67,9 @@ class Post {
   /// Примерное расстояние от пункта смотрящего до места поста, км, округлённое; `0` — тот же пункт. Нет или `null`, если его не посчитать или пост свой (specs/027-post-place.md, требования 7–9) 
   int? distanceKm;
 
+  /// Нормализованные тэги в порядке автора; нет тэгов — пустой массив (specs/028-post-tags.md) 
+  List<String> tags;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Post &&
     other.id == id &&
@@ -79,7 +83,8 @@ class Post {
     other.visibility == visibility &&
     other.editedAt == editedAt &&
     other.place == place &&
-    other.distanceKm == distanceKm;
+    other.distanceKm == distanceKm &&
+    _deepEquality.equals(other.tags, tags);
 
   @override
   int get hashCode =>
@@ -95,10 +100,11 @@ class Post {
     (visibility.hashCode) +
     (editedAt == null ? 0 : editedAt!.hashCode) +
     (place == null ? 0 : place!.hashCode) +
-    (distanceKm == null ? 0 : distanceKm!.hashCode);
+    (distanceKm == null ? 0 : distanceKm!.hashCode) +
+    (tags.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -126,6 +132,7 @@ class Post {
     } else {
       json[r'distance_km'] = null;
     }
+      json[r'tags'] = this.tags;
     return json;
   }
 
@@ -174,6 +181,9 @@ class Post {
         editedAt: mapDateTime(json, r'edited_at', r''),
         place: Place.fromJson(json[r'place']),
         distanceKm: mapValueOfType<int>(json, r'distance_km'),
+        tags: json[r'tags'] is Iterable
+            ? (json[r'tags'] as Iterable).cast<String>().toList(growable: false)
+            : const [],
       );
     }
     return null;

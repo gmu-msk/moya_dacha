@@ -113,7 +113,7 @@ func (s *Server) GetUserPosts(ctx context.Context, request gen.GetUserPostsReque
 		return gen.GetUserPosts403JSONResponse(errProfileClosed), nil
 	}
 
-	page, err := s.feedPage(ctx, current.user.Id, request.UserId, false, after, limit)
+	page, err := s.feedPage(ctx, current.user.Id, request.UserId, "", false, after, limit)
 	if err != nil {
 		return nil, err
 	}

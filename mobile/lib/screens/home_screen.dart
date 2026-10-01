@@ -26,6 +26,7 @@ import 'intro_screen.dart';
 import 'notifications_screen.dart';
 import 'new_post_screen.dart';
 import 'post_screen.dart';
+import 'tag_posts_screen.dart';
 import 'user_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -381,6 +382,21 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Посты с тэгом — поверх ленты (specs/028-post-tags.md, требование 24).
+  Future<void> _openTag(String tag) async {
+    final user = _user;
+    if (user == null) {
+      return;
+    }
+    await openTagPosts(
+      _feedStack.context,
+      token: widget.token,
+      viewerId: user.id,
+      tag: tag,
+      onPostChanged: (post) => _feed.currentState?.replace(post),
+    );
+  }
+
   Future<void> _openPost(Post post) async {
     final user = _user;
     if (user == null) {
@@ -471,6 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onOpenPost: _openPost,
                   onNewPost: _newPost,
                   onOpenAuthor: (author) => _openProfile(author.id),
+                  onOpenTag: _openTag,
                 ),
               ),
             ),

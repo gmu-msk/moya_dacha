@@ -17,6 +17,7 @@ class PostDraft {
     this.caption,
     this.visibility,
     this.placeId,
+    this.tags = const [],
   });
 
   /// Идентификаторы уже загруженных фотографий, в том порядке, в котором они должны стоять в посте. 
@@ -42,12 +43,16 @@ class PostDraft {
   /// Место поста — пункт из подсказок `GET /places`; нет, `null` или пустая строка — без места (specs/027-post-place.md) 
   String? placeId;
 
+  /// Тэги поста, до десяти; сервер нормализует их: без `#` в начале, в нижнем регистре, без повторов (specs/028-post-tags.md) 
+  List<String>? tags;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is PostDraft &&
     _deepEquality.equals(other.mediaIds, mediaIds) &&
     other.caption == caption &&
     other.visibility == visibility &&
-    other.placeId == placeId;
+    other.placeId == placeId &&
+    _deepEquality.equals(other.tags, tags);
 
   @override
   int get hashCode =>
@@ -55,10 +60,11 @@ class PostDraft {
     (mediaIds.hashCode) +
     (caption == null ? 0 : caption!.hashCode) +
     (visibility == null ? 0 : visibility!.hashCode) +
-    (placeId == null ? 0 : placeId!.hashCode);
+    (placeId == null ? 0 : placeId!.hashCode) +
+    (tags == null ? 0 : tags!.hashCode);
 
   @override
-  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId]';
+  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, tags=$tags]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -77,6 +83,11 @@ class PostDraft {
       json[r'place_id'] = this.placeId;
     } else {
       json[r'place_id'] = null;
+    }
+    if (this.tags != null) {
+      json[r'tags'] = this.tags;
+    } else {
+      json[r'tags'] = null;
     }
     return json;
   }
@@ -104,6 +115,9 @@ class PostDraft {
         caption: mapValueOfType<String>(json, r'caption'),
         visibility: PostVisibility.fromJson(json[r'visibility']),
         placeId: mapValueOfType<String>(json, r'place_id'),
+        tags: json[r'tags'] is Iterable
+            ? (json[r'tags'] as Iterable).cast<String>().toList(growable: false)
+            : const [],
       );
     }
     return null;

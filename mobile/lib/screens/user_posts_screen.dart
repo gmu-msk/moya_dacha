@@ -12,6 +12,7 @@ import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/feed_view.dart';
 import 'post_screen.dart';
+import 'tag_posts_screen.dart';
 import 'user_screen.dart';
 
 class UserPostsScreen extends StatefulWidget {
@@ -130,6 +131,13 @@ class _UserPostsScreenState extends State<UserPostsScreen> {
       showAuthor: false,
       onTap: () => _open(post),
       onChanged: _changed,
+      onOpenTag: (tag) => openTagPosts(
+        context,
+        token: widget.token,
+        viewerId: widget.viewerId,
+        tag: tag,
+        onPostChanged: _changed,
+      ),
     ),
   );
 

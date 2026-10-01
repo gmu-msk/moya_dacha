@@ -55,7 +55,17 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 		after = &parsed
 	}
 
-	page, err := s.feedPage(ctx, current.user.Id, "", followingOnly, after, limit)
+	// Лента одного тэга (specs/028-post-tags.md, требования 12–14).
+	var tag string
+	if request.Params.Tag != nil {
+		normalized, err := normalizeTag(*request.Params.Tag)
+		if err != nil {
+			return gen.GetFeed400JSONResponse(errInvalidTag), nil
+		}
+		tag = normalized
+	}
+
+	page, err := s.feedPage(ctx, current.user.Id, "", tag, followingOnly, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +85,10 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 // закрытый профиль, «друзьям», «только мне». followingOnly
 // оставляет только своих и тех, на кого смотрящий подписан: вкладка
 // «Подписки» (требование 17). Заявка — не подписка.
-func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, followingOnly bool, after *feedCursor, limit int) (gen.Feed, error) {
+//
+// tag оставляет только посты с этим тэгом (specs/028-post-tags.md,
+// требование 12); пустой — все.
+func (s *Server) feedPage(ctx context.Context, viewerID, authorID, tag string, followingOnly bool, after *feedCursor, limit int) (gen.Feed, error) {
 	var (
 		afterTime *time.Time
 		afterID   *string
@@ -86,6 +99,10 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 	var author *string
 	if authorID != "" {
 		author = &authorID
+	}
+	var withTag *string
+	if tag != "" {
+		withTag = &tag
 	}
 
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
@@ -111,10 +128,12 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 		           WHERE f.follower_id = $4::uuid AND f.followee_id = p.author_id
 		             AND f.accepted
 		       ))
+		  AND ($7::text IS NULL OR EXISTS (
+		       SELECT 1 FROM post_tags pt WHERE pt.post_id = p.id AND pt.tag = $7))
 		  AND ($1::timestamptz IS NULL
 		       OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid))
 		ORDER BY p.created_at DESC, p.id DESC
-		LIMIT $3`, afterTime, afterID, limit+1, viewerID, author, followingOnly)
+		LIMIT $3`, afterTime, afterID, limit+1, viewerID, author, followingOnly, withTag)
 	if err != nil {
 		return gen.Feed{}, err
 	}
@@ -153,6 +172,9 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 	}
 
 	if err := s.attachMedia(ctx, feed.Items); err != nil {
+		return gen.Feed{}, err
+	}
+	if err := s.attachTags(ctx, feed.Items); err != nil {
 		return gen.Feed{}, err
 	}
 	return feed, nil
