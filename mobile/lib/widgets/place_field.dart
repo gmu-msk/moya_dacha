@@ -62,6 +62,44 @@ class PlaceText extends StatelessWidget {
   }
 }
 
+/// Место поста в карточке: значок, название пункта и, если сервис его
+/// посчитал, расстояние — «рядом» или «~N км» (specs/027-post-place.md,
+/// требование 16). Района и области нет: пост — не профиль.
+class PostPlaceLine extends StatelessWidget {
+  const PostPlaceLine({super.key, required this.place, this.distanceKm});
+
+  final Place place;
+  final int? distanceKm;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
+    final style = theme.textTheme.bodyMedium?.copyWith(color: color);
+    final distance = distanceKm;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: AppGap.tiny),
+          child: Icon(Icons.place_outlined, size: 18, color: color),
+        ),
+        Expanded(
+          child: Text(
+            distance == null
+                ? place.name
+                : '${place.name} · ${distanceText(distance)}',
+            style: style,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Расстояние до поста словами: 0 — тот же пункт, «рядом».
+String distanceText(int km) => km == 0 ? 'рядом' : '~$km км';
+
 /// Почему не удалось найти пункты рядом: текст для человека
 /// (specs/026-places-nearby.md, требование 12).
 class NearbyProblem implements Exception {
@@ -74,7 +112,8 @@ class NearbyProblem implements Exception {
 }
 
 /// Поле «Населённый пункт» на экране «Изменить профиль» (025, требования
-/// 15–18; 026, требования 11–14). Выбранный пункт поднимается наверх через
+/// 15–18; 026, требования 11–14) и «Место» в новом посте (027,
+/// требование 13). Выбранный пункт поднимается наверх через
 /// [onChanged]; набранный и не выбранный текст пунктом не становится.
 class PlaceField extends StatefulWidget {
   const PlaceField({
@@ -83,6 +122,8 @@ class PlaceField extends StatefulWidget {
     required this.place,
     required this.onChanged,
     this.enabled = true,
+    this.label = 'Населённый пункт',
+    this.helper = 'СНТ, деревня, посёлок — выберите из подсказок',
     this.suggest,
     this.nearby,
   });
@@ -91,6 +132,11 @@ class PlaceField extends StatefulWidget {
   final Place? place;
   final ValueChanged<Place?> onChanged;
   final bool enabled;
+
+  /// Название поля и подсказка под ним: в профиле — «Населённый пункт»,
+  /// в новом посте — «Место» (specs/027-post-place.md, требование 13).
+  final String label;
+  final String helper;
 
   /// Откуда брать подсказки; по умолчанию — `GET /places`. Подменяется
   /// в тестах экрана.
@@ -266,7 +312,7 @@ class _PlaceFieldState extends State<PlaceField> {
 
     if (place != null) {
       return InputDecorator(
-        decoration: const InputDecoration(labelText: 'Населённый пункт'),
+        decoration: InputDecoration(labelText: widget.label),
         child: Row(
           children: [
             Expanded(child: PlaceText(place: place)),
@@ -290,8 +336,8 @@ class _PlaceFieldState extends State<PlaceField> {
           onChanged: _onTyped,
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
-            labelText: 'Населённый пункт',
-            helperText: 'СНТ, деревня, посёлок — выберите из подсказок',
+            labelText: widget.label,
+            helperText: widget.helper,
             suffixIcon: _loading
                 ? const Padding(
                     padding: EdgeInsets.all(AppGap.snug),

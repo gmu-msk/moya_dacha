@@ -18,6 +18,7 @@ import 'error_view.dart';
 import 'like_button.dart';
 import 'post_action.dart';
 import 'loading_view.dart';
+import 'place_field.dart';
 import 'segment_tabs.dart';
 
 const feedPageSize = 20;
@@ -547,6 +548,11 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+          ),
+        if (post.place case final place?)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppGap.snug),
+            child: PostPlaceLine(place: place, distanceKm: post.distanceKm),
           ),
         if (post.media.isNotEmpty)
           GestureDetector(

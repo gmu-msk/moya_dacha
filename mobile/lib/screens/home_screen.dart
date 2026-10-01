@@ -356,8 +356,11 @@ class _HomeScreenState extends State<HomeScreen> {
     // Выезжает снизу (макет «Сад», одобрено в раунде 2).
     final post = await Navigator.of(context, rootNavigator: true).push<Post>(
       SlideUpRoute(
-        builder: (_) =>
-            NewPostScreen(token: widget.token, closed: user?.closed ?? false),
+        builder: (_) => NewPostScreen(
+          token: widget.token,
+          closed: user?.closed ?? false,
+          place: user?.place,
+        ),
       ),
     );
     if (post == null || user == null || !mounted) {

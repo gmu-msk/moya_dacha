@@ -116,9 +116,20 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		return gen.CreatePost400JSONResponse(errInvalidVisibility), nil
 	}
 
-	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, request.Body.MediaIds)
+	// Место поста — по желанию, только из подсказок
+	// (specs/027-post-place.md, требование 1).
+	var placeID *string
+	if id := request.Body.PlaceId; id != nil && strings.TrimSpace(*id) != "" {
+		trimmed := strings.TrimSpace(*id)
+		placeID = &trimmed
+	}
+
+	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, placeID, request.Body.MediaIds)
 	if errors.Is(err, errMediaUnusable) {
 		return gen.CreatePost400JSONResponse(errInvalidMedia), nil
+	}
+	if errors.Is(err, errPlaceUnknown) {
+		return gen.CreatePost400JSONResponse(errUnknownPlace), nil
 	}
 	if err != nil {
 		return nil, err
@@ -157,13 +168,16 @@ func (s *Server) GetPost(ctx context.Context, request gen.GetPostRequestObject) 
 // errMediaUnusable — фотографии нет, она чужая или уже в другом посте.
 var errMediaUnusable = errors.New("фотография не годится для поста")
 
+// errPlaceUnknown — места поста сервер в подсказках не отдавал.
+var errPlaceUnknown = errors.New("место поста не из подсказок")
+
 // insertPost заводит пост и прикрепляет к нему фотографии.
 //
 // Пост создаётся целиком или не создаётся вовсе: прикрепление каждой
 // фотографии — это перевод строки из «загружено» в «опубликовано», и
 // если хоть один перевод не удался, транзакция откатывается целиком
 // (specs/003-posts.md).
-func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, mediaIDs []string) (string, error) {
+func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, placeID *string, mediaIDs []string) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -171,10 +185,16 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, visib
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var id string
-	if err := tx.QueryRow(ctx, `
-		INSERT INTO posts (author_id, caption, visibility) VALUES ($1, $2, $3)
-		RETURNING id`, authorID, caption, string(visibility),
-	).Scan(&id); err != nil {
+	err = tx.QueryRow(ctx, `
+		INSERT INTO posts (author_id, caption, visibility, place_id)
+		SELECT $1, $2, $3, $4
+		WHERE $4::text IS NULL OR EXISTS (SELECT 1 FROM places WHERE id = $4)
+		RETURNING id`, authorID, caption, string(visibility), placeID,
+	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", errPlaceUnknown
+	}
+	if err != nil {
 		return "", err
 	}
 
@@ -241,21 +261,25 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 	var (
 		post      gen.Post
 		avatarKey *string
+		place     postPlaceScan
 	)
 	if err := s.db.QueryRow(ctx, `
 		SELECT p.id, p.created_at, p.edited_at, p.caption, p.visibility,
 			u.id, u.nickname, u.name, u.avatar_key,
 			`+likeColumns+`,
-			`+commentCount("$2")+`
+			`+commentCount("$2")+`,
+			`+postPlaceColumns("$2")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
+		`+postPlaceJoin+`
 		WHERE p.id = $1 AND `+postVisibleTo("$2"), id, viewerID,
-	).Scan(
+	).Scan(append([]any{
 		&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption, &post.Visibility,
 		&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 		&post.Likes, &post.Liked, &post.Comments,
-	); err != nil {
+	}, place.targets()...)...); err != nil {
 		return gen.Post{}, err
 	}
+	place.apply(&post)
 	if avatarKey != nil {
 		url := s.cfg.Media.URL(*avatarKey)
 		post.Author.AvatarUrl = &url
