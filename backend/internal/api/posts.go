@@ -116,6 +116,17 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		return gen.CreatePost400JSONResponse(errInvalidVisibility), nil
 	}
 
+	// Тэги — после подписи и видимости, до места
+	// (specs/028-post-tags.md, требование 6).
+	var tags []string
+	if request.Body.Tags != nil {
+		normalized, err := normalizeTags(*request.Body.Tags)
+		if err != nil {
+			return gen.CreatePost400JSONResponse(tagsError(err)), nil
+		}
+		tags = normalized
+	}
+
 	// Место поста — по желанию, только из подсказок
 	// (specs/027-post-place.md, требование 1).
 	var placeID *string
@@ -124,7 +135,7 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		placeID = &trimmed
 	}
 
-	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, placeID, request.Body.MediaIds)
+	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, placeID, tags, request.Body.MediaIds)
 	if errors.Is(err, errMediaUnusable) {
 		return gen.CreatePost400JSONResponse(errInvalidMedia), nil
 	}
@@ -177,7 +188,7 @@ var errPlaceUnknown = errors.New("место поста не из подсказ
 // фотографии — это перевод строки из «загружено» в «опубликовано», и
 // если хоть один перевод не удался, транзакция откатывается целиком
 // (specs/003-posts.md).
-func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, placeID *string, mediaIDs []string) (string, error) {
+func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, placeID *string, tags []string, mediaIDs []string) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -195,6 +206,10 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, visib
 		return "", errPlaceUnknown
 	}
 	if err != nil {
+		return "", err
+	}
+
+	if err := writeTags(ctx, tx, id, tags); err != nil {
 		return "", err
 	}
 
@@ -310,7 +325,11 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		return gen.Post{}, err
 	}
 
-	return post, nil
+	posts := []gen.Post{post}
+	if err := s.attachTags(ctx, posts); err != nil {
+		return gen.Post{}, err
+	}
+	return posts[0], nil
 }
 
 // isUUID отвечает, похож ли идентификатор на UUID. Нужен, чтобы

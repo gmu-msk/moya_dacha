@@ -459,7 +459,10 @@ class PostsApi {
   ///
   /// * [String] cursor:
   ///   Курсор из предыдущего ответа; без него — первая страница
-  Future<Response> getFeedWithHttpInfo({ String? scope, int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+  ///
+  /// * [String] tag:
+  ///   Только посты с этим тэгом; нормализуется, как тэги поста. Пустой — как без параметра (specs/028-post-tags.md, требования 12–14). 
+  Future<Response> getFeedWithHttpInfo({ String? scope, int? limit, String? cursor, String? tag, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/feed';
 
@@ -478,6 +481,9 @@ class PostsApi {
     }
     if (cursor != null) {
       queryParams.addAll(_queryParams('', 'cursor', cursor));
+    }
+    if (tag != null) {
+      queryParams.addAll(_queryParams('', 'tag', tag));
     }
 
     const contentTypes = <String>[];
@@ -509,8 +515,11 @@ class PostsApi {
   ///
   /// * [String] cursor:
   ///   Курсор из предыдущего ответа; без него — первая страница
-  Future<Feed?> getFeed({ String? scope, int? limit, String? cursor, Future<void>? abortTrigger, }) async {
-    final response = await getFeedWithHttpInfo(scope: scope, limit: limit, cursor: cursor, abortTrigger: abortTrigger,);
+  ///
+  /// * [String] tag:
+  ///   Только посты с этим тэгом; нормализуется, как тэги поста. Пустой — как без параметра (specs/028-post-tags.md, требования 12–14). 
+  Future<Feed?> getFeed({ String? scope, int? limit, String? cursor, String? tag, Future<void>? abortTrigger, }) async {
+    final response = await getFeedWithHttpInfo(scope: scope, limit: limit, cursor: cursor, tag: tag, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -579,6 +588,78 @@ class PostsApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
+  /// Подсказки тэгов для черновика поста
+  ///
+  /// До пяти тэгов: сначала найденные в подписи, потом популярные у сообщества, потом из стартового словаря (specs/028-post-tags.md, требования 15–19). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] text:
+  ///   Подпись черновика; учитываются первые 1000 знаков
+  ///
+  /// * [List<String>] exclude:
+  ///   Тэги, уже выбранные в черновике; их в ответе нет
+  Future<Response> getTagSuggestionsWithHttpInfo({ String? text, List<String>? exclude, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/tags/suggestions';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (text != null) {
+      queryParams.addAll(_queryParams('', 'text', text));
+    }
+    if (exclude != null) {
+      queryParams.addAll(_queryParams('multi', 'exclude', exclude));
+    }
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Подсказки тэгов для черновика поста
+  ///
+  /// До пяти тэгов: сначала найденные в подписи, потом популярные у сообщества, потом из стартового словаря (specs/028-post-tags.md, требования 15–19). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] text:
+  ///   Подпись черновика; учитываются первые 1000 знаков
+  ///
+  /// * [List<String>] exclude:
+  ///   Тэги, уже выбранные в черновике; их в ответе нет
+  Future<TagSuggestions?> getTagSuggestions({ String? text, List<String>? exclude, Future<void>? abortTrigger, }) async {
+    final response = await getTagSuggestionsWithHttpInfo(text: text, exclude: exclude, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'TagSuggestions',) as TagSuggestions;
     
     }
     return null;
@@ -761,6 +842,70 @@ class PostsApi {
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+  }
+
+  /// Заменить тэги своего поста
+  ///
+  /// Тэги заменяются целиком; пустой массив снимает все. Подпись, фотографии и `edited_at` не меняются. Проверки как у правки подписи, потом тэги — как при создании поста (specs/028-post-tags.md, требования 9–10). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [TagsUpdate] tagsUpdate (required):
+  Future<Response> setPostTagsWithHttpInfo(String postId, TagsUpdate tagsUpdate, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/tags'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = tagsUpdate;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Заменить тэги своего поста
+  ///
+  /// Тэги заменяются целиком; пустой массив снимает все. Подпись, фотографии и `edited_at` не меняются. Проверки как у правки подписи, потом тэги — как при создании поста (specs/028-post-tags.md, требования 9–10). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [TagsUpdate] tagsUpdate (required):
+  Future<Post?> setPostTags(String postId, TagsUpdate tagsUpdate, { Future<void>? abortTrigger, }) async {
+    final response = await setPostTagsWithHttpInfo(postId, tagsUpdate, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
   }
 
   /// Сменить видимость своего поста

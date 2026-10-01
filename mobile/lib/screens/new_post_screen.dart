@@ -24,6 +24,7 @@ import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/place_field.dart';
+import '../widgets/tag_field.dart';
 import '../widgets/visibility_picker.dart';
 
 /// Превью выбранной фотографии: 104×130, как на макете.
@@ -88,6 +89,10 @@ class _NewPostScreenState extends State<NewPostScreen> {
   int _shakes = 0;
 
   PostVisibility _visibility = PostVisibility.all;
+
+  /// Тэги поста (specs/028-post-tags.md, требования 20–22).
+  List<String> _tags = const [];
+  final _tagField = GlobalKey<TagFieldState>();
 
   /// Место поста; в профиль не попадает.
   late Place? _place = widget.place;
@@ -277,6 +282,13 @@ class _NewPostScreenState extends State<NewPostScreen> {
     if (!_ready) {
       return;
     }
+    // Набранный, но не ставший чипом тэг тоже уходит (требование 20).
+    // Не годится — ошибка уже под полем тэгов.
+    final field = _tagField.currentState;
+    final tags = field == null ? _tags : field.collect();
+    if (tags == null) {
+      return;
+    }
     setState(() {
       _publishing = true;
       _error = null;
@@ -289,6 +301,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
           caption: _caption.text,
           visibility: _visibility,
           placeId: _place?.id,
+          tags: tags,
         ),
       );
       debugPrint('$logMarker post=published id=${post?.id}');
@@ -352,6 +365,15 @@ class _NewPostScreenState extends State<NewPostScreen> {
                   ),
                 ),
                 const SizedBox(height: AppGap.small),
+                TagField(
+                  key: _tagField,
+                  token: widget.token,
+                  tags: _tags,
+                  caption: _caption,
+                  enabled: !_publishing,
+                  onChanged: (tags) => setState(() => _tags = tags),
+                ),
+                const SizedBox(height: AppGap.medium),
                 VisibilityPicker(
                   value: _visibility,
                   closed: widget.closed,

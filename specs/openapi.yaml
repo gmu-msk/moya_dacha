@@ -606,8 +606,10 @@ paths:
             Нет ни одной фотографии (`no_media`), фотографий больше десяти
             (`too_many_media`), фотография чужая, уже опубликована или не
             существует (`invalid_media`), подпись слишком длинная
-            (`invalid_caption`), место не из подсказок (`unknown_place`),
-            тело запроса не разбирается (`invalid_request`)
+            (`invalid_caption`), тэг не одно слово до 30 знаков
+            (`invalid_tag`), тэгов больше десяти (`too_many_tags`), место
+            не из подсказок (`unknown_place`), тело запроса не разбирается
+            (`invalid_request`)
           content:
             application/json:
               schema:
@@ -754,6 +756,108 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /posts/{postId}/tags:
+    put:
+      operationId: setPostTags
+      summary: Заменить тэги своего поста
+      description: |
+        Тэги заменяются целиком; пустой массив снимает все. Подпись,
+        фотографии и `edited_at` не меняются. Проверки как у правки
+        подписи, потом тэги — как при создании поста
+        (specs/028-post-tags.md, требования 9–10).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagsUpdate"
+      responses:
+        "200":
+          description: Пост после правки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          description: |
+            Тэг не одно слово до 30 знаков (`invalid_tag`), тэгов больше
+            десяти (`too_many_tags`), тело без `tags` или не разбирается
+            (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Пост есть, но он чужой (`not_your_post`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /tags/suggestions:
+    get:
+      operationId: getTagSuggestions
+      summary: Подсказки тэгов для черновика поста
+      description: |
+        До пяти тэгов: сначала найденные в подписи, потом популярные у
+        сообщества, потом из стартового словаря
+        (specs/028-post-tags.md, требования 15–19).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: text
+          in: query
+          required: false
+          description: Подпись черновика; учитываются первые 1000 знаков
+          schema:
+            type: string
+        - name: exclude
+          in: query
+          required: false
+          description: Тэги, уже выбранные в черновике; их в ответе нет
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        "200":
+          description: Подсказки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagSuggestions"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /feed:
     get:
       operationId: getFeed
@@ -800,6 +904,15 @@ paths:
           description: Курсор из предыдущего ответа; без него — первая страница
           schema:
             type: string
+        - name: tag
+          in: query
+          required: false
+          description: |
+            Только посты с этим тэгом; нормализуется, как тэги поста.
+            Пустой — как без параметра (specs/028-post-tags.md,
+            требования 12–14).
+          schema:
+            type: string
       responses:
         "200":
           description: Страница ленты
@@ -810,7 +923,8 @@ paths:
         "400":
           description: |
             `limit` вне диапазона или не число, неизвестный `scope`
-            (`invalid_request`), курсор не разбирается (`invalid_cursor`)
+            (`invalid_request`), курсор не разбирается (`invalid_cursor`),
+            `tag` не одно слово до 30 знаков (`invalid_tag`)
           content:
             application/json:
               schema:
@@ -2382,6 +2496,43 @@ components:
             округлённое; `0` — тот же пункт. Нет или `null`, если его не
             посчитать или пост свой (specs/027-post-place.md, требования 7–9)
           example: 25
+        # В required нет нарочно: сборка из PR ходит и на сервер с main,
+        # где поля ещё нет. Сервер с тэгами отдаёт его всегда.
+        tags:
+          type: array
+          maxItems: 10
+          description: |
+            Нормализованные тэги в порядке автора; нет тэгов — пустой
+            массив (specs/028-post-tags.md)
+          items:
+            type: string
+          example: ["груша", "сорт"]
+
+    TagsUpdate:
+      type: object
+      # Поле нужно всегда, но в required его нет нарочно: тело без тэгов —
+      # 400 invalid_request, как у CaptionUpdate.
+      properties:
+        tags:
+          type: array
+          description: |
+            Новые тэги поста целиком; пустой массив снимает все. Обязательно:
+            тело без него — `invalid_request`.
+          items:
+            type: string
+          example: ["груша", "урожай"]
+
+    TagSuggestions:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 5
+          description: Подсказанные тэги, лучшие первыми
+          items:
+            type: string
+          example: ["груша", "поделюсь", "советы"]
 
     CaptionUpdate:
       type: object
@@ -2893,6 +3044,15 @@ components:
             Место поста — пункт из подсказок `GET /places`; нет, `null` или
             пустая строка — без места (specs/027-post-place.md)
           example: "5f4a3b2c-1d0e-4f9a-8b7c-6d5e4f3a2b1c"
+        tags:
+          type: array
+          nullable: true
+          description: |
+            Тэги поста, до десяти; сервер нормализует их: без `#` в начале,
+            в нижнем регистре, без повторов (specs/028-post-tags.md)
+          items:
+            type: string
+          example: ["Груша", "#сорт"]
 
     Media:
       type: object

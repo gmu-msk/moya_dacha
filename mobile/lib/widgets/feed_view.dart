@@ -20,6 +20,7 @@ import 'post_action.dart';
 import 'loading_view.dart';
 import 'place_field.dart';
 import 'segment_tabs.dart';
+import 'tag_field.dart';
 
 const feedPageSize = 20;
 const _loadAheadPixels = 600.0;
@@ -44,12 +45,14 @@ class FeedTabs extends StatefulWidget {
     required this.onOpenPost,
     required this.onNewPost,
     this.onOpenAuthor,
+    this.onOpenTag,
     this.onRefreshed,
   });
 
   final String token;
   final void Function(Post post) onOpenPost;
   final void Function(Author author)? onOpenAuthor;
+  final void Function(String tag)? onOpenTag;
   final VoidCallback onNewPost;
   final VoidCallback? onRefreshed;
 
@@ -105,6 +108,7 @@ class FeedTabsState extends State<FeedTabs> {
       onOpenPost: widget.onOpenPost,
       onNewPost: widget.onNewPost,
       onOpenAuthor: widget.onOpenAuthor,
+      onOpenTag: widget.onOpenTag,
       onShowAll: () => _select(FeedScope.all),
       onRefreshed: widget.onRefreshed,
     ),
@@ -143,13 +147,19 @@ class FeedView extends StatefulWidget {
     required this.onOpenPost,
     required this.onNewPost,
     this.onOpenAuthor,
+    this.onOpenTag,
     this.scope = FeedScope.all,
+    this.tag,
     this.onShowAll,
     this.onRefreshed,
   });
 
   final String token;
   final FeedScope scope;
+
+  /// Только посты с этим тэгом (specs/028-post-tags.md, требование 24).
+  final String? tag;
+  final void Function(String tag)? onOpenTag;
   final VoidCallback? onShowAll;
   final VoidCallback? onRefreshed;
   final void Function(Post post) onOpenPost;
@@ -240,6 +250,7 @@ class FeedViewState extends State<FeedView> {
       final page = await _api.getFeed(
         scope: widget.scope.name,
         limit: feedPageSize,
+        tag: widget.tag,
       );
       debugPrint(
         '$logMarker feed=loaded scope=${widget.scope.name} '
@@ -284,6 +295,7 @@ class FeedViewState extends State<FeedView> {
         scope: widget.scope.name,
         limit: feedPageSize,
         cursor: cursor,
+        tag: widget.tag,
       );
       debugPrint('$logMarker feed=page posts=${page?.items.length}');
       if (!mounted) {
@@ -323,7 +335,12 @@ class FeedViewState extends State<FeedView> {
           children: [
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.6,
-              child: widget.scope == FeedScope.following
+              child: widget.tag != null
+                  ? EmptyView(
+                      icon: Icons.tag,
+                      title: 'Постов с тэгом #${widget.tag} пока нет',
+                    )
+                  : widget.scope == FeedScope.following
                   ? EmptyView(
                       icon: Icons.people_outline,
                       title: 'Вы пока ни на кого не подписаны',
@@ -384,6 +401,7 @@ class FeedViewState extends State<FeedView> {
               onTap: () => widget.onOpenPost(post),
               onChanged: replace,
               onOpenAuthor: widget.onOpenAuthor,
+              onOpenTag: widget.onOpenTag,
             ),
           );
         },
@@ -481,6 +499,7 @@ class FeedPostCard extends StatefulWidget {
     required this.onTap,
     required this.onChanged,
     this.onOpenAuthor,
+    this.onOpenTag,
     this.showAuthor = true,
     this.heroTag,
   });
@@ -490,6 +509,9 @@ class FeedPostCard extends StatefulWidget {
   final VoidCallback onTap;
   final void Function(Post post) onChanged;
   final void Function(Author author)? onOpenAuthor;
+
+  /// Касание тэга (specs/028-post-tags.md, требование 23).
+  final void Function(String tag)? onOpenTag;
   final bool showAuthor;
 
   /// Тег перехода «фото → пост»; без него фото не летит.
@@ -577,6 +599,11 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+          ),
+        if (post.tags.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: AppGap.tiny),
+            child: PostTagsLine(tags: post.tags, onOpen: widget.onOpenTag),
           ),
         Padding(
           padding: const EdgeInsets.only(top: AppGap.tiny),
