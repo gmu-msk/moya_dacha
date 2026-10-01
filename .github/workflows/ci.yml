@@ -229,7 +229,7 @@ jobs:
           mobile/tool/firebase-config.sh
           make app-apk \
             APP_DART_DEFINE="--dart-define=API_BASE_URL=https://$domain/api" \
-            APP_BUILD_ARGS="--build-number=$build"
+            APP_BUILD_ARGS="--build-number=$build --build-name=$(jq -r .version mobile/assets/build_info.json)"
           rm -f mobile/android/key.properties "$RUNNER_TEMP/moya-dacha-release.jks" \
             mobile/android/app/google-services.json
           cp "$apk" "$RUNNER_TEMP/phone.apk"

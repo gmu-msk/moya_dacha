@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Записать сведения о сборке в assets/build_info.json и напечатать номер
 # сборки для `flutter build --build-number` (specs/017-app-updates.md).
+# Версию для `--build-name` брать из того же файла: `jq -r .version`.
 # Запускается на CI перед сборкой APK для телефона.
 #
 #   WHATS_NEW="строка"   «Что нового» одной строкой — сборка PR
@@ -14,7 +15,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 build=$(( ($(date -u +%s) - 1767225600) / 60 ))
-version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+# Версия — «старшая.младшая» из pubspec.yaml и номер сборки третьим
+# числом: её Android показывает в настройках, и она должна расти вместе
+# с номером, а не стоять на 1.0.0.
+version=$(sed -n 's/^version: *\([0-9]*\.[0-9]*\).*/\1/p' pubspec.yaml).$build
 # COMMIT берётся как есть: в неглубоком checkout PR самого коммита нет.
 if [ -n "${COMMIT:-}" ]; then
 	commit=${COMMIT:0:7}
