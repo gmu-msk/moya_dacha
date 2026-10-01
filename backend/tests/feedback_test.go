@@ -65,6 +65,7 @@ const (
 	fbNeedNumber     = "Напишите номер задачи: /одобрить 71"
 	fbNoGitHub       = "GitHub не настроен: нет FEEDBACK_GITHUB_TOKEN."
 	fbNoCaption      = "Скриншот без подписи"
+	fbOnlyTesters    = "Отзывы здесь принимаются только от тестировщиков МоейДачи."
 
 	fbBuild int64 = 386950
 )
@@ -580,6 +581,94 @@ func (f *fakeTelegram) serveFile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.NotFound(w, r)
+}
+
+// tgMember — участие человека в группе для ответа getChatMember.
+type tgMember struct {
+	status   string // creator | administrator | member | restricted | left | kicked
+	isMember bool   // is_member у restricted
+}
+
+// tgMemberCall — один запрос getChatMember.
+type tgMemberCall struct {
+	chatID int64
+	userID int64
+}
+
+// setMember — что getChatMember ответит про человека userID.
+func (f *fakeTelegram) setMember(userID int64, status string, isMember bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.members == nil {
+		f.members = map[int64]tgMember{}
+	}
+	f.members[userID] = tgMember{status: status, isMember: isMember}
+}
+
+// setFailMembers — Telegram начинает отвечать ошибкой на getChatMember.
+func (f *fakeTelegram) setFailMembers(fail bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failMembers = fail
+}
+
+// memberCalls — запросы getChatMember по порядку.
+func (f *fakeTelegram) memberCalls() []tgMemberCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]tgMemberCall(nil), f.memberAsked...)
+}
+
+func (f *fakeTelegram) serveGetChatMember(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	var p struct {
+		ChatID json.RawMessage `json:"chat_id"`
+		UserID json.RawMessage `json:"user_id"`
+	}
+	chatRaw, userRaw := "", ""
+	if json.Unmarshal(body, &p) == nil && len(p.ChatID) > 0 {
+		chatRaw, userRaw = string(p.ChatID), string(p.UserID)
+	} else {
+		vals, err := url.ParseQuery(string(body))
+		if err != nil || vals.Get("chat_id") == "" {
+			vals = r.URL.Query()
+		}
+		chatRaw, userRaw = vals.Get("chat_id"), vals.Get("user_id")
+	}
+	call := tgMemberCall{chatID: f.chatID(chatRaw), userID: f.chatID(userRaw)}
+
+	f.mu.Lock()
+	f.memberAsked = append(f.memberAsked, call)
+	fail := f.failMembers
+	m, ok := f.members[call.userID]
+	f.mu.Unlock()
+
+	if fail {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":false,"error_code":400,"description":"Bad Request: user not found"}`))
+		return
+	}
+	if !ok {
+		m = tgMember{status: "member"}
+	}
+	res := map[string]any{
+		"status": m.status,
+		"user":   map[string]any{"id": call.userID, "is_bot": false, "first_name": "Человек"},
+	}
+	switch m.status {
+	case "restricted":
+		res["is_member"] = m.isMember
+		res["until_date"] = 0
+		res["can_send_messages"] = true
+	case "kicked":
+		res["until_date"] = 0
+	case "administrator":
+		res["can_be_edited"] = false
+		res["is_anonymous"] = false
+	case "creator":
+		res["is_anonymous"] = false
+	}
+	tgReply(w, res)
 }
 
 // tgMessage — входящее сообщение для фейкового Telegram.
@@ -1137,10 +1226,13 @@ type tgEnv struct {
 }
 
 // startFeedbackBot поднимает бота; withToken == false — без токена GitHub.
+// Группа тестировщиков tgGroupID привязана: отзыв из лички принимается от
+// её участника (ФТ-21а), а фейк по умолчанию считает участником любого.
 func startFeedbackBot(t *testing.T, withToken bool) tgEnv {
 	t.Helper()
 
 	pool := tgPool(t)
+	bindChat(t, "group", tgGroupID)
 	fake := newFakeTelegram(t)
 	gh := newFakeGitHub(t, ghRepo)
 	store := newRecordingStorage(t)
@@ -1744,9 +1836,9 @@ func TestFeedbackBotNotify(t *testing.T) {
 	}
 }
 
-// Сообщение в личку от кого угодно, владельца тоже, — отзыв «из телеграма»;
-// автор получает номер задачи ответом на своё сообщение (ФТ-5, ФТ-6, ФТ-9,
-// ФТ-21, ФТ-22).
+// Сообщение в личку от участника группы тестировщиков или от владельца —
+// отзыв «из телеграма»; автор получает номер задачи ответом на своё
+// сообщение (ФТ-5, ФТ-6, ФТ-9, ФТ-21, ФТ-21а, ФТ-22).
 func TestFeedbackTelegramPrivate(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -1785,6 +1877,134 @@ func TestFeedbackTelegramPrivate(t *testing.T) {
 				t.Fatalf("автору ожидался один ответ, получено %d", n)
 			}
 		})
+	}
+}
+
+// Участник привязанной группы тестировщиков — статус creator, administrator,
+// member или restricted с is_member: true; бот спрашивает getChatMember
+// с номером группы и from.id автора (ФТ-21а).
+func TestFeedbackTelegramPrivateFromGroupMember(t *testing.T) {
+	cases := []struct {
+		status   string
+		isMember bool
+	}{
+		{status: "creator"},
+		{status: "administrator"},
+		{status: "member"},
+		{status: "restricted", isMember: true},
+	}
+	for _, c := range cases {
+		t.Run(c.status, func(t *testing.T) {
+			env := startFeedbackBot(t, true)
+			env.fake.setMember(tgStrangerID, c.status, c.isMember)
+
+			msgID := env.fake.pushMessage(strangerPrivate("Идея участника"))
+			issue := env.gh.waitCreated(1, "задача от участника группы")[0]
+			requireReply(t, env.fake.waitSent(tgStrangerID, 1, "ответ участнику")[0], fbAccepted(issue.Number), msgID, 0)
+
+			calls := env.fake.memberCalls()
+			if len(calls) == 0 {
+				t.Fatal("бот должен спросить у Telegram getChatMember, участник ли автор")
+			}
+			for _, call := range calls {
+				if call.chatID != tgGroupID || call.userID != tgStrangerID {
+					t.Fatalf("getChatMember: ожидались chat_id %d (группа) и user_id %d (from.id), получено %+v",
+						tgGroupID, tgStrangerID, call)
+				}
+			}
+		})
+	}
+}
+
+// Отзыв в личку не от тестировщика — группа не привязана, автор не
+// участник, Telegram ответил ошибкой, ник владельца при чужом id после
+// привязки лички — не записывается, задача не заводится, фото не
+// скачивается, а автору — «Отзывы здесь принимаются только от
+// тестировщиков МоейДачи.» (ФТ-21, ФТ-21а; 018, ФТ-2а).
+func TestFeedbackTelegramPrivateFromNonTester(t *testing.T) {
+	const impostorID int64 = 3003
+
+	cases := []struct {
+		name  string
+		from  int64
+		nick  string
+		setup func(t *testing.T, env tgEnv)
+	}{
+		{name: "группа не привязана", from: tgStrangerID, nick: "tester_vasya", setup: func(t *testing.T, env tgEnv) {
+			execSQL(t, `DELETE FROM telegram_chats WHERE role = 'group'`)
+		}},
+		{name: "вышел из группы", from: tgStrangerID, nick: "tester_vasya", setup: func(t *testing.T, env tgEnv) {
+			env.fake.setMember(tgStrangerID, "left", false)
+		}},
+		{name: "исключён из группы", from: tgStrangerID, nick: "tester_vasya", setup: func(t *testing.T, env tgEnv) {
+			env.fake.setMember(tgStrangerID, "kicked", false)
+		}},
+		{name: "ограничен и не в группе", from: tgStrangerID, nick: "tester_vasya", setup: func(t *testing.T, env tgEnv) {
+			env.fake.setMember(tgStrangerID, "restricted", false)
+		}},
+		{name: "ошибка Telegram", from: tgStrangerID, nick: "tester_vasya", setup: func(t *testing.T, env tgEnv) {
+			env.fake.setFailMembers(true)
+		}},
+		{name: "ник владельца, чужой id", from: impostorID, nick: tgOwnerNick, setup: func(t *testing.T, env tgEnv) {
+			bindChat(t, "owner", tgOwnerID)
+			env.fake.setMember(impostorID, "left", false)
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			env := startFeedbackBot(t, true)
+			c.setup(t, env)
+			env.fake.addFile("big", "photos/file_9.jpg", photoContent(t), false)
+
+			env.fake.pushMessage(tgMessage{
+				fromID: c.from, username: c.nick, chatID: c.from, chatType: "private",
+				caption: "Посторонняя идея", photo: []string{"big"},
+			})
+			got := env.fake.waitSent(c.from, 1, "ответ не тестировщику")
+			if got[0].method != "sendMessage" || strings.TrimSpace(got[0].text) != fbOnlyTesters {
+				t.Fatalf("не тестировщику ожидался ответ %q, получено: %s", fbOnlyTesters, describeSent(got))
+			}
+
+			settle(t, env.fake)
+			if n := countSQL(t, `SELECT count(*) FROM feedback`); n != 0 {
+				t.Fatalf("отзыв не от тестировщика не записывается, а в feedback %d строк", n)
+			}
+			if n := len(env.gh.createdIssues()); n != 0 {
+				t.Fatalf("задача не заводится, а заведено %d", n)
+			}
+			if asked := env.fake.askedFiles(); len(asked) != 0 {
+				t.Fatalf("фото не скачивается, а getFile запрошен: %q", asked)
+			}
+			if stored := env.store.stored(); len(stored) != 0 {
+				t.Fatalf("в хранилище ничего не кладётся, а положено файлов: %d", len(stored))
+			}
+			if got := env.fake.sentTo(c.from); len(got) != 1 {
+				t.Fatalf("автору ожидался ровно один ответ, получено: %s", describeSent(got))
+			}
+			if id, _ := boundChat(t, env.pool, "owner"); c.from == impostorID && id != tgOwnerID {
+				t.Fatalf("личка владельца не должна перепривязаться, она %d", id)
+			}
+		})
+	}
+}
+
+// Владельцу проверка участия не нужна: после привязки лички он опознаётся
+// по id, даже сменив ник, — отзыв принимается без группы и без участия
+// (ФТ-21а; 018, ФТ-2а).
+func TestFeedbackTelegramOwnerNeedsNoMembership(t *testing.T) {
+	env := startFeedbackBot(t, true)
+	execSQL(t, `DELETE FROM telegram_chats WHERE role = 'group'`)
+	bindChat(t, "owner", tgOwnerID)
+	env.fake.setMember(tgOwnerID, "left", false)
+
+	msgID := env.fake.pushMessage(tgMessage{fromID: tgOwnerID, username: "renamed_owner", chatID: tgOwnerID, text: "Идея владельца"})
+	issue := env.gh.waitCreated(1, "задача от владельца")[0]
+	if issue.Title != "Отзыв: Идея владельца" {
+		t.Fatalf("заголовок задачи %q", issue.Title)
+	}
+	requireReply(t, env.fake.waitSent(tgOwnerID, 1, "ответ владельцу")[0], fbAccepted(issue.Number), msgID, 0)
+	if rows := feedbackRows(t, "issue = $1", issue.Number); rows[0].author != "@renamed_owner" {
+		t.Fatalf("автор отзыва %q, ожидался @renamed_owner", rows[0].author)
 	}
 }
 

@@ -49,6 +49,7 @@ func (b *Bot) CheckAppErrors(ctx context.Context) error {
 		) e ON true
 		LEFT JOIN users u ON u.id = e.user_id
 		WHERE g.notified_at IS NULL AND g.first_at > now() - interval '24 hours'
+		  AND e.user_id IS NOT NULL
 		ORDER BY g.first_at, g.id
 		LIMIT $1`, newErrorsPerCheck)
 	if err != nil {
@@ -71,7 +72,36 @@ func (b *Bot) CheckAppErrors(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
+	return b.checkAnonymousErrors(ctx, chat)
+}
+
+// checkAnonymousErrors — новые группы, чей первый отчёт пришёл без входа
+// (требование 8а). Их текст мог прислать кто угодно, поэтому владельцу
+// уходит только счётчик одним сообщением, а сами ошибки — на дашборде.
+func (b *Bot) checkAnonymousErrors(ctx context.Context, chat int64) error {
+	rows, err := b.db.Query(ctx, `
+		SELECT g.id::text
+		FROM app_error_groups g
+		JOIN LATERAL (
+			SELECT user_id FROM app_errors e WHERE e.group_id = g.id
+			ORDER BY at, id LIMIT 1
+		) e ON true
+		WHERE g.notified_at IS NULL AND g.first_at > now() - interval '24 hours'
+		  AND e.user_id IS NULL`)
+	if err != nil {
+		return err
+	}
+	groups, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil || len(groups) == 0 {
+		return err
+	}
+	text := fmt.Sprintf("Новые ошибки без входа: %d. Подробности — на дашборде.", len(groups))
+	if err := b.Send(ctx, chat, text); err != nil {
+		return err
+	}
+	_, err = b.db.Exec(ctx,
+		`UPDATE app_error_groups SET notified_at = now() WHERE id = ANY($1::uuid[])`, groups)
+	return err
 }
 
 // message — текст сообщения по требованию 8.

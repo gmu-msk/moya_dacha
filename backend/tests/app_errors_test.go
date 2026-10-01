@@ -22,11 +22,19 @@ import (
 	"github.com/gmu-msk/moya_dacha/backend/internal/telegram"
 )
 
-// Тексты из спецификации (ФТ-8).
+// Тексты из спецификации (ФТ-8, ФТ-8а).
 const (
-	aeHeader    = "Новая ошибка в приложении:"
-	aeAnonymous = "Кто: без входа"
+	aeHeader = "Новая ошибка в приложении:"
+
+	// aeNick — ник вошедшей тестировщицы из aeTester; aeWho — её строка «Кто».
+	aeNick = "Err_Tester"
+	aeWho  = "Кто: @" + aeNick
 )
+
+// aeAnonymousCount — сообщение о новых ошибках без входа (ФТ-8а).
+func aeAnonymousCount(n int) string {
+	return fmt.Sprintf("Новые ошибки без входа: %d. Подробности — на дашборде.", n)
+}
 
 // aeLimit — предел отчётов за час (ФТ-4).
 const aeLimit = 100
@@ -832,20 +840,20 @@ func TestAppErrorBotMessageFormat(t *testing.T) {
 	}
 }
 
-// Без входа, без стека, без версии и экрана: «Где» нет, «Сборка ?» без
-// номера, «Кто: без входа» (ФТ-8).
+// Без стека, без версии и экрана: «Где» нет, «Сборка ?» без номера (ФТ-8).
 func TestAppErrorBotMessageWithoutOptionalFields(t *testing.T) {
 	baseURL, bot, fake := appErrorBot(t)
 	bindChat(t, "owner", tgOwnerID)
+	token := aeTester(t, baseURL)
 
-	reportAppError(t, baseURL, "", map[string]any{"error": "Ошибка до входа"})
+	reportAppError(t, baseURL, token, map[string]any{"error": "Ошибка без подробностей"})
 	checkAppErrors(t, bot, "проверка")
 
 	got := fake.sentTo(tgOwnerID)
 	if len(got) != 1 {
 		t.Fatalf("ожидалось одно сообщение, получено: %s", describeSent(got))
 	}
-	requireLines(t, got[0], aeHeader, "Ошибка до входа", "Сборка ?", aeAnonymous)
+	requireLines(t, got[0], aeHeader, "Ошибка без подробностей", "Сборка ?", aeWho)
 }
 
 // Нет версии, но есть экран — «Сборка ?, экран …»; нет экрана, но есть
@@ -854,13 +862,14 @@ func TestAppErrorBotMessageWithoutOptionalFields(t *testing.T) {
 func TestAppErrorBotMessageBuildLineAndForeignStack(t *testing.T) {
 	baseURL, bot, fake := appErrorBot(t)
 	bindChat(t, "owner", tgOwnerID)
+	token := aeTester(t, baseURL)
 	now := time.Now()
 
-	reportAppError(t, baseURL, "", map[string]any{
+	reportAppError(t, baseURL, token, map[string]any{
 		"error": "Ошибка а", "screen": "sign_in", "build": 5,
 		"stack": "\n  #0 Zone.run (dart:async/zone.dart:1:1)  \n#1 Timer._run (dart:async/timer.dart:2:2)",
 	})
-	reportAppError(t, baseURL, "", map[string]any{"error": "Ошибка б", "version": "1.2.3", "build": 7})
+	reportAppError(t, baseURL, token, map[string]any{"error": "Ошибка б", "version": "1.2.3", "build": 7})
 	shiftAppErrors(t, "error", "Ошибка а", now.Add(-2*time.Minute))
 	shiftAppErrors(t, "error", "Ошибка б", now.Add(-time.Minute))
 
@@ -869,8 +878,8 @@ func TestAppErrorBotMessageBuildLineAndForeignStack(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("ожидалось два сообщения, получено: %s", describeSent(got))
 	}
-	requireLines(t, got[0], aeHeader, "Ошибка а", "Где: #0 Zone.run (dart:async/zone.dart:1:1)", "Сборка ?, экран sign_in", aeAnonymous)
-	requireLines(t, got[1], aeHeader, "Ошибка б", "Сборка 1.2.3 (7)", aeAnonymous)
+	requireLines(t, got[0], aeHeader, "Ошибка а", "Где: #0 Zone.run (dart:async/zone.dart:1:1)", "Сборка ?, экран sign_in", aeWho)
+	requireLines(t, got[1], aeHeader, "Ошибка б", "Сборка 1.2.3 (7)", aeWho)
 }
 
 // Текст ошибки в сообщении — не длиннее 500 символов, без многоточия (ФТ-8).
@@ -879,7 +888,7 @@ func TestAppErrorBotMessageCutsLongError(t *testing.T) {
 	bindChat(t, "owner", tgOwnerID)
 
 	long := strings.Repeat("я", 300) + strings.Repeat("z", 300)
-	reportAppError(t, baseURL, "", map[string]any{"error": long})
+	reportAppError(t, baseURL, aeTester(t, baseURL), map[string]any{"error": long})
 	checkAppErrors(t, bot, "проверка")
 
 	got := fake.sentTo(tgOwnerID)
@@ -887,7 +896,7 @@ func TestAppErrorBotMessageCutsLongError(t *testing.T) {
 		t.Fatalf("ожидалось одно сообщение, получено: %s", describeSent(got))
 	}
 	want := string([]rune(long)[:500])
-	requireLines(t, got[0], aeHeader, want, "Сборка ?", aeAnonymous)
+	requireLines(t, got[0], aeHeader, want, "Сборка ?", aeWho)
 }
 
 // О группе пишется один раз: повторная проверка, та же ошибка ещё раз и
@@ -895,8 +904,9 @@ func TestAppErrorBotMessageCutsLongError(t *testing.T) {
 func TestAppErrorBotNotifiesOnce(t *testing.T) {
 	baseURL, bot, fake := appErrorBot(t)
 	bindChat(t, "owner", tgOwnerID)
+	token := aeTester(t, baseURL)
 
-	reportAppError(t, baseURL, "", map[string]any{"error": "Bad state: 1"})
+	reportAppError(t, baseURL, token, map[string]any{"error": "Bad state: 1"})
 	checkAppErrors(t, bot, "первая проверка")
 	if got := fake.sentTo(tgOwnerID); len(got) != 1 {
 		t.Fatalf("о новой ошибке ожидалось одно сообщение, получено: %s", describeSent(got))
@@ -906,7 +916,7 @@ func TestAppErrorBotNotifiesOnce(t *testing.T) {
 	}
 
 	checkAppErrors(t, bot, "вторая проверка")
-	reportAppError(t, baseURL, "", map[string]any{"error": "Bad state: 2"})
+	reportAppError(t, baseURL, token, map[string]any{"error": "Bad state: 2"})
 	checkAppErrors(t, bot, "та же ошибка ещё раз")
 
 	restarted := telegram.New(connect(t), tgConfig(t, fake))
@@ -920,13 +930,13 @@ func TestAppErrorBotNotifiesOnce(t *testing.T) {
 	}
 
 	// Новая ошибка после этого — снова сообщение.
-	reportAppError(t, baseURL, "", map[string]any{"error": "Другая ошибка"})
+	reportAppError(t, baseURL, token, map[string]any{"error": "Другая ошибка"})
 	checkAppErrors(t, restarted, "новая ошибка")
 	got := fake.sentTo(tgOwnerID)
 	if len(got) != 2 {
 		t.Fatalf("о новой ошибке ожидалось сообщение, всего получено: %s", describeSent(got))
 	}
-	requireLines(t, got[1], aeHeader, "Другая ошибка", "Сборка ?", aeAnonymous)
+	requireLines(t, got[1], aeHeader, "Другая ошибка", "Сборка ?", aeWho)
 }
 
 // Не больше 5 сообщений за проверку, от старых к новым; остальные — на
@@ -934,12 +944,13 @@ func TestAppErrorBotNotifiesOnce(t *testing.T) {
 func TestAppErrorBotSendsFivePerCheckOldestFirst(t *testing.T) {
 	baseURL, bot, fake := appErrorBot(t)
 	bindChat(t, "owner", tgOwnerID)
+	token := aeTester(t, baseURL)
 	now := time.Now()
 
 	// Отправляются в обратном порядке, а время — от старой «a» к новой «g».
 	for i := 6; i >= 0; i-- {
 		text := "Ошибка " + letters(i)
-		reportAppError(t, baseURL, "", map[string]any{"error": text})
+		reportAppError(t, baseURL, token, map[string]any{"error": text})
 		shiftAppErrors(t, "error", text, now.Add(-time.Duration(70-i)*time.Minute))
 	}
 
@@ -984,11 +995,12 @@ func TestAppErrorBotSendsFivePerCheckOldestFirst(t *testing.T) {
 func TestAppErrorBotSkipsGroupsOlderThanDay(t *testing.T) {
 	baseURL, bot, fake := appErrorBot(t)
 	bindChat(t, "owner", tgOwnerID)
+	token := aeTester(t, baseURL)
 
-	reportAppError(t, baseURL, "", map[string]any{"error": "Старая ошибка", "os": "давно"})
+	reportAppError(t, baseURL, token, map[string]any{"error": "Старая ошибка", "os": "давно"})
 	shiftAppErrors(t, "os", "давно", time.Now().Add(-25*time.Hour))
-	reportAppError(t, baseURL, "", map[string]any{"error": "Старая ошибка", "os": "сейчас"})
-	reportAppError(t, baseURL, "", map[string]any{"error": "Свежая ошибка"})
+	reportAppError(t, baseURL, token, map[string]any{"error": "Старая ошибка", "os": "сейчас"})
+	reportAppError(t, baseURL, token, map[string]any{"error": "Свежая ошибка"})
 	if got := countAppErrorGroups(t); got != 2 {
 		t.Fatalf("ожидалось две группы, найдено %d", got)
 	}
@@ -1000,7 +1012,7 @@ func TestAppErrorBotSkipsGroupsOlderThanDay(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("ожидалось одно сообщение — о свежей ошибке, получено: %s", describeSent(got))
 	}
-	requireLines(t, got[0], aeHeader, "Свежая ошибка", "Сборка ?", aeAnonymous)
+	requireLines(t, got[0], aeHeader, "Свежая ошибка", "Сборка ?", aeWho)
 }
 
 // Личка не привязана — ничего не уходит и ничего не помечается; после
@@ -1010,7 +1022,7 @@ func TestAppErrorBotWaitsForOwnerChat(t *testing.T) {
 	baseURL, bot, fake := appErrorBot(t)
 	bindChat(t, "group", tgGroupID)
 
-	reportAppError(t, baseURL, "", map[string]any{"error": "Ошибка без лички"})
+	reportAppError(t, baseURL, aeTester(t, baseURL), map[string]any{"error": "Ошибка без лички"})
 
 	if err := bot.CheckAppErrors(context.Background()); err != nil {
 		t.Fatalf("CheckAppErrors без привязанной лички не должен падать: %v", err)
@@ -1028,7 +1040,7 @@ func TestAppErrorBotWaitsForOwnerChat(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("после привязки лички сообщение должно прийти, получено: %s", describeSent(fake.allSent()))
 	}
-	requireLines(t, got[0], aeHeader, "Ошибка без лички", "Сборка ?", aeAnonymous)
+	requireLines(t, got[0], aeHeader, "Ошибка без лички", "Сборка ?", aeWho)
 	if g := fake.sentTo(tgGroupID); len(g) != 0 {
 		t.Errorf("в группу сообщения о новых ошибках не уходят, а ушло: %s", describeSent(g))
 	}
@@ -1061,6 +1073,181 @@ func TestAppErrorBotNotConfigured(t *testing.T) {
 	if got := fake.sentTo(tgOwnerID); len(got) != 1 {
 		t.Fatalf("настроенный бот должен отправить ошибку, получено: %s", describeSent(fake.allSent()))
 	}
+}
+
+// requireNoAnonymousText — текст ошибок без входа владельцу в личку не
+// уходит ни в каком виде (ФТ-8а).
+func requireNoAnonymousText(t *testing.T, fake *fakeTelegram, texts ...string) {
+	t.Helper()
+	for _, s := range fake.allSent() {
+		for _, text := range texts {
+			if strings.Contains(s.text, text) {
+				t.Fatalf("текст ошибки без входа %q ушёл в Telegram: %s", text, describeSent([]tgSent{s}))
+			}
+		}
+	}
+}
+
+// countMessages — сколько сообщений ровно с этим текстом и сколько
+// отдельных сообщений «Новая ошибка в приложении».
+func countMessages(list []tgSent, text string) (exact, single int) {
+	for _, s := range list {
+		switch {
+		case strings.TrimSpace(s.text) == text:
+			exact++
+		case strings.HasPrefix(strings.TrimSpace(s.text), aeHeader):
+			single++
+		}
+	}
+	return exact, single
+}
+
+// Группы, чей первый отчёт без входа, отдельными сообщениями не уходят:
+// за проверку — одно сообщение со счётчиком, без текста ошибок; лимит 5
+// их не касается и места у групп с входом не занимает; все они
+// помечаются, повторов нет. Группы старше суток в счёт не идут (ФТ-8а).
+func TestAppErrorBotAnonymousGroupsAsOneCounter(t *testing.T) {
+	baseURL, bot, fake := appErrorBot(t)
+	bindChat(t, "owner", tgOwnerID)
+	token := aeTester(t, baseURL)
+	now := time.Now()
+
+	var anonymous []string
+	for i := 0; i < 7; i++ {
+		text := "Аноним " + letters(i)
+		anonymous = append(anonymous, text)
+		reportAppError(t, baseURL, "", map[string]any{"error": text})
+		shiftAppErrors(t, "error", text, now.Add(-time.Duration(90-i)*time.Minute))
+	}
+	for i := 0; i < 6; i++ {
+		text := "Вошедшая " + letters(i)
+		reportAppError(t, baseURL, token, map[string]any{"error": text})
+		shiftAppErrors(t, "error", text, now.Add(-time.Duration(60-i)*time.Minute))
+	}
+	// Без входа, но старше суток — не новая, в счёт не идёт (ФТ-9).
+	reportAppError(t, baseURL, "", map[string]any{"error": "Давний аноним"})
+	shiftAppErrors(t, "error", "Давний аноним", now.Add(-25*time.Hour))
+
+	checkAppErrors(t, bot, "первая проверка")
+	got := fake.sentTo(tgOwnerID)
+	counters, singles := countMessages(got, aeAnonymousCount(7))
+	if counters != 1 || singles != 5 || len(got) != 6 {
+		t.Fatalf("первая проверка: ожидались 5 сообщений об ошибках с входом и одно %q, получено: %s",
+			aeAnonymousCount(7), describeSent(got))
+	}
+	for _, s := range got {
+		if strings.HasPrefix(strings.TrimSpace(s.text), aeHeader) && indexOfLine(lines(s.text), aeWho) < 0 {
+			t.Fatalf("отдельным сообщением уходят только ошибки с входом: %s", describeSent([]tgSent{s}))
+		}
+	}
+	requireNoAnonymousText(t, fake, append(anonymous, "Давний аноним")...)
+	if n := notifiedGroups(t); n != 5+7 {
+		t.Fatalf("после первой проверки помечены должны быть 5 групп с входом и все 7 без входа, помечено %d", n)
+	}
+
+	checkAppErrors(t, bot, "вторая проверка")
+	got = fake.sentTo(tgOwnerID)
+	if len(got) != 7 {
+		t.Fatalf("вторая проверка: ожидалось одно сообщение — шестая ошибка с входом, всего получено: %s", describeSent(got))
+	}
+	requireLines(t, got[6], aeHeader, "Вошедшая "+letters(5), "Сборка ?", aeWho)
+
+	checkAppErrors(t, bot, "третья проверка")
+	if got := fake.sentTo(tgOwnerID); len(got) != 7 {
+		t.Fatalf("новых групп нет — ничего не уходит, всего получено: %s", describeSent(got))
+	}
+	if n := notifiedGroups(t); n != 6+7 {
+		t.Fatalf("давняя группа не помечается, остальные помечены: ожидалось 13, помечено %d", n)
+	}
+}
+
+// Без входа или с входом — по первому отчёту группы: группа, начатая
+// без входа, остаётся в счётчике, даже если потом её прислала вошедшая;
+// начатая вошедшей уходит отдельным сообщением с её ником. Новых ошибок
+// без входа нет — сообщения со счётчиком нет (ФТ-8, ФТ-8а).
+func TestAppErrorBotAnonymousByFirstReport(t *testing.T) {
+	baseURL, bot, fake := appErrorBot(t)
+	bindChat(t, "owner", tgOwnerID)
+	token := aeTester(t, baseURL)
+	now := time.Now()
+
+	reportAppError(t, baseURL, "", map[string]any{"error": "Начата без входа", "os": "аноним первый"})
+	shiftAppErrors(t, "os", "аноним первый", now.Add(-10*time.Minute))
+	reportAppError(t, baseURL, token, map[string]any{"error": "Начата без входа", "os": "вошедшая потом"})
+
+	reportAppError(t, baseURL, token, map[string]any{"error": "Начата вошедшей", "os": "вошедшая первой"})
+	shiftAppErrors(t, "os", "вошедшая первой", now.Add(-10*time.Minute))
+	reportAppError(t, baseURL, "", map[string]any{"error": "Начата вошедшей", "os": "аноним потом"})
+
+	if n := countAppErrorGroups(t); n != 2 {
+		t.Fatalf("ожидалось две группы, найдено %d", n)
+	}
+
+	checkAppErrors(t, bot, "проверка")
+	got := fake.sentTo(tgOwnerID)
+	counters, singles := countMessages(got, aeAnonymousCount(1))
+	if counters != 1 || singles != 1 || len(got) != 2 {
+		t.Fatalf("ожидались одно сообщение об ошибке вошедшей и одно %q, получено: %s", aeAnonymousCount(1), describeSent(got))
+	}
+	for _, s := range got {
+		if strings.HasPrefix(strings.TrimSpace(s.text), aeHeader) {
+			requireLines(t, s, aeHeader, "Начата вошедшей", "Сборка ?", aeWho)
+		}
+	}
+	requireNoAnonymousText(t, fake, "Начата без входа")
+	if n := notifiedGroups(t); n != 2 {
+		t.Fatalf("обе группы должны быть помечены, помечено %d", n)
+	}
+
+	// Только ошибка с входом — счётчика нет.
+	reportAppError(t, baseURL, token, map[string]any{"error": "Ещё одна вошедшей"})
+	checkAppErrors(t, bot, "вторая проверка")
+	got = fake.sentTo(tgOwnerID)
+	if len(got) != 3 {
+		t.Fatalf("новых ошибок без входа нет — ожидалось одно новое сообщение, всего получено: %s", describeSent(got))
+	}
+	requireLines(t, got[2], aeHeader, "Ещё одна вошедшей", "Сборка ?", aeWho)
+}
+
+// Telegram ответил ошибкой на счётчик — ни одна группа без входа не
+// помечается, и счётчик со всеми ними уходит на следующей проверке
+// (ФТ-8а, ФТ-10).
+func TestAppErrorBotAnonymousCounterTelegramError(t *testing.T) {
+	baseURL, bot, fake := appErrorBot(t)
+	bindChat(t, "owner", tgOwnerID)
+
+	reportAppError(t, baseURL, "", map[string]any{"error": "Первая без входа"})
+	reportAppError(t, baseURL, "", map[string]any{"error": "Вторая без входа"})
+
+	fake.setFailSend(true)
+	// Вернёт ли проверка ошибку, спецификация не говорит: важно, что
+	// ничего не помечено.
+	_ = bot.CheckAppErrors(context.Background())
+	if n := notifiedGroups(t); n != 0 {
+		t.Fatalf("Telegram ответил ошибкой — группы без входа не помечаются, помечено %d", n)
+	}
+
+	fake.setFailSend(false)
+	checkAppErrors(t, bot, "проверка после сбоя")
+	got := fake.sentTo(tgOwnerID)
+	if len(got) != 1 || strings.TrimSpace(got[0].text) != aeAnonymousCount(2) {
+		t.Fatalf("после сбоя ожидалось одно сообщение %q, получено: %s", aeAnonymousCount(2), describeSent(got))
+	}
+	if n := notifiedGroups(t); n != 2 {
+		t.Fatalf("после отправки обе группы без входа помечены, помечено %d", n)
+	}
+	requireNoAnonymousText(t, fake, "Первая без входа", "Вторая без входа")
+}
+
+// aeTester — вошедшая тестировщица с ником aeNick. Отдельным сообщением
+// уходят только группы, чей первый отчёт с входом (ФТ-8а), поэтому
+// проверки формата сообщения шлют отчёты от неё.
+func aeTester(t *testing.T, baseURL string) string {
+	t.Helper()
+
+	u := newAppErrorUser(t, baseURL, 50)
+	chooseNickname(t, baseURL, u.token, aeNick)
+	return u.token
 }
 
 // appErrorUser — вошедший участник тестов ошибок приложения.

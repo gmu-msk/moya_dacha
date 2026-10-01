@@ -26,6 +26,8 @@ const (
 	textApproveUse = "Напишите номер задачи: /одобрить 71"
 	textNoGitHub   = "GitHub не настроен: нет FEEDBACK_GITHUB_TOKEN."
 	textNoCaption  = "Скриншот без подписи"
+	// textTestersOnly — ответ в личку не участнику группы (019, 21а).
+	textTestersOnly = "Отзывы здесь принимаются только от тестировщиков МоейДачи."
 )
 
 type update struct {
@@ -47,6 +49,7 @@ type message struct {
 		PhoneNumber string `json:"phone_number"`
 	} `json:"contact"`
 	From *struct {
+		ID        int64  `json:"id"`
 		IsBot     bool   `json:"is_bot"`
 		Username  string `json:"username"`
 		FirstName string `json:"first_name"`
@@ -103,18 +106,35 @@ func command(text string) string {
 	return strings.ToLower(cmd)
 }
 
-func (b *Bot) isOwner(m *message) bool {
-	return b.cfg.Owner != "" && m.From != nil && strings.EqualFold(m.From.Username, b.cfg.Owner)
+// isOwner — от владельца ли сообщение (требование 2а): пока личка не
+// привязана — по нику, после — только по id, равному номеру лички. Ник
+// можно сменить и занять, а владелец выдаёт приглашения.
+func (b *Bot) isOwner(ctx context.Context, m *message) (bool, error) {
+	if b.cfg.Owner == "" || m.From == nil {
+		return false, nil
+	}
+	chat, err := b.chat(ctx, RoleOwner)
+	switch {
+	case errors.Is(err, ErrNotBound):
+		return strings.EqualFold(m.From.Username, b.cfg.Owner), nil
+	case err != nil:
+		return false, err
+	}
+	return m.From.ID == chat, nil
 }
 
 func (b *Bot) handle(ctx context.Context, m *message) error {
 	cmd := command(m.Text)
 	private := m.Chat.Type == "private"
 	group := m.Chat.Type == "group" || m.Chat.Type == "supergroup"
+	owner, err := b.isOwner(ctx, m)
+	if err != nil {
+		return err
+	}
 
 	// Номер для приглашения: контакт или ответ на /invite без номера
 	// (требования 27–28). Команда снимает ожидание.
-	if private && b.isOwner(m) {
+	if private && owner {
 		if cmd != "" {
 			b.setAwaitPhone(false)
 		} else if phone, ok := b.phoneFromOwner(m); ok {
@@ -126,10 +146,10 @@ func (b *Bot) handle(ctx context.Context, m *message) error {
 		}
 	}
 	if cmd == "" {
-		return b.takeFeedback(ctx, m)
+		return b.takeFeedback(ctx, m, owner)
 	}
 
-	if !b.isOwner(m) {
+	if !owner {
 		// В группе чужие команды молча пропускаются (требование 7).
 		if private {
 			return b.Send(ctx, m.Chat.ID, textStranger)
@@ -235,12 +255,17 @@ func (b *Bot) reply(ctx context.Context, m *message, text string) error {
 
 // takeFeedback превращает сообщение в отзыв, если оно в личке или в теме
 // для идей (specs/019-feedback.md, требования 21–22, 9).
-func (b *Bot) takeFeedback(ctx context.Context, m *message) error {
+func (b *Bot) takeFeedback(ctx context.Context, m *message, owner bool) error {
 	fb := b.cfg.Feedback
 	if fb == nil || m.From == nil || m.From.IsBot {
 		return nil
 	}
 	private := m.Chat.Type == "private"
+	if private && !owner && !b.isTester(ctx, m.From.ID) {
+		// Бота находит поиском кто угодно, а отзыв — задача в публичном
+		// репозитории и файл на диске (specs/019-feedback.md, 21а).
+		return b.Send(ctx, m.Chat.ID, textTestersOnly)
+	}
 	if !private {
 		chat, thread, ok, err := b.ideas(ctx)
 		if err != nil || !ok || chat != m.Chat.ID {
@@ -359,4 +384,34 @@ func (b *Bot) approve(ctx context.Context, text string) string {
 		return "Не получилось: " + err.Error()
 	}
 	return fmt.Sprintf("#%d одобрена.", n)
+}
+
+// isTester — состоит ли человек в привязанной группе тестировщиков
+// (specs/019-feedback.md, требование 21а). Группа не привязана или
+// Telegram ответил ошибкой — нет: без ответа лучше не принять отзыв, чем
+// принять от постороннего.
+func (b *Bot) isTester(ctx context.Context, userID int64) bool {
+	group, err := b.chat(ctx, RoleGroup)
+	if err != nil {
+		if !errors.Is(err, ErrNotBound) {
+			logError("не удалось прочитать группу тестировщиков", err)
+		}
+		return false
+	}
+	var member struct {
+		Status   string `json:"status"`
+		IsMember bool   `json:"is_member"`
+	}
+	if err := b.callJSON(ctx, "getChatMember",
+		map[string]any{"chat_id": group, "user_id": userID}, &member); err != nil {
+		logError("не удалось проверить участника группы", err)
+		return false
+	}
+	switch member.Status {
+	case "creator", "administrator", "member":
+		return true
+	case "restricted":
+		return member.IsMember
+	}
+	return false
 }
