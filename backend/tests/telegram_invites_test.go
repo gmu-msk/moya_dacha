@@ -650,3 +650,29 @@ func TestTelegramInviteCommandsFromStranger(t *testing.T) {
 	}
 	requireNoCodeSent(t, fake, "команды не владельца")
 }
+
+// Владелец, сменивший ник, — по-прежнему владелец: /invite выдаёт код;
+// занявший его ник с другим id — не владелец: ответ из требования 7,
+// приглашения нет (018, ФТ-2а, ФТ-32).
+func TestTelegramInviteByOwnerIDNotNick(t *testing.T) {
+	baseURL, pool, fake := tiSetup(t)
+
+	fake.push(tgOwnerID, "renamed_owner", tgOwnerID, "private", "/invite "+tiPretty)
+	got := fake.waitSent(tgOwnerID, 1, "ответ владельцу с новым ником на /invite")
+	code := requireInviteReply(t, got[0], tiStored, "/invite владельца с новым ником")
+	requireCodeSignsIn(t, baseURL, tiPretty, code)
+
+	fake.push(tgImpostorID, tgOwnerNick, tgImpostorID, "private", "/invite "+tiOtherPretty)
+	requireText(t, fake.waitSent(tgImpostorID, 1, "ответ занявшему ник на /invite")[0], tgStrangerText, "/invite занявшего ник")
+	fake.pushContact(tgImpostorID, tgOwnerNick, tgImpostorID, "private", tiOtherPretty)
+	settle(t, fake)
+
+	if _, ok := inviteAttempts(t, pool, tiOtherStored); ok {
+		t.Fatal("занявший ник владельца получил приглашение")
+	}
+	for _, s := range fake.sentTo(tgImpostorID) {
+		if strings.Contains(s.text, "Код:") {
+			t.Fatalf("занявшему ник ушёл код приглашения: %s", describeSent([]tgSent{s}))
+		}
+	}
+}

@@ -42,6 +42,7 @@ const (
 
 	tgOwnerID    int64 = 1001       // владелец; его личка — чат с тем же номером
 	tgStrangerID int64 = 2002       // тестировщик, не владелец
+	tgImpostorID int64 = 3003       // занял ник владельца после привязки лички (ФТ-2а)
 	tgGroupID    int64 = -100200300 // группа тестировщиков
 	tgOtherGroup int64 = -100900900 // другая группа, для перепривязки
 )
@@ -95,6 +96,12 @@ type fakeTelegram struct {
 	// (specs/019-feedback.md, ФТ-21); заполняет feedback_test.go.
 	files     map[string]tgFile // по file_id
 	fileAsked []string          // file_id из запросов getFile
+
+	// Ответы getChatMember (specs/019-feedback.md, ФТ-21а); заполняет
+	// feedback_test.go. Кого нет в members — «member».
+	members     map[int64]tgMember // по user_id
+	failMembers bool               // отвечать {"ok": false} на getChatMember
+	memberAsked []tgMemberCall
 
 	// Вызовы setMyCommands (ФТ-23–25); заполняет serveSetMyCommands.
 	commands     []tgCommands
@@ -269,6 +276,8 @@ func (f *fakeTelegram) serve(w http.ResponseWriter, r *http.Request) {
 		f.serveGetFile(w, r)
 	case "setMyCommands":
 		f.serveSetMyCommands(w, r)
+	case "getChatMember":
+		f.serveGetChatMember(w, r)
 	case "getMe":
 		tgReply(w, map[string]any{"id": 999, "is_bot": true, "first_name": "МояДача", "username": "moya_dacha_bot"})
 	default:
@@ -852,6 +861,102 @@ func TestTelegramRebindReplacesChat(t *testing.T) {
 	}
 	if id, _ := boundChat(t, pool, "group"); id != tgOtherGroup {
 		t.Fatalf("группа должна смотреть в новый чат %d, а смотрит в %d", tgOtherGroup, id)
+	}
+}
+
+// requireStatusReply — ответ в чат — сводка /status (ФТ-9), а не
+// приветствие чужому.
+func requireStatusReply(t *testing.T, s tgSent, what string) {
+	t.Helper()
+	if s.method != "sendMessage" || indexOfLine(lines(s.text), "Работает:") < 0 {
+		t.Fatalf("%s: ожидалась сводка со строкой «Работает: …», получено: %s", what, describeSent([]tgSent{s}))
+	}
+}
+
+// После привязки лички владелец опознаётся по from.id, равному номеру
+// лички: сменив ник, он остаётся владельцем — в личке и в группе
+// (ФТ-2а, ФТ-5).
+func TestTelegramOwnerKnownByIDAfterStart(t *testing.T) {
+	pool := tgPool(t)
+	fake := newFakeTelegram(t)
+	runBot(t, pool, fake)
+
+	fake.pushOwnerPrivate("/start")
+	fake.waitSent(tgOwnerID, 1, "ответ на /start")
+	waitBound(t, pool, "owner", tgOwnerID)
+
+	const renamed = "renamed_owner"
+	fake.push(tgOwnerID, renamed, tgOwnerID, "private", "/status")
+	requireStatusReply(t, fake.waitSent(tgOwnerID, 2, "/status владельца с новым ником")[1], "/status владельца с новым ником в личке")
+
+	fake.push(tgOwnerID, "", tgOwnerID, "private", "/start")
+	got := fake.waitSent(tgOwnerID, 3, "/start владельца без ника")
+	if strings.TrimSpace(got[2].text) != tgOwnerBound {
+		t.Fatalf("владелец без ника после привязки — всё ещё владелец; ожидался ответ %q, получено: %s", tgOwnerBound, describeSent(got[2:]))
+	}
+
+	fake.push(tgOwnerID, renamed, tgGroupID, "supergroup", "/group")
+	gotGroup := fake.waitSent(tgGroupID, 1, "/group владельца с новым ником")
+	if strings.TrimSpace(gotGroup[0].text) != tgGroupBound {
+		t.Fatalf("на /group владельца с новым ником ожидался ответ %q, получено: %s", tgGroupBound, describeSent(gotGroup))
+	}
+	waitBound(t, pool, "group", tgGroupID)
+
+	fake.push(tgOwnerID, renamed, tgGroupID, "supergroup", "/status")
+	requireStatusReply(t, fake.waitSent(tgGroupID, 2, "/status в группе")[1], "/status владельца с новым ником в группе")
+
+	if id, _ := boundChat(t, pool, "owner"); id != tgOwnerID {
+		t.Fatalf("личка владельца должна остаться %d, а она %d", tgOwnerID, id)
+	}
+}
+
+// Ник владельца у человека с другим id, когда личка уже привязана, —
+// не владелец: /start не перепривязывает и получает ответ из ФТ-7, /status
+// — тоже; в группе его /group и /status бот молча пропускает (ФТ-2а, ФТ-5).
+func TestTelegramOwnerNickTakenAfterStart(t *testing.T) {
+	pool := tgPool(t)
+	fake := newFakeTelegram(t)
+	runBot(t, pool, fake)
+
+	fake.pushOwnerPrivate("/start")
+	fake.waitSent(tgOwnerID, 1, "ответ на /start")
+	waitBound(t, pool, "owner", tgOwnerID)
+
+	for i, cmd := range []string{"/start", "/status", "/START"} {
+		fake.push(tgImpostorID, tgOwnerNick, tgImpostorID, "private", cmd)
+		got := fake.waitSent(tgImpostorID, i+1, "ответ занявшему ник на "+cmd)
+		if strings.TrimSpace(got[i].text) != tgStrangerText {
+			t.Fatalf("занявшему ник владельца на %s ожидался ответ %q, получено: %s", cmd, tgStrangerText, describeSent(got[i:]))
+		}
+	}
+	// Ник в другом регистре — тоже не владелец.
+	fake.push(tgImpostorID, strings.ToLower(tgOwnerNick), tgImpostorID, "private", "/start")
+	fake.waitSent(tgImpostorID, 4, "ответ занявшему ник в другом регистре")
+
+	fake.push(tgImpostorID, tgOwnerNick, tgGroupID, "supergroup", "/group")
+	fake.push(tgImpostorID, tgOwnerNick, tgGroupID, "supergroup", "/status")
+	settle(t, fake)
+
+	if id, _ := boundChat(t, pool, "owner"); id != tgOwnerID {
+		t.Fatalf("/start занявшего ник не должен перепривязывать личку: она %d, а была %d", id, tgOwnerID)
+	}
+	if _, ok := boundChat(t, pool, "group"); ok {
+		t.Fatal("/group занявшего ник не должна привязывать группу")
+	}
+	if got := fake.sentTo(tgGroupID); len(got) != 0 {
+		t.Fatalf("на команды занявшего ник в группе бот молчит, а отправил: %s", describeSent(got))
+	}
+	got := fake.sentTo(tgImpostorID)
+	if len(got) != 4 {
+		t.Fatalf("занявшему ник ожидалось ровно 4 ответа — на команды в личке, получено: %s", describeSent(got))
+	}
+	for _, s := range got {
+		if strings.TrimSpace(s.text) != tgStrangerText {
+			t.Fatalf("занявшему ник уходит только ответ из ФТ-7, а ушло: %s", describeSent([]tgSent{s}))
+		}
+	}
+	if n := countChats(t, pool); n != 1 {
+		t.Fatalf("в telegram_chats ожидалась одна строка — личка владельца, их %d", n)
 	}
 }
 
