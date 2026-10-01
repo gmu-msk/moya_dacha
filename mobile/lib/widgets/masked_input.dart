@@ -48,7 +48,8 @@ const codeMask = InputMask(skeleton: '____', slots: [0, 1, 2, 3]);
 
 String phoneDigits(String raw) {
   var digits = raw.replaceAll(_notDigit, '');
-  if (digits.length == 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
+  if (digits.length == 11 &&
+      (digits.startsWith('7') || digits.startsWith('8'))) {
     digits = digits.substring(1);
   }
   if (digits.length > phoneMask.length) {
@@ -149,14 +150,15 @@ class MaskedField extends StatefulWidget {
 
 class _MaskedFieldState extends State<MaskedField>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _shake = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 400),
-  )..addStatusListener((status) {
-    if (status == AnimationStatus.completed && mounted) {
-      setState(() => _rejected = false);
-    }
-  });
+  late final AnimationController _shake =
+      AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 400),
+      )..addStatusListener((status) {
+        if (status == AnimationStatus.completed && mounted) {
+          setState(() => _rejected = false);
+        }
+      });
 
   bool _rejected = false;
 
@@ -260,11 +262,16 @@ class _MaskedFieldState extends State<MaskedField>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    widget.controller.hintColor = scheme.outline;
+    // У клеток незаполненный хвост маски (`____`) не рисуется: невидимое
+    // поле иначе показало бы его подсказкой поверх клеток.
+    widget.controller.hintColor = widget.boxes
+        ? Colors.transparent
+        : scheme.outline;
 
     final shape = theme.inputDecorationTheme.border;
-    final border = (shape is OutlineInputBorder ? shape : const OutlineInputBorder())
-        .copyWith(borderSide: BorderSide(color: scheme.error, width: 2));
+    final border =
+        (shape is OutlineInputBorder ? shape : const OutlineInputBorder())
+            .copyWith(borderSide: BorderSide(color: scheme.error, width: 2));
 
     final Widget field;
     if (widget.boxes) {
@@ -329,7 +336,9 @@ class _MaskedFieldState extends State<MaskedField>
       animation: _shake,
       builder: (context, child) => Transform.translate(
         offset: Offset(
-          math.sin(_shake.value * math.pi * 6) * (1 - _shake.value) * AppGap.small,
+          math.sin(_shake.value * math.pi * 6) *
+              (1 - _shake.value) *
+              AppGap.small,
           0,
         ),
         child: child,

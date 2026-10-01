@@ -2,7 +2,9 @@
 //
 // Маска — чистый счёт по знакоместам, и ошибиться в ней легко: проверки
 // дешевле, чем искать съехавшую скобку на телефоне.
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moya_dacha/theme.dart';
 import 'package:moya_dacha/widgets/masked_input.dart';
 
 void main() {
@@ -32,5 +34,35 @@ void main() {
     expect(phoneDigits('+7(915)234-56-78'), '9152345678');
     // Лишнее в конце отбрасывается: больше десяти цифр номер не вмещает.
     expect(phoneDigits('915234567890'), '9152345678');
+  });
+
+  testWidgets('у клеток кода не видно чёрточек маски', (tester) async {
+    final controller = MaskedController(mask: codeMask);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme(Brightness.light),
+        home: Scaffold(
+          body: MaskedField(controller: controller, label: 'Код', boxes: true),
+        ),
+      ),
+    );
+    controller.digits = '12';
+    await tester.pump();
+
+    // Невидимое поле лежит поверх клеток: незаполненный хвост `__` в нём
+    // тоже должен быть прозрачным, иначе посреди клеток видны чёрточки.
+    final span = controller.buildTextSpan(
+      context: tester.element(find.byType(TextField)),
+      style: const TextStyle(color: Colors.transparent),
+      withComposing: false,
+    );
+    span.visitChildren((child) {
+      final text = (child as TextSpan).text ?? '';
+      if (text.contains('_')) {
+        final color = child.style?.color ?? span.style?.color;
+        expect(color?.a, 0, reason: 'хвост «$text» виден');
+      }
+      return true;
+    });
   });
 }
