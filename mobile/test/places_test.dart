@@ -1,4 +1,4 @@
-// Населённый пункт: specs/025-places.md.
+// Населённый пункт: specs/025-places.md, specs/026-places-nearby.md.
 //
 // Проверяется то, чего гейт проекта не видит: строка пункта в профиле,
 // подсказки под полем и то, что набранный текст пунктом не становится.
@@ -110,6 +110,81 @@ void main() {
     fail = true;
     await tester.enterText(find.byType(TextField), 'Ыыыыыы');
     await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Подсказки сейчас недоступны'), findsOneWidget);
+  });
+
+  testWidgets('пункты рядом по кнопке, набор их убирает', (tester) async {
+    Place? chosen;
+    await tester.pumpWidget(
+      app(
+        StatefulBuilder(
+          builder: (context, setState) => PlaceField(
+            token: 'т',
+            place: chosen,
+            nearby: () async => [snt, village],
+            suggest: (q) async => [moscow],
+            onChanged: (place) => setState(() => chosen = place),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Определить по месту'));
+    await tester.pump();
+    expect(find.text('снт Андрейково'), findsOneWidget);
+    expect(find.text('д Андрейково'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Моск');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('снт Андрейково'), findsNothing);
+    expect(find.text('г Москва'), findsOneWidget);
+
+    await tester.tap(find.text('Определить по месту'));
+    await tester.pump();
+    await tester.tap(find.text('снт Андрейково'));
+    await tester.pump();
+    expect(chosen, snt);
+  });
+
+  testWidgets('пусто рядом и нет доступа к месту', (tester) async {
+    Object? answer = const <Place>[];
+    await tester.pumpWidget(
+      app(
+        PlaceField(
+          token: 'т',
+          place: null,
+          nearby: () async {
+            final a = answer;
+            if (a is Exception) {
+              throw a;
+            }
+            return a as List<Place>;
+          },
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Определить по месту'));
+    await tester.pump();
+    expect(
+      find.text('Рядом ничего не нашлось. Найдите пункт по названию'),
+      findsOneWidget,
+    );
+
+    answer = const NearbyProblem(
+      'Нет доступа к месту. Найдите пункт по названию',
+    );
+    await tester.tap(find.text('Определить по месту'));
+    await tester.pump();
+    expect(
+      find.text('Нет доступа к месту. Найдите пункт по названию'),
+      findsOneWidget,
+    );
+
+    answer = Exception('503');
+    await tester.tap(find.text('Определить по месту'));
+    await tester.pump();
     expect(find.text('Подсказки сейчас недоступны'), findsOneWidget);
   });
 }

@@ -1,8 +1,10 @@
 // Населённый пункт: строка в профиле и поле выбора из подсказок
-// справочника ФИАС (specs/025-places.md).
+// справочника ФИАС (specs/025-places.md), в том числе пунктов рядом по
+// геолокации (specs/026-places-nearby.md).
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:moya_dacha_api/api.dart';
 
 import '../api.dart';
@@ -60,9 +62,20 @@ class PlaceText extends StatelessWidget {
   }
 }
 
-/// Поле «Населённый пункт» на экране «Изменить профиль» (требования
-/// 15–18). Выбранный пункт поднимается наверх через [onChanged]; набранный
-/// и не выбранный текст пунктом не становится.
+/// Почему не удалось найти пункты рядом: текст для человека
+/// (specs/026-places-nearby.md, требование 12).
+class NearbyProblem implements Exception {
+  const NearbyProblem(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Поле «Населённый пункт» на экране «Изменить профиль» (025, требования
+/// 15–18; 026, требования 11–14). Выбранный пункт поднимается наверх через
+/// [onChanged]; набранный и не выбранный текст пунктом не становится.
 class PlaceField extends StatefulWidget {
   const PlaceField({
     super.key,
@@ -71,6 +84,7 @@ class PlaceField extends StatefulWidget {
     required this.onChanged,
     this.enabled = true,
     this.suggest,
+    this.nearby,
   });
 
   final String token;
@@ -81,6 +95,10 @@ class PlaceField extends StatefulWidget {
   /// Откуда брать подсказки; по умолчанию — `GET /places`. Подменяется
   /// в тестах экрана.
   final Future<List<Place>> Function(String query)? suggest;
+
+  /// Откуда брать пункты рядом; по умолчанию — место телефона и
+  /// `GET /places/nearby`. Подменяется в тестах экрана.
+  final Future<List<Place>> Function()? nearby;
 
   @override
   State<PlaceField> createState() => _PlaceFieldState();
@@ -108,6 +126,7 @@ class _PlaceFieldState extends State<PlaceField> {
 
   void _onTyped(String text) {
     _timer?.cancel();
+    // Набор убирает пункты рядом (026, требование 14).
     if (text.trim().length < _minQuery) {
       setState(() {
         _asked++;
@@ -144,6 +163,82 @@ class _PlaceFieldState extends State<PlaceField> {
         _message = 'Подсказки сейчас недоступны';
       });
     }
+  }
+
+  /// Пункты рядом по кнопке «Определить по месту».
+  Future<void> _askNearby() async {
+    _timer?.cancel();
+    _query.clear();
+    final asked = ++_asked;
+    setState(() {
+      _loading = true;
+      _places = null;
+      _message = null;
+    });
+    try {
+      final places = await (widget.nearby ?? _nearbyFromDevice)();
+      if (!mounted || asked != _asked) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _places = places;
+        _message = places.isEmpty
+            ? 'Рядом ничего не нашлось. Найдите пункт по названию'
+            : null;
+      });
+    } on NearbyProblem catch (problem) {
+      if (!mounted || asked != _asked) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _message = problem.message;
+      });
+    } on Exception catch (error) {
+      debugPrint('$logMarker places_nearby=failed error=$error');
+      if (!mounted || asked != _asked) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _message = 'Подсказки сейчас недоступны';
+      });
+    }
+  }
+
+  /// Место телефона и пункты рядом с ним (026, требования 12–13). О
+  /// разрешении приложение спрашивает только здесь, по кнопке.
+  Future<List<Place>> _nearbyFromDevice() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw const NearbyProblem('Включите геолокацию в настройках телефона');
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw const NearbyProblem(
+        'Нет доступа к месту. Найдите пункт по названию',
+      );
+    }
+    final Position position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+    } on TimeoutException {
+      throw const NearbyProblem('Не удалось определить место');
+    } on LocationServiceDisabledException {
+      throw const NearbyProblem('Включите геолокацию в настройках телефона');
+    }
+    final list = await ProfileApi(apiClient(token: widget.token))
+        .getPlacesNearby(position.latitude, position.longitude);
+    return list?.places ?? const <Place>[];
   }
 
   Future<List<Place>> _fromApi(String query) async {
@@ -206,6 +301,14 @@ class _PlaceFieldState extends State<PlaceField> {
                     ),
                   )
                 : null,
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: widget.enabled && !_loading ? _askNearby : null,
+            icon: const Icon(Icons.my_location_outlined),
+            label: const Text('Определить по месту'),
           ),
         ),
         if (places != null && places.isNotEmpty)

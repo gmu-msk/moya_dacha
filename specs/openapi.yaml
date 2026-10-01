@@ -466,6 +466,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /places/nearby:
+    get:
+      operationId: getPlacesNearby
+      summary: Населённые пункты рядом с точкой
+      description: |
+        До 10 пунктов из справочника ФИАС (через DaData) в радиусе
+        километра от точки (specs/026-places-nearby.md). Координаты
+        сервис не сохраняет.
+      tags: [profile]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Широта, от −90 до 90
+          schema:
+            type: number
+            format: double
+        - name: lon
+          in: query
+          required: true
+          description: Долгота, от −180 до 180
+          schema:
+            type: number
+            format: double
+      responses:
+        "200":
+          description: Пункты рядом, может быть пусто
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaceList"
+        "400":
+          description: |
+            Координаты вне пределов, `NaN` или бесконечность
+            (`invalid_location`); нет параметра или он не число —
+            `invalid_request`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: |
+            Справочник не настроен или не ответил (`places_unavailable`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /media:
     post:
       operationId: uploadMedia

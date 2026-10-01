@@ -212,6 +212,74 @@ class ProfileApi {
     return null;
   }
 
+  /// Населённые пункты рядом с точкой
+  ///
+  /// До 10 пунктов из справочника ФИАС (через DaData) в радиусе километра от точки (specs/026-places-nearby.md). Координаты сервис не сохраняет. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [double] lat (required):
+  ///   Широта, от −90 до 90
+  ///
+  /// * [double] lon (required):
+  ///   Долгота, от −180 до 180
+  Future<Response> getPlacesNearbyWithHttpInfo(double lat, double lon, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/places/nearby';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+      queryParams.addAll(_queryParams('', 'lat', lat));
+      queryParams.addAll(_queryParams('', 'lon', lon));
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Населённые пункты рядом с точкой
+  ///
+  /// До 10 пунктов из справочника ФИАС (через DaData) в радиусе километра от точки (specs/026-places-nearby.md). Координаты сервис не сохраняет. 
+  ///
+  /// Parameters:
+  ///
+  /// * [double] lat (required):
+  ///   Широта, от −90 до 90
+  ///
+  /// * [double] lon (required):
+  ///   Долгота, от −180 до 180
+  Future<PlaceList?> getPlacesNearby(double lat, double lon, { Future<void>? abortTrigger, }) async {
+    final response = await getPlacesNearbyWithHttpInfo(lat, lon, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'PlaceList',) as PlaceList;
+    
+    }
+    return null;
+  }
+
   /// Поставить аватар
   ///
   /// Картинка JPEG или PNG не больше 5 МБ. Сервис уменьшает её до 512×512 и пересохраняет в JPEG; новый аватар заменяет прежний. 
