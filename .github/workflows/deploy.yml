@@ -230,8 +230,12 @@ jobs:
         run: |
           set -euo pipefail
           mobile/tool/firebase-config.sh
-          since=$(curl -fsS "https://$DOMAIN/app.json" | jq -r '.commit // empty' || true)
-          build=$(SINCE="$since" mobile/tool/stamp-build.sh)
+          # Сборка, что сейчас на сервере: с её коммита считается «Что
+          # нового», от её версии — следующая.
+          current=$(curl -fsS "https://$DOMAIN/app.json" || true)
+          since=$(jq -r '.commit // empty' <<<"$current" 2>/dev/null || true)
+          previous=$(jq -r '.version // empty' <<<"$current" 2>/dev/null || true)
+          build=$(SINCE="$since" PREVIOUS="$previous" mobile/tool/stamp-build.sh)
           name=$(jq -r .version mobile/assets/build_info.json)
           echo "Версия $name, сборка $build, что нового:"
           jq -r '.whatsNew[]' mobile/assets/build_info.json
