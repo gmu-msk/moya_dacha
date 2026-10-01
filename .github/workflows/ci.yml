@@ -209,6 +209,7 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           # Настройки Firebase для пушей (specs/024-push.md, требование 17).
           # Эмуляторная сборка идёт без них: в эмуляторе нет Google Play.
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
@@ -225,7 +226,9 @@ jobs:
           else
             echo "::warning::Нет доступа к VPS: APK подписан debug-ключом и поверх не встанет"
           fi
-          build=$(WHATS_NEW="$PR_TITLE" COMMIT="$SHA" mobile/tool/stamp-build.sh)
+          previous=$(curl -fsS "https://$domain/app.json" | jq -r '.version // empty' || true)
+          build=$(WHATS_NEW="$PR_TITLE" COMMIT="$SHA" PREVIOUS="$previous" PR="$PR_NUMBER" \
+            mobile/tool/stamp-build.sh)
           mobile/tool/firebase-config.sh
           make app-apk \
             APP_DART_DEFINE="--dart-define=API_BASE_URL=https://$domain/api" \
