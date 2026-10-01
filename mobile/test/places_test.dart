@@ -1,4 +1,5 @@
-// Населённый пункт: specs/025-places.md, specs/026-places-nearby.md.
+// Населённый пункт: specs/025-places.md, specs/026-places-nearby.md;
+// место поста: specs/027-post-place.md.
 //
 // Проверяется то, чего гейт проекта не видит: строка пункта в профиле,
 // подсказки под полем и то, что набранный текст пунктом не становится.
@@ -186,5 +187,34 @@ void main() {
     await tester.tap(find.text('Определить по месту'));
     await tester.pump();
     expect(find.text('Подсказки сейчас недоступны'), findsOneWidget);
+  });
+
+  testWidgets('место поста: название и расстояние, без района', (tester) async {
+    await tester.pumpWidget(app(PostPlaceLine(place: snt, distanceKm: 25)));
+    expect(find.text('снт Андрейково · ~25 км'), findsOneWidget);
+    expect(find.textContaining('Дмитровский'), findsNothing);
+
+    await tester.pumpWidget(app(PostPlaceLine(place: snt, distanceKm: 0)));
+    expect(find.text('снт Андрейково · рядом'), findsOneWidget);
+
+    await tester.pumpWidget(app(PostPlaceLine(place: snt)));
+    expect(find.text('снт Андрейково'), findsOneWidget);
+  });
+
+  testWidgets('поле места в посте называется «Место»', (tester) async {
+    await tester.pumpWidget(
+      app(
+        PlaceField(
+          token: 'т',
+          place: snt,
+          label: 'Место',
+          helper: 'Где это: СНТ, деревня, город',
+          onChanged: (_) {},
+        ),
+      ),
+    );
+    expect(find.text('Место'), findsOneWidget);
+    expect(find.text('снт Андрейково'), findsOneWidget);
+    expect(find.text('Убрать'), findsOneWidget);
   });
 }

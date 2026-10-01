@@ -37,6 +37,7 @@ func (s *Server) GetPlacesNearby(ctx context.Context, request gen.GetPlacesNearb
 	}
 
 	places := []gen.Place{}
+	points := map[string]geoPoint{}
 	seen := map[string]bool{}
 	for _, sg := range suggestions {
 		place, ok := nearbyPlace(sg)
@@ -45,12 +46,17 @@ func (s *Server) GetPlacesNearby(ctx context.Context, request gen.GetPlacesNearb
 		}
 		seen[place.Id] = true
 		places = append(places, place)
+		// Точка первого дома пункта, а не точка человека
+		// (specs/027-post-place.md, требование 11).
+		if point, ok := sg.point(); ok {
+			points[place.Id] = point
+		}
 		if len(places) == maxPlaces {
 			break
 		}
 	}
 
-	if err := s.rememberPlaces(ctx, places); err != nil {
+	if err := s.rememberPlaces(ctx, places, points, false); err != nil {
 		return nil, err
 	}
 	return gen.GetPlacesNearby200JSONResponse(gen.PlaceList{Places: places}), nil

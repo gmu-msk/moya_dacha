@@ -56,6 +56,12 @@ void main() {
     liked: true,
     comments: 1,
     visibility: PostVisibility.all,
+    place: Place(
+      id: 'snt',
+      name: 'снт Андрейково',
+      area: 'Дмитровский р-н, Московская обл',
+    ),
+    distanceKm: 25,
   );
 
   for (final brightness in Brightness.values) {
@@ -86,7 +92,7 @@ void main() {
     });
 
     testWidgets('новый пост рисуется в $theme теме', (tester) async {
-      await _pump(tester, brightness, const NewPostScreen(token: 'т'));
+      await _pump(tester, brightness, NewPostScreen(token: 'т', place: post.place));
     });
 
     testWidgets('пост рисуется в $theme теме', (tester) async {
@@ -136,7 +142,7 @@ void main() {
       await _pump(
         tester,
         brightness,
-        const NewPostScreen(token: 'т'),
+        NewPostScreen(token: 'т', place: post.place),
         textScale: 2,
       );
     });

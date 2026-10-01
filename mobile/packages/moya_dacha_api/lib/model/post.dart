@@ -23,6 +23,8 @@ class Post {
     required this.comments,
     required this.visibility,
     this.editedAt,
+    this.place,
+    this.distanceKm,
   });
 
   /// Идентификатор поста (UUID)
@@ -53,6 +55,17 @@ class Post {
   /// Когда подпись последний раз меняли; нет или `null`, если не меняли (specs/022-edit-block-delete.md) 
   DateTime? editedAt;
 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  Place? place;
+
+  /// Примерное расстояние от пункта смотрящего до места поста, км, округлённое; `0` — тот же пункт. Нет или `null`, если его не посчитать или пост свой (specs/027-post-place.md, требования 7–9) 
+  int? distanceKm;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Post &&
     other.id == id &&
@@ -64,7 +77,9 @@ class Post {
     other.liked == liked &&
     other.comments == comments &&
     other.visibility == visibility &&
-    other.editedAt == editedAt;
+    other.editedAt == editedAt &&
+    other.place == place &&
+    other.distanceKm == distanceKm;
 
   @override
   int get hashCode =>
@@ -78,10 +93,12 @@ class Post {
     (liked.hashCode) +
     (comments.hashCode) +
     (visibility.hashCode) +
-    (editedAt == null ? 0 : editedAt!.hashCode);
+    (editedAt == null ? 0 : editedAt!.hashCode) +
+    (place == null ? 0 : place!.hashCode) +
+    (distanceKm == null ? 0 : distanceKm!.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -98,6 +115,16 @@ class Post {
       json[r'edited_at'] = this.editedAt!.toUtc().toIso8601String();
     } else {
       json[r'edited_at'] = null;
+    }
+    if (this.place != null) {
+      json[r'place'] = this.place;
+    } else {
+      json[r'place'] = null;
+    }
+    if (this.distanceKm != null) {
+      json[r'distance_km'] = this.distanceKm;
+    } else {
+      json[r'distance_km'] = null;
     }
     return json;
   }
@@ -145,6 +172,8 @@ class Post {
         comments: mapValueOfType<int>(json, r'comments')!,
         visibility: PostVisibility.fromJson(json[r'visibility'])!,
         editedAt: mapDateTime(json, r'edited_at', r''),
+        place: Place.fromJson(json[r'place']),
+        distanceKm: mapValueOfType<int>(json, r'distance_km'),
       );
     }
     return null;

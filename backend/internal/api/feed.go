@@ -98,8 +98,10 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 				SELECT 1 FROM post_likes l
 				WHERE l.post_id = p.id AND l.user_id = $4::uuid
 			),
-			`+commentCount("$4")+`
+			`+commentCount("$4")+`,
+			`+postPlaceColumns("$4")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
+		`+postPlaceJoin+`
 		WHERE ($5::uuid IS NULL OR p.author_id = $5::uuid)
 		  AND `+postVisibleTo("$4")+`
 		  AND (NOT $6::boolean
@@ -123,14 +125,16 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID string, follow
 		var (
 			post      gen.Post
 			avatarKey *string
+			place     postPlaceScan
 		)
-		if err := rows.Scan(
+		if err := rows.Scan(append([]any{
 			&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption, &post.Visibility,
 			&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 			&post.Likes, &post.Liked, &post.Comments,
-		); err != nil {
+		}, place.targets()...)...); err != nil {
 			return gen.Feed{}, err
 		}
+		place.apply(&post)
 		if avatarKey != nil {
 			url := s.cfg.Media.URL(*avatarKey)
 			post.Author.AvatarUrl = &url

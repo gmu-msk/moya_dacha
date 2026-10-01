@@ -606,8 +606,8 @@ paths:
             Нет ни одной фотографии (`no_media`), фотографий больше десяти
             (`too_many_media`), фотография чужая, уже опубликована или не
             существует (`invalid_media`), подпись слишком длинная
-            (`invalid_caption`), тело запроса не разбирается
-            (`invalid_request`)
+            (`invalid_caption`), место не из подсказок (`unknown_place`),
+            тело запроса не разбирается (`invalid_request`)
           content:
             application/json:
               schema:
@@ -2371,6 +2371,17 @@ components:
           description: |
             Когда подпись последний раз меняли; нет или `null`, если не
             меняли (specs/022-edit-block-delete.md)
+        place:
+          $ref: "#/components/schemas/Place"
+        distance_km:
+          type: integer
+          format: int32
+          nullable: true
+          description: |
+            Примерное расстояние от пункта смотрящего до места поста, км,
+            округлённое; `0` — тот же пункт. Нет или `null`, если его не
+            посчитать или пост свой (specs/027-post-place.md, требования 7–9)
+          example: 25
 
     CaptionUpdate:
       type: object
@@ -2875,6 +2886,13 @@ components:
           example: "Первая клубника в этом году"
         visibility:
           $ref: "#/components/schemas/PostVisibility"
+        place_id:
+          type: string
+          nullable: true
+          description: |
+            Место поста — пункт из подсказок `GET /places`; нет, `null` или
+            пустая строка — без места (specs/027-post-place.md)
+          example: "5f4a3b2c-1d0e-4f9a-8b7c-6d5e4f3a2b1c"
 
     Media:
       type: object

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -51,30 +52,51 @@ func (s *Server) GetPlaces(ctx context.Context, request gen.GetPlacesRequestObje
 		return gen.GetPlaces503JSONResponse(errPlacesUnavailable), nil
 	}
 
-	places, err := s.suggestPlaces(ctx, query)
+	places, points, err := s.suggestPlaces(ctx, query)
 	if err != nil {
 		slog.Warn("подсказки DaData не пришли", "err", err)
 		return gen.GetPlaces503JSONResponse(errPlacesUnavailable), nil
 	}
 
-	if err := s.rememberPlaces(ctx, places); err != nil {
+	if err := s.rememberPlaces(ctx, places, points, true); err != nil {
 		return nil, err
 	}
 	return gen.GetPlaces200JSONResponse(gen.PlaceList{Places: places}), nil
 }
 
+// geoPoint — координаты пункта из подсказки (specs/027-post-place.md,
+// требования 10–11).
+type geoPoint struct{ lat, lon float64 }
+
 // rememberPlaces запоминает отданные пункты (требование 5): новый
-// добавляется, у известного обновляются название и уточнение.
-func (s *Server) rememberPlaces(ctx context.Context, places []gen.Place) error {
+// добавляется, у известного обновляются название и уточнение. Координаты
+// из points: центр пункта (center) заменяет прежние, точка дома в пункте
+// пишется, только если координат ещё нет (027, требование 11).
+func (s *Server) rememberPlaces(ctx context.Context, places []gen.Place, points map[string]geoPoint, center bool) error {
 	for _, p := range places {
+		var lat, lon *float64
+		if point, ok := points[p.Id]; ok {
+			lat, lon = &point.lat, &point.lon
+		}
 		if _, err := s.db.Exec(ctx, `
-			INSERT INTO places (id, name, area, updated_at) VALUES ($1, $2, $3, now())
-			ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, area = EXCLUDED.area, updated_at = now()`,
-			p.Id, p.Name, p.Area); err != nil {
+			INSERT INTO places (id, name, area, lat, lon, updated_at) VALUES ($1, $2, $3, $4, $5, now())
+			ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, area = EXCLUDED.area, updated_at = now(),
+				lat = CASE WHEN `+keepPoint(center)+` THEN places.lat ELSE EXCLUDED.lat END,
+				lon = CASE WHEN `+keepPoint(center)+` THEN places.lon ELSE EXCLUDED.lon END`,
+			p.Id, p.Name, p.Area, lat, lon); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// keepPoint — когда у известного пункта остаются прежние координаты:
+// новых нет, а для точки дома — и когда прежние уже есть.
+func keepPoint(center bool) string {
+	if center {
+		return `EXCLUDED.lat IS NULL`
+	}
+	return `(EXCLUDED.lat IS NULL OR places.lat IS NOT NULL)`
 }
 
 // SetPlace ставит или убирает пункт в профиле. Справочник не спрашивается:
@@ -124,8 +146,9 @@ func (p placeScan) value() *gen.Place {
 
 // dadataSuggestion — подсказка DaData. Подсказкам по названию нужны
 // value, fias_id и fias_level (specs/025-places.md, требование 7),
-// пунктам рядом — поля пункта (specs/026-places-nearby.md, 7–8).
-// fias_level приходит строкой, но может и числом.
+// пунктам рядом — поля пункта (specs/026-places-nearby.md, 7–8), обоим —
+// координаты (specs/027-post-place.md, 11). fias_level и координаты
+// приходят строкой, но могут и числом.
 type dadataSuggestion struct {
 	Value string `json:"value"`
 	Data  struct {
@@ -137,17 +160,21 @@ type dadataSuggestion struct {
 		CityWithType       string          `json:"city_with_type"`
 		AreaWithType       string          `json:"area_with_type"`
 		RegionWithType     string          `json:"region_with_type"`
+		GeoLat             json.RawMessage `json:"geo_lat"`
+		GeoLon             json.RawMessage `json:"geo_lon"`
 	} `json:"data"`
 }
 
 // suggestPlaces спрашивает DaData и разбирает ответ по требованиям 6–8.
-func (s *Server) suggestPlaces(ctx context.Context, query string) ([]gen.Place, error) {
+// Вместе с пунктами отдаёт их координаты, где они есть.
+func (s *Server) suggestPlaces(ctx context.Context, query string) ([]gen.Place, map[string]geoPoint, error) {
 	suggestions, err := s.askDadata(ctx, "/suggest/address",
 		map[string]any{"query": query, "count": placesAsked})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	points := map[string]geoPoint{}
 	places := []gen.Place{}
 	seen := map[string]bool{}
 	for _, sg := range suggestions {
@@ -161,11 +188,39 @@ func (s *Server) suggestPlaces(ctx context.Context, query string) ([]gen.Place, 
 		}
 		seen[id] = true
 		places = append(places, gen.Place{Id: id, Name: name, Area: area})
+		if point, ok := sg.point(); ok {
+			points[id] = point
+		}
 		if len(places) == maxPlaces {
 			break
 		}
 	}
-	return places, nil
+	return places, points, nil
+}
+
+// point — координаты подсказки, если пришли обе и в пределах
+// (specs/027-post-place.md, требование 11).
+func (sg dadataSuggestion) point() (geoPoint, bool) {
+	lat, okLat := coordinate(sg.Data.GeoLat)
+	lon, okLon := coordinate(sg.Data.GeoLon)
+	if !okLat || !okLon || !inRange(lat, 90) || !inRange(lon, 180) {
+		return geoPoint{}, false
+	}
+	return geoPoint{lat: lat, lon: lon}, true
+}
+
+// coordinate читает координату и строкой, и числом; null и пустое — нет.
+func coordinate(raw json.RawMessage) (float64, bool) {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		return v, err == nil
+	}
+	var number float64
+	if json.Unmarshal(raw, &number) == nil && string(raw) != "null" {
+		return number, true
+	}
+	return 0, false
 }
 
 // askDadata отправляет запрос в DaData и отдаёт подсказки из ответа. Нет

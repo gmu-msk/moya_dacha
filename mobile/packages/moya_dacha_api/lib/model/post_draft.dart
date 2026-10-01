@@ -16,6 +16,7 @@ class PostDraft {
     this.mediaIds = const [],
     this.caption,
     this.visibility,
+    this.placeId,
   });
 
   /// Идентификаторы уже загруженных фотографий, в том порядке, в котором они должны стоять в посте. 
@@ -38,21 +39,26 @@ class PostDraft {
   ///
   PostVisibility? visibility;
 
+  /// Место поста — пункт из подсказок `GET /places`; нет, `null` или пустая строка — без места (specs/027-post-place.md) 
+  String? placeId;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is PostDraft &&
     _deepEquality.equals(other.mediaIds, mediaIds) &&
     other.caption == caption &&
-    other.visibility == visibility;
+    other.visibility == visibility &&
+    other.placeId == placeId;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (mediaIds.hashCode) +
     (caption == null ? 0 : caption!.hashCode) +
-    (visibility == null ? 0 : visibility!.hashCode);
+    (visibility == null ? 0 : visibility!.hashCode) +
+    (placeId == null ? 0 : placeId!.hashCode);
 
   @override
-  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility]';
+  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -66,6 +72,11 @@ class PostDraft {
       json[r'visibility'] = this.visibility;
     } else {
       json[r'visibility'] = null;
+    }
+    if (this.placeId != null) {
+      json[r'place_id'] = this.placeId;
+    } else {
+      json[r'place_id'] = null;
     }
     return json;
   }
@@ -92,6 +103,7 @@ class PostDraft {
             : const [],
         caption: mapValueOfType<String>(json, r'caption'),
         visibility: PostVisibility.fromJson(json[r'visibility']),
+        placeId: mapValueOfType<String>(json, r'place_id'),
       );
     }
     return null;

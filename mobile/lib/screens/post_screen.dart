@@ -16,6 +16,7 @@ import '../widgets/confirm.dart';
 import '../widgets/edit_text_dialog.dart';
 import '../widgets/feed_view.dart';
 import '../widgets/like_button.dart';
+import '../widgets/place_field.dart';
 import '../widgets/report_dialog.dart';
 import '../widgets/visibility_picker.dart';
 import 'user_screen.dart';
@@ -261,6 +262,10 @@ class _PostScreenState extends State<PostScreen> {
                   edited: post.editedAt != null,
                   onTap: () => _openAuthor(post.author),
                 ),
+                if (post.place case final place?) ...[
+                  const SizedBox(height: AppGap.small),
+                  PostPlaceLine(place: place, distanceKm: post.distanceKm),
+                ],
                 if (post.caption.isNotEmpty) ...[
                   const SizedBox(height: AppGap.small),
                   Text(post.caption, style: theme.textTheme.bodyLarge),

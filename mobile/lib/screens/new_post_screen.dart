@@ -1,4 +1,4 @@
-// Экран создания поста (specs/003-posts.md).
+// Экран создания поста (specs/003-posts.md, место — specs/027-post-place.md).
 //
 // Вид «Сад» (2a): экран выезжает снизу и сразу предлагает последние фото
 // из галереи телефона сеткой 3×N. Касание фото выбирает его (номер в
@@ -23,6 +23,7 @@ import '../theme.dart';
 import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
+import '../widgets/place_field.dart';
 import '../widgets/visibility_picker.dart';
 
 /// Превью выбранной фотографии: 104×130, как на макете.
@@ -55,10 +56,19 @@ class _Photo {
 }
 
 class NewPostScreen extends StatefulWidget {
-  const NewPostScreen({super.key, required this.token, this.closed = false});
+  const NewPostScreen({
+    super.key,
+    required this.token,
+    this.closed = false,
+    this.place,
+  });
 
   final String token;
   final bool closed;
+
+  /// Пункт из профиля: с ним поле «Место» открывается заполненным
+  /// (specs/027-post-place.md, требование 14).
+  final Place? place;
 
   @override
   State<NewPostScreen> createState() => _NewPostScreenState();
@@ -78,6 +88,9 @@ class _NewPostScreenState extends State<NewPostScreen> {
   int _shakes = 0;
 
   PostVisibility _visibility = PostVisibility.all;
+
+  /// Место поста; в профиль не попадает.
+  late Place? _place = widget.place;
 
   PostsApi get _api => PostsApi(apiClient(token: widget.token));
 
@@ -196,7 +209,11 @@ class _NewPostScreenState extends State<NewPostScreen> {
     final added = <_Photo>[];
     for (final file in picked.take(maxPostPhotos - _photos.length)) {
       added.add(
-        _Photo(key: file.path, bytes: await file.readAsBytes(), name: file.name),
+        _Photo(
+          key: file.path,
+          bytes: await file.readAsBytes(),
+          name: file.name,
+        ),
       );
     }
     if (!mounted) {
@@ -271,6 +288,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
           mediaIds: [for (final photo in _photos) photo.uploaded!.id],
           caption: _caption.text,
           visibility: _visibility,
+          placeId: _place?.id,
         ),
       );
       debugPrint('$logMarker post=published id=${post?.id}');
@@ -339,6 +357,15 @@ class _NewPostScreenState extends State<NewPostScreen> {
                   closed: widget.closed,
                   enabled: !_publishing,
                   onChanged: (picked) => setState(() => _visibility = picked),
+                ),
+                const SizedBox(height: AppGap.medium),
+                PlaceField(
+                  token: widget.token,
+                  place: _place,
+                  enabled: !_publishing,
+                  label: 'Место',
+                  helper: 'Где это: СНТ, деревня, город',
+                  onChanged: (place) => setState(() => _place = place),
                 ),
                 const SizedBox(height: AppGap.large),
                 Row(
@@ -420,7 +447,10 @@ class _NewPostScreenState extends State<NewPostScreen> {
         padding: const EdgeInsets.all(AppGap.medium),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppShape.medium),
-          border: Border.all(color: scheme.outlineVariant, width: AppShape.hairline),
+          border: Border.all(
+            color: scheme.outlineVariant,
+            width: AppShape.hairline,
+          ),
         ),
         child: Row(
           children: [
@@ -520,9 +550,8 @@ class _NewPostScreenState extends State<NewPostScreen> {
       return Text(
         'Галерея телефона недоступна. Нажмите «Все фото», чтобы выбрать '
         'снимки.',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: scheme.onSurfaceVariant,
-        ),
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: scheme.onSurfaceVariant),
       );
     }
     return GridView.builder(
@@ -573,9 +602,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
               Positioned(
                 right: AppGap.small,
                 top: AppGap.small,
-                child: number == null
-                    ? const _EmptyCircle()
-                    : _Number(number),
+                child: number == null ? const _EmptyCircle() : _Number(number),
               ),
             ],
           ),
