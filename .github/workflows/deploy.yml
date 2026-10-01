@@ -232,11 +232,12 @@ jobs:
           mobile/tool/firebase-config.sh
           since=$(curl -fsS "https://$DOMAIN/app.json" | jq -r '.commit // empty' || true)
           build=$(SINCE="$since" mobile/tool/stamp-build.sh)
-          echo "Сборка $build, что нового:"
+          name=$(jq -r .version mobile/assets/build_info.json)
+          echo "Версия $name, сборка $build, что нового:"
           jq -r '.whatsNew[]' mobile/assets/build_info.json
           cd mobile
           flutter pub get
-          flutter build apk --release --build-number="$build" \
+          flutter build apk --release --build-number="$build" --build-name="$name" \
             --dart-define=API_BASE_URL=https://$DOMAIN/api
           rm -f android/key.properties "$RUNNER_TEMP/moya-dacha-release.jks"
 
