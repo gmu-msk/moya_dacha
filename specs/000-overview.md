@@ -107,3 +107,4 @@ Android, раздача через **внутреннее тестировани
 - [specs/023-moderation.md](023-moderation.md) — владелец удаляет чужой пост или комментарий из дашборда
 - [specs/025-places.md](025-places.md) — населённый пункт в профиле из справочника ФИАС
 - [specs/026-places-nearby.md](026-places-nearby.md) — населённый пункт по геолокации
+- [specs/027-post-place.md](027-post-place.md) — геометка поста и расстояние до него
