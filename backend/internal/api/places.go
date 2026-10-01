@@ -57,15 +57,24 @@ func (s *Server) GetPlaces(ctx context.Context, request gen.GetPlacesRequestObje
 		return gen.GetPlaces503JSONResponse(errPlacesUnavailable), nil
 	}
 
+	if err := s.rememberPlaces(ctx, places); err != nil {
+		return nil, err
+	}
+	return gen.GetPlaces200JSONResponse(gen.PlaceList{Places: places}), nil
+}
+
+// rememberPlaces запоминает отданные пункты (требование 5): новый
+// добавляется, у известного обновляются название и уточнение.
+func (s *Server) rememberPlaces(ctx context.Context, places []gen.Place) error {
 	for _, p := range places {
 		if _, err := s.db.Exec(ctx, `
 			INSERT INTO places (id, name, area, updated_at) VALUES ($1, $2, $3, now())
 			ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, area = EXCLUDED.area, updated_at = now()`,
 			p.Id, p.Name, p.Area); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return gen.GetPlaces200JSONResponse(gen.PlaceList{Places: places}), nil
+	return nil
 }
 
 // SetPlace ставит или убирает пункт в профиле. Справочник не спрашивается:
@@ -113,23 +122,61 @@ func (p placeScan) value() *gen.Place {
 	return &place
 }
 
-// dadataSuggestion — подсказка DaData; из неё нужны только три поля
-// (требование 7). fias_level приходит строкой, но может и числом.
+// dadataSuggestion — подсказка DaData. Подсказкам по названию нужны
+// value, fias_id и fias_level (specs/025-places.md, требование 7),
+// пунктам рядом — поля пункта (specs/026-places-nearby.md, 7–8).
+// fias_level приходит строкой, но может и числом.
 type dadataSuggestion struct {
 	Value string `json:"value"`
 	Data  struct {
-		FiasID    string          `json:"fias_id"`
-		FiasLevel json.RawMessage `json:"fias_level"`
+		FiasID             string          `json:"fias_id"`
+		FiasLevel          json.RawMessage `json:"fias_level"`
+		SettlementFiasID   string          `json:"settlement_fias_id"`
+		SettlementWithType string          `json:"settlement_with_type"`
+		CityFiasID         string          `json:"city_fias_id"`
+		CityWithType       string          `json:"city_with_type"`
+		AreaWithType       string          `json:"area_with_type"`
+		RegionWithType     string          `json:"region_with_type"`
 	} `json:"data"`
 }
 
 // suggestPlaces спрашивает DaData и разбирает ответ по требованиям 6–8.
 func (s *Server) suggestPlaces(ctx context.Context, query string) ([]gen.Place, error) {
+	suggestions, err := s.askDadata(ctx, "/suggest/address",
+		map[string]any{"query": query, "count": placesAsked})
+	if err != nil {
+		return nil, err
+	}
+
+	places := []gen.Place{}
+	seen := map[string]bool{}
+	for _, sg := range suggestions {
+		id := strings.TrimSpace(sg.Data.FiasID)
+		if id == "" || seen[id] || !placeLevels[fiasLevel(sg.Data.FiasLevel)] {
+			continue
+		}
+		name, area, ok := splitPlaceValue(sg.Value)
+		if !ok {
+			continue
+		}
+		seen[id] = true
+		places = append(places, gen.Place{Id: id, Name: name, Area: area})
+		if len(places) == maxPlaces {
+			break
+		}
+	}
+	return places, nil
+}
+
+// askDadata отправляет запрос в DaData и отдаёт подсказки из ответа. Нет
+// поля suggestions — подсказок нет. Тело запроса в лог не пишется: в нём
+// бывают координаты человека (specs/026-places-nearby.md, требование 5).
+func (s *Server) askDadata(ctx context.Context, path string, payload any) ([]dadataSuggestion, error) {
 	base := s.cfg.PlacesURL
 	if base == "" {
 		base = DefaultPlacesURL
 	}
-	body, err := json.Marshal(map[string]any{"query": query, "count": placesAsked})
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +184,7 @@ func (s *Server) suggestPlaces(ctx context.Context, query string) ([]gen.Place, 
 	ctx, cancel := context.WithTimeout(ctx, placesTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		strings.TrimRight(base, "/")+"/suggest/address", bytes.NewReader(body))
+		strings.TrimRight(base, "/")+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -160,25 +207,7 @@ func (s *Server) suggestPlaces(ctx context.Context, query string) ([]gen.Place, 
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&parsed); err != nil {
 		return nil, fmt.Errorf("ответ DaData не разобран: %w", err)
 	}
-
-	places := []gen.Place{}
-	seen := map[string]bool{}
-	for _, sg := range parsed.Suggestions {
-		id := strings.TrimSpace(sg.Data.FiasID)
-		if id == "" || seen[id] || !placeLevels[fiasLevel(sg.Data.FiasLevel)] {
-			continue
-		}
-		name, area, ok := splitPlaceValue(sg.Value)
-		if !ok {
-			continue
-		}
-		seen[id] = true
-		places = append(places, gen.Place{Id: id, Name: name, Area: area})
-		if len(places) == maxPlaces {
-			break
-		}
-	}
-	return places, nil
+	return parsed.Suggestions, nil
 }
 
 // fiasLevel читает уровень ФИАС и строкой, и числом.

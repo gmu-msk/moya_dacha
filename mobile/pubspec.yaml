@@ -68,6 +68,10 @@ dependencies:
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
 
+  # Пункты рядом по кнопке «Определить по месту»
+  # (specs/026-places-nearby.md).
+  geolocator: ^14.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

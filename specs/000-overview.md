@@ -106,3 +106,4 @@ Android, раздача через **внутреннее тестировани
 - [specs/022-edit-block-delete.md](022-edit-block-delete.md) — правка подписи и комментария, блокировка, удаление аккаунта
 - [specs/023-moderation.md](023-moderation.md) — владелец удаляет чужой пост или комментарий из дашборда
 - [specs/025-places.md](025-places.md) — населённый пункт в профиле из справочника ФИАС
+- [specs/026-places-nearby.md](026-places-nearby.md) — населённый пункт по геолокации
