@@ -65,11 +65,28 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 		tag = normalized
 	}
 
-	page, err := s.feedPage(ctx, current.user.Id, "", tag, followingOnly, after, limit)
+	page, err := s.feedPage(ctx, current.user.Id, feedFilter{tag: tag, followingOnly: followingOnly}, after, limit)
 	if err != nil {
 		return nil, err
 	}
 	return gen.GetFeed200JSONResponse(page), nil
+}
+
+// feedFilter сужает ленту. Пустой — лента «Все».
+type feedFilter struct {
+	// authorID — посты одного человека: так страницами отдаются посты в
+	// профиле (specs/009-user-profile.md).
+	authorID string
+	// tag — посты с этим тэгом (specs/028-post-tags.md, требование 12).
+	tag string
+	// groupID — посты группы, её лента (specs/030-group-posts.md,
+	// требование 9).
+	groupID string
+	// followingOnly — вкладка «Подписки» (specs/012-follows.md,
+	// требование 17): свои посты, посты тех, на кого смотрящий подписан
+	// (заявка — не подписка), и посты групп, где он участник
+	// (specs/030-group-posts.md, требование 6).
+	followingOnly bool
 }
 
 // feedPage читает страницу ленты и решает, есть ли продолжение.
@@ -77,18 +94,10 @@ func (s *Server) GetFeed(ctx context.Context, request gen.GetFeedRequestObject) 
 // (specs/005-likes.md, требование 4). Число комментариев приходит там
 // же: в ленте видно, где разговор идёт (specs/006-comments.md).
 //
-// authorID сужает ленту до постов одного человека — так страницами
-// отдаются посты в профиле (specs/009-user-profile.md). Пустой — лента
-// всех.
-//
 // Каждый пост проходит проверку видимости (specs/013-post-visibility.md):
-// закрытый профиль, «друзьям», «только мне». followingOnly
-// оставляет только своих и тех, на кого смотрящий подписан: вкладка
-// «Подписки» (требование 17). Заявка — не подписка.
-//
-// tag оставляет только посты с этим тэгом (specs/028-post-tags.md,
-// требование 12); пустой — все.
-func (s *Server) feedPage(ctx context.Context, viewerID, authorID, tag string, followingOnly bool, after *feedCursor, limit int) (gen.Feed, error) {
+// закрытый профиль, «друзьям», «только мне». Группа поста её не
+// расширяет (specs/030-group-posts.md, требование 3).
+func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilter, after *feedCursor, limit int) (gen.Feed, error) {
 	var (
 		afterTime *time.Time
 		afterID   *string
@@ -96,13 +105,11 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID, tag string, f
 	if after != nil {
 		afterTime, afterID = &after.createdAt, &after.id
 	}
-	var author *string
-	if authorID != "" {
-		author = &authorID
-	}
-	var withTag *string
-	if tag != "" {
-		withTag = &tag
+	optional := func(value string) *string {
+		if value == "" {
+			return nil
+		}
+		return &value
 	}
 
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
@@ -127,13 +134,22 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID, tag string, f
 		           SELECT 1 FROM follows f
 		           WHERE f.follower_id = $4::uuid AND f.followee_id = p.author_id
 		             AND f.accepted
+		       )
+		       OR EXISTS (
+		           SELECT 1 FROM post_groups pg
+		           JOIN group_members gm ON gm.group_id = pg.group_id
+		           WHERE pg.post_id = p.id AND gm.user_id = $4::uuid
+		             AND gm.state = 'member'
 		       ))
 		  AND ($7::text IS NULL OR EXISTS (
 		       SELECT 1 FROM post_tags pt WHERE pt.post_id = p.id AND pt.tag = $7))
+		  AND ($8::uuid IS NULL OR EXISTS (
+		       SELECT 1 FROM post_groups pg WHERE pg.post_id = p.id AND pg.group_id = $8::uuid))
 		  AND ($1::timestamptz IS NULL
 		       OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid))
 		ORDER BY p.created_at DESC, p.id DESC
-		LIMIT $3`, afterTime, afterID, limit+1, viewerID, author, followingOnly, withTag)
+		LIMIT $3`, afterTime, afterID, limit+1, viewerID,
+		optional(filter.authorID), filter.followingOnly, optional(filter.tag), optional(filter.groupID))
 	if err != nil {
 		return gen.Feed{}, err
 	}
@@ -175,6 +191,9 @@ func (s *Server) feedPage(ctx context.Context, viewerID, authorID, tag string, f
 		return gen.Feed{}, err
 	}
 	if err := s.attachTags(ctx, feed.Items); err != nil {
+		return gen.Feed{}, err
+	}
+	if err := s.attachGroups(ctx, viewerID, feed.Items); err != nil {
 		return gen.Feed{}, err
 	}
 	return feed, nil
