@@ -14,7 +14,7 @@ class AuthorLine extends StatelessWidget {
     super.key,
     required this.author,
     required this.when,
-    this.visibility,
+    this.audience,
     this.edited = false,
     this.onTap,
   });
@@ -24,9 +24,10 @@ class AuthorLine extends StatelessWidget {
   /// Когда пост выложен.
   final DateTime when;
 
-  /// Кто видит пост: у «друзьям» и «только мне» рядом со временем
-  /// отметка (specs/013-post-visibility.md, требование 7).
-  final PostVisibility? visibility;
+  /// Кто видит пост: у «друзьям», «только мне» и «участникам группы»
+  /// рядом со временем отметка (specs/013-post-visibility.md,
+  /// требование 7; specs/031-group-visibility.md, требование 17).
+  final Audience? audience;
 
   /// Меняли ли текст: рядом со временем — «изменено»
   /// (specs/022-edit-block-delete.md, требование 26).
@@ -57,7 +58,7 @@ class AuthorLine extends StatelessWidget {
           color: theme.colorScheme.secondary,
         ),
       ),
-      subtitle: PostedLine(when: when, visibility: visibility, edited: edited),
+      subtitle: PostedLine(when: when, audience: audience, edited: edited),
     );
   }
 }
@@ -67,22 +68,22 @@ class PostedLine extends StatelessWidget {
   const PostedLine({
     super.key,
     required this.when,
-    this.visibility,
+    this.audience,
     this.edited = false,
     this.style,
   });
 
   final DateTime when;
-  final PostVisibility? visibility;
+  final Audience? audience;
   final bool edited;
   final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
-    final visibility = this.visibility;
-    final mark = visibility == null ? null : visibilityMark(visibility);
+    final audience = this.audience;
+    final mark = audience == null ? null : visibilityMark(audience);
     final posted = edited ? '${whenPosted(when)} · изменено' : whenPosted(when);
-    if (visibility == null || mark == null) {
+    if (audience == null || mark == null) {
       return Text(posted, style: style);
     }
     final base = style ?? DefaultTextStyle.of(context).style;
@@ -93,7 +94,7 @@ class PostedLine extends StatelessWidget {
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
             child: Icon(
-              visibilityIcon(visibility),
+              visibilityIcon(audience),
               size: base.fontSize,
               color: base.color,
             ),

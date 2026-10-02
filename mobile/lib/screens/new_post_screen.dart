@@ -89,7 +89,11 @@ class _NewPostScreenState extends State<NewPostScreen> {
   bool _publishing = false;
   int _shakes = 0;
 
-  PostVisibility _visibility = PostVisibility.all;
+  Audience _audience = const Audience(PostVisibility.all);
+
+  /// Свои группы: для «Кто увидит» и «Выложить в группе»
+  /// (specs/031-group-visibility.md, требование 14).
+  List<Group> _groups = const [];
 
   /// Тэги поста (specs/028-post-tags.md, требования 20–22).
   List<String> _tags = const [];
@@ -113,12 +117,26 @@ class _NewPostScreenState extends State<NewPostScreen> {
     super.initState();
     usage.screen('new_post');
     _loadRecent();
+    _loadGroups();
   }
 
   @override
   void dispose() {
     _caption.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadGroups() async {
+    try {
+      final list = await GroupsApi(apiClient(token: widget.token))
+          .getGroups(scope: 'mine');
+      debugPrint('$logMarker post=groups count=${list?.items.length}');
+      if (mounted) {
+        setState(() => _groups = audienceGroupOrder(list?.items ?? const []));
+      }
+    } on Exception catch (error) {
+      debugPrint('$logMarker post=groups_failed error=$error');
+    }
   }
 
   Future<void> _loadRecent() async {
@@ -303,7 +321,8 @@ class _NewPostScreenState extends State<NewPostScreen> {
         PostDraft(
           mediaIds: [for (final photo in _photos) photo.uploaded!.id],
           caption: _caption.text,
-          visibility: _visibility,
+          visibility: _audience.visibility,
+          visibilityGroupId: _audience.group?.id,
           placeId: _place?.id,
           tags: tags,
           groupIds: _groupIds,
@@ -380,14 +399,18 @@ class _NewPostScreenState extends State<NewPostScreen> {
                 ),
                 const SizedBox(height: AppGap.medium),
                 VisibilityPicker(
-                  value: _visibility,
+                  value: _audience,
                   closed: widget.closed,
+                  groups: [
+                    for (final g in _groups) GroupBrief(id: g.id, name: g.name),
+                  ],
                   enabled: !_publishing,
-                  onChanged: (picked) => setState(() => _visibility = picked),
+                  onChanged: (picked) => setState(() => _audience = picked),
                 ),
                 const SizedBox(height: AppGap.small),
                 GroupPicker(
-                  token: widget.token,
+                  groups: _groups,
+                  lockedId: _audience.group?.id,
                   enabled: !_publishing,
                   onChanged: (ids) => _groupIds = ids,
                 ),
