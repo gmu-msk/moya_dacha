@@ -623,8 +623,8 @@ paths:
                 $ref: "#/components/schemas/Error"
         "403":
           description: |
-            Автор не участник одной из групп `group_ids` или такой группы
-            нет (`not_group_member`)
+            Автор не участник одной из групп `group_ids` или группы
+            `visibility_group_id`, или такой группы нет (`not_group_member`)
           content:
             application/json:
               schema:
@@ -1731,7 +1731,8 @@ paths:
       description: |
         Лайки и комментарии остаются; кто перестал видеть пост, их тоже
         не видит (specs/013-post-visibility.md, требование 6). Чужой
-        видимый пост — `403 not_your_post`, невидимый — `404`.
+        видимый пост — `403 not_your_post`, невидимый — `404`. Видимость
+        группы снимается (specs/031-group-visibility.md, требование 12).
       tags: [posts]
       security:
         - bearerAuth: []
@@ -2972,6 +2973,16 @@ components:
             по названию; нет — пустой массив (specs/030-group-posts.md)
           items:
             $ref: "#/components/schemas/GroupBrief"
+        # В required нет нарочно: сборка из PR ходит и на сервер с main.
+        visibility_group:
+          allOf:
+            - $ref: "#/components/schemas/GroupBrief"
+          nullable: true
+          description: |
+            Пост видят только участники этой группы
+            (specs/031-group-visibility.md). Тогда `visibility` — `friends`,
+            чтобы старые сборки разбирали ответ; приложение смотрит сюда.
+            Нет или `null` — видимость по `visibility`.
 
     TagsUpdate:
       type: object
@@ -3694,6 +3705,16 @@ components:
           items:
             type: string
           example: ["00000000-0000-4000-8000-000000002901"]
+        visibility_group_id:
+          type: string
+          nullable: true
+          description: |
+            Пост увидят только участники этой группы; автор должен быть её
+            участником. Тогда `visibility` не учитывается — приложение шлёт
+            `me`, чтобы сервер без этой фичи не выложил пост всем. Группа
+            сама добавляется к `group_ids`. Нет, `null` или пусто —
+            видимость по `visibility` (specs/031-group-visibility.md)
+          example: "00000000-0000-4000-8000-000000002901"
 
     Media:
       type: object

@@ -111,3 +111,4 @@ Android, раздача через **внутреннее тестировани
 - [specs/028-post-tags.md](028-post-tags.md) — тэги у поста и подсказки тэгов
 - [specs/029-groups.md](029-groups.md) — геогруппы и группы по интересам
 - [specs/030-group-posts.md](030-group-posts.md) — посты в группах и лента группы
+- [specs/031-group-visibility.md](031-group-visibility.md) — «Кто увидит»: только участники группы
