@@ -24,7 +24,7 @@ class UnreadNotifications {
   /// Сколько заявок на подписку ждут ответа
   int requests;
 
-  /// Сколько заявок в группы смотрящего и приглашений ему ждут ответа (specs/029-groups.md, требование 27). Сервер отдаёт всегда; необязательно, чтобы сборка новее сервера не падала. 
+  /// Сколько приглашений в группы ждут ответа смотрящего (specs/029-groups.md, требование 28). Сервер отдаёт всегда; необязательно, чтобы сборка новее сервера не падала. 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

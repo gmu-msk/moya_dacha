@@ -1,8 +1,10 @@
-// Группы по интересам и по месту: specs/029-groups.md.
+// Геогруппы и группы по интересам: specs/029-groups.md.
 //
-// Хозяин группы — groups.owner_id и одновременно строка group_members
-// со state = member: «Мои группы» и число участников считаются одним
-// запросом. Заявка и приглашение становятся участием той же строкой.
+// Хозяин группы по интересам — groups.owner_id и одновременно строка
+// group_members со state = member: «Мои группы» и число участников
+// считаются одним запросом. Приглашение становится участием той же
+// строкой. Геогруппы и вступление в них делает триггер базы на смене
+// пункта в профиле (миграция 00024), здесь их только читают.
 package api
 
 import (
@@ -18,49 +20,40 @@ import (
 	"github.com/gmu-msk/moya_dacha/backend/api/gen"
 )
 
-// Ограничения группы (требования 1 и 3).
+// Ограничения группы по интересам (требование 3).
 const (
 	MaxGroupName        = 60
 	MaxGroupDescription = 500
-	MaxGroupRadiusKm    = 100
-	// MaxGroupList — сколько групп отдаёт список (требование 16).
+	// MaxGroupList — сколько групп отдаёт список (требование 19).
 	MaxGroupList = 100
 )
 
-// groupVisible — группа g видна смотрящему viewer: её хозяин не
-// заблокировал смотрящего (требование 14), а группу по приглашению
-// видят только те, у кого в ней есть строка — хозяин, участники и
-// приглашённые (13). Заявки в такую группу не бывает.
+// groupVisible — группа g видна смотрящему viewer: это геогруппа или
+// хозяин группы по интересам не заблокировал смотрящего (требование 16).
 func groupVisible(viewer string) string {
-	return `NOT ` + blocks("g.owner_id", viewer) + ` AND (g.join_policy <> 'invite' OR EXISTS (
-		SELECT 1 FROM group_members vm WHERE vm.group_id = g.id AND vm.user_id = ` + viewer + `))`
+	return `(g.owner_id IS NULL OR NOT ` + blocks("g.owner_id", viewer) + `)`
 }
 
-// groupQuery — видимые смотрящему ($1) группы в порядке groupScan,
+// groupQuery — видимые смотрящему ($1) группы в порядке scanGroup,
 // отобранные условием where над b.* и упорядоченные order. Расстояние
 // до места — как у поста (027): -1 — тот же пункт, NULL — посчитать
-// нельзя. near — смотрящий в пункте группы или в её радиусе (12).
+// нельзя. near — пункт смотрящего и есть место геогруппы (15).
 func groupQuery(where, order string) string {
 	return `
-	SELECT b.id, b.name, b.description, b.kind, b.join_policy, b.created_at,
+	SELECT b.id, b.name, b.description, b.kind, b.created_at,
 		b.owner_id, b.owner_nickname, b.owner_name, b.owner_avatar,
-		b.members, b.membership, b.requests,
-		b.place_id, b.place_name, b.place_area, b.radius_km, b.dist,
-		coalesce(b.kind = 'place' AND (b.dist = -1 OR b.dist <= b.radius_km), false) AS near
+		b.members, b.membership,
+		b.place_id, b.place_name, b.place_area, b.dist,
+		coalesce(b.dist = -1, false) AS near
 	FROM (
-		SELECT g.id, g.name, g.description, g.kind, g.join_policy, g.created_at,
+		SELECT g.id, g.name, g.description, g.kind, g.created_at,
 			o.id AS owner_id, o.nickname AS owner_nickname, o.name AS owner_name,
 			o.avatar_key AS owner_avatar,
 			(SELECT count(*) FROM group_members m WHERE m.group_id = g.id AND m.state = 'member') AS members,
 			CASE WHEN g.owner_id = $1::uuid THEN 'owner' ELSE coalesce((
 				SELECT m.state FROM group_members m WHERE m.group_id = g.id AND m.user_id = $1::uuid
 			), 'none') END AS membership,
-			CASE WHEN g.owner_id = $1::uuid THEN (
-				SELECT count(*) FROM group_members m
-				WHERE m.group_id = g.id AND m.state = 'requested'
-				  AND NOT ` + blockedBetween("$1::uuid", "m.user_id") + `
-			) END AS requests,
-			gp.id AS place_id, gp.name AS place_name, gp.area AS place_area, g.radius_km,
+			gp.id AS place_id, gp.name AS place_name, gp.area AS place_area,
 			CASE
 				WHEN gp.id IS NULL OR vp.id IS NULL THEN NULL
 				WHEN vp.id = gp.id THEN -1
@@ -71,7 +64,7 @@ func groupQuery(where, order string) string {
 					  * power(sin(radians(gp.lon - vp.lon) / 2), 2))))
 			END AS dist
 		FROM groups g
-		JOIN users o ON o.id = g.owner_id
+		LEFT JOIN users o ON o.id = g.owner_id
 		LEFT JOIN places gp ON gp.id = g.place_id
 		LEFT JOIN users vu ON vu.id = $1::uuid
 		LEFT JOIN places vp ON vp.id = vu.place_id
@@ -81,41 +74,47 @@ func groupQuery(where, order string) string {
 	ORDER BY ` + order
 }
 
-// scanGroup читает строку groupQuery.
+// scanGroup читает строку groupQuery. join_policy всегда open — для
+// старых сборок (требование 12).
 func (s *Server) scanGroup(row pgx.Row) (gen.Group, error) {
 	var (
 		group      gen.Group
 		kind       string
-		policy     string
+		ownerID    *string
+		nickname   *string
+		ownerName  *string
 		avatarKey  *string
 		members    int64
 		membership string
-		requests   *int64
 		place      placeScan
-		radius     *int32
 		dist       *float64
 	)
-	if err := row.Scan(&group.Id, &group.Name, &group.Description, &kind, &policy, &group.CreatedAt,
-		&group.Owner.Id, &group.Owner.Nickname, &group.Owner.Name, &avatarKey,
-		&members, &membership, &requests,
-		&place.id, &place.name, &place.area, &radius, &dist, &group.Near,
+	if err := row.Scan(&group.Id, &group.Name, &group.Description, &kind, &group.CreatedAt,
+		&ownerID, &nickname, &ownerName, &avatarKey,
+		&members, &membership,
+		&place.id, &place.name, &place.area, &dist, &group.Near,
 	); err != nil {
 		return gen.Group{}, err
 	}
 	group.Kind = gen.GroupKind(kind)
-	group.JoinPolicy = gen.GroupJoinPolicy(policy)
-	if avatarKey != nil {
-		url := s.cfg.Media.URL(*avatarKey)
-		group.Owner.AvatarUrl = &url
+	group.JoinPolicy = gen.GroupJoinPolicyOpen
+	if ownerID != nil {
+		owner := gen.Author{Id: *ownerID}
+		if nickname != nil {
+			owner.Nickname = *nickname
+		}
+		if ownerName != nil {
+			owner.Name = *ownerName
+		}
+		if avatarKey != nil {
+			url := s.cfg.Media.URL(*avatarKey)
+			owner.AvatarUrl = &url
+		}
+		group.Owner = &owner
 	}
 	group.Members = int32(members)
 	group.Membership = gen.GroupMembership(membership)
-	if requests != nil {
-		n := int32(*requests)
-		group.Requests = &n
-	}
 	group.Place = place.value()
-	group.RadiusKm = radius
 	if dist != nil {
 		km := int32(0)
 		if *dist != samePlace {
@@ -141,8 +140,8 @@ func (s *Server) group(ctx context.Context, viewerID, groupID string) (gen.Group
 	return group, true, nil
 }
 
-// CreateGroup создаёт группу; создатель — хозяин и первый участник
-// (требования 1–6).
+// CreateGroup создаёт группу по интересам; создатель — хозяин и первый
+// участник (требование 10). Геогруппы создаются сами.
 func (s *Server) CreateGroup(ctx context.Context, request gen.CreateGroupRequestObject) (gen.CreateGroupResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -152,9 +151,11 @@ func (s *Server) CreateGroup(ctx context.Context, request gen.CreateGroupRequest
 	if body == nil {
 		return gen.CreateGroup400JSONResponse(errInvalidGroupRequest), nil
 	}
-	kind, policy := body.Kind, body.JoinPolicy
-	if (kind != "interest" && kind != "place") ||
-		(policy != "open" && policy != "request" && policy != "invite") {
+	// join_policy от первой версии не учитывается: все группы открытые.
+	if body.Kind != nil && *body.Kind != "interest" {
+		if *body.Kind == "place" {
+			return gen.CreateGroup400JSONResponse(errInvalidGroup), nil
+		}
 		return gen.CreateGroup400JSONResponse(errInvalidGroupRequest), nil
 	}
 
@@ -164,27 +165,9 @@ func (s *Server) CreateGroup(ctx context.Context, request gen.CreateGroupRequest
 		description = strings.TrimSpace(*body.Description)
 	}
 	if name == "" || utf8.RuneCountInString(name) > MaxGroupName ||
-		utf8.RuneCountInString(description) > MaxGroupDescription {
+		utf8.RuneCountInString(description) > MaxGroupDescription ||
+		(body.PlaceId != nil && strings.TrimSpace(*body.PlaceId) != "") || body.RadiusKm != nil {
 		return gen.CreateGroup400JSONResponse(errInvalidGroup), nil
-	}
-
-	var placeID *string
-	if body.PlaceId != nil && strings.TrimSpace(*body.PlaceId) != "" {
-		trimmed := strings.TrimSpace(*body.PlaceId)
-		placeID = &trimmed
-	}
-	radius := body.RadiusKm
-	if kind == "interest" {
-		if placeID != nil || radius != nil {
-			return gen.CreateGroup400JSONResponse(errInvalidGroup), nil
-		}
-	} else {
-		if placeID == nil {
-			return gen.CreateGroup400JSONResponse(errPlaceRequired), nil
-		}
-		if radius != nil && (*radius < 1 || *radius > MaxGroupRadiusKm) {
-			return gen.CreateGroup400JSONResponse(errInvalidGroup), nil
-		}
 	}
 
 	tx, err := s.db.Begin(ctx)
@@ -193,19 +176,13 @@ func (s *Server) CreateGroup(ctx context.Context, request gen.CreateGroupRequest
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Место годится только то, что сервер уже отдавал в подсказках (025).
 	var groupID string
-	err = tx.QueryRow(ctx, `
-		INSERT INTO groups (owner_id, name, description, kind, join_policy, place_id, radius_km)
-		SELECT $1, $2, $3, $4, $5, $6, $7
-		WHERE $6::text IS NULL OR EXISTS (SELECT 1 FROM places WHERE id = $6)
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO groups (owner_id, name, description, kind, join_policy)
+		VALUES ($1, $2, $3, 'interest', 'open')
 		RETURNING id`,
-		current.user.Id, name, description, kind, policy, placeID, radius,
-	).Scan(&groupID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return gen.CreateGroup400JSONResponse(errUnknownPlace), nil
-	}
-	if err != nil {
+		current.user.Id, name, description,
+	).Scan(&groupID); err != nil {
 		return nil, err
 	}
 	if _, err := tx.Exec(ctx,
@@ -226,7 +203,7 @@ func (s *Server) CreateGroup(ctx context.Context, request gen.CreateGroupRequest
 }
 
 // GetGroups отдаёт «Мои группы» или группы, куда можно вступить
-// (требования 16–17).
+// (требования 19–20).
 func (s *Server) GetGroups(ctx context.Context, request gen.GetGroupsRequestObject) (gen.GetGroupsResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -243,9 +220,9 @@ func (s *Server) GetGroups(ctx context.Context, request gen.GetGroupsRequestObje
 	switch scope {
 	case "mine":
 		where = append(where, `b.membership IN ('owner', 'member')`)
-		order = `lower(b.name), b.created_at, b.id`
+		order = `b.kind = 'place' DESC, near DESC, lower(b.name), b.created_at, b.id`
 	case "available":
-		where = append(where, `b.membership IN ('none', 'requested', 'invited')`)
+		where = append(where, `b.membership IN ('none', 'invited')`)
 		order = `b.membership = 'invited' DESC, near DESC, b.members DESC, lower(b.name), b.created_at, b.id`
 	default:
 		return gen.GetGroups400JSONResponse(errInvalidGroupRequest), nil
@@ -288,7 +265,7 @@ func (s *Server) GetGroups(ctx context.Context, request gen.GetGroupsRequestObje
 	return gen.GetGroups200JSONResponse(list), nil
 }
 
-// GetGroup отдаёт одну группу (требование 15).
+// GetGroup отдаёт одну группу (требование 16).
 func (s *Server) GetGroup(ctx context.Context, request gen.GetGroupRequestObject) (gen.GetGroupResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -304,8 +281,9 @@ func (s *Server) GetGroup(ctx context.Context, request gen.GetGroupRequestObject
 	return gen.GetGroup200JSONResponse(group), nil
 }
 
-// DeleteGroup удаляет свою группу; состав, заявки и приглашения уходят
-// каскадом (требование 7).
+// DeleteGroup удаляет свою группу по интересам; состав и приглашения
+// уходят каскадом. Хозяина у геогруппы нет — её не удалить никому
+// (требование 11).
 func (s *Server) DeleteGroup(ctx context.Context, request gen.DeleteGroupRequestObject) (gen.DeleteGroupResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -329,8 +307,8 @@ func (s *Server) DeleteGroup(ctx context.Context, request gen.DeleteGroupRequest
 	return gen.DeleteGroup204Response{}, nil
 }
 
-// JoinGroup вступает в группу, просится в неё или принимает приглашение
-// (требование 18). Повтор ничего не меняет.
+// JoinGroup вступает в группу или принимает приглашение (требование 17).
+// Повтор ничего не меняет.
 func (s *Server) JoinGroup(ctx context.Context, request gen.JoinGroupRequestObject) (gen.JoinGroupResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -343,28 +321,17 @@ func (s *Server) JoinGroup(ctx context.Context, request gen.JoinGroupRequestObje
 	if !found {
 		return gen.JoinGroup404JSONResponse(errGroupNotFound), nil
 	}
-
-	switch group.Membership {
-	case gen.GroupMembershipInvited:
-		// Приглашение — согласие хозяина: участник сразу, при любом правиле.
-		_, err = s.db.Exec(ctx, `
-			UPDATE group_members SET state = 'member', created_at = now()
-			WHERE group_id = $1 AND user_id = $2 AND state = 'invited'`,
-			group.Id, current.user.Id)
-	case gen.GroupMembershipNone:
-		// Без приглашения группа по приглашению не видна: сюда она не дойдёт.
-		state := "member"
-		if group.JoinPolicy == gen.GroupJoinPolicyRequest {
-			state = "requested"
-		}
-		_, err = s.db.Exec(ctx, `
-			INSERT INTO group_members (group_id, user_id, state) VALUES ($1, $2, $3)
-			ON CONFLICT (group_id, user_id) DO NOTHING`,
-			group.Id, current.user.Id, state)
-	default:
+	if group.Membership == gen.GroupMembershipOwner || group.Membership == gen.GroupMembershipMember {
 		return gen.JoinGroup200JSONResponse(group), nil
 	}
-	if err != nil {
+
+	if _, err := s.db.Exec(ctx, `
+		INSERT INTO group_members (group_id, user_id, state) VALUES ($1, $2, 'member')
+		ON CONFLICT (group_id, user_id) DO UPDATE
+			SET state = 'member', invited_by = NULL, created_at = now()
+			WHERE group_members.state = 'invited'`,
+		group.Id, current.user.Id,
+	); err != nil {
 		return nil, err
 	}
 
@@ -378,8 +345,8 @@ func (s *Server) JoinGroup(ctx context.Context, request gen.JoinGroupRequestObje
 	return gen.JoinGroup200JSONResponse(group), nil
 }
 
-// LeaveGroup выходит из группы, отзывает заявку или отклоняет
-// приглашение — строка смотрящего удаляется (требование 19).
+// LeaveGroup выходит из группы или отклоняет приглашение — строка
+// смотрящего удаляется (требование 18).
 func (s *Server) LeaveGroup(ctx context.Context, request gen.LeaveGroupRequestObject) (gen.LeaveGroupResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -403,8 +370,8 @@ func (s *Server) LeaveGroup(ctx context.Context, request gen.LeaveGroupRequestOb
 	return gen.LeaveGroup204Response{}, nil
 }
 
-// GetGroupMembers отдаёт участников, а хозяину — ещё заявки и
-// приглашения (требования 20–21).
+// GetGroupMembers отдаёт участников, а участникам — ещё приглашения
+// (требования 21–22).
 func (s *Server) GetGroupMembers(ctx context.Context, request gen.GetGroupMembersRequestObject) (gen.GetGroupMembersResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -424,29 +391,31 @@ func (s *Server) GetGroupMembers(ctx context.Context, request gen.GetGroupMember
 	if !found {
 		return gen.GetGroupMembers404JSONResponse(errGroupNotFound), nil
 	}
-	if state != "member" && group.Membership != gen.GroupMembershipOwner {
-		return gen.GetGroupMembers403JSONResponse(errNotGroupOwner), nil
+	list := gen.GroupMemberList{Items: []gen.GroupMember{}}
+	if state == "requested" {
+		// Заявок больше нет; пустой список — чтобы не ломать старые сборки.
+		return gen.GetGroupMembers200JSONResponse(list), nil
+	}
+	if state == "invited" && !groupMember(group) {
+		return gen.GetGroupMembers403JSONResponse(errNotGroupMember), nil
 	}
 
-	// Участники — хозяин первым, дальше новые выше; заявки и приглашения
-	// — новые сверху. Заблокировавших смотрящего нет (20), а заявок от
-	// тех, с кем у хозяина блокировка, хозяин не видит, как и заявок на
-	// подписку (012).
+	// Участники — хозяин первым, дальше новые выше; приглашения — новые
+	// сверху. Заблокировавших смотрящего нет (21).
 	rows, err := s.db.Query(ctx, `
-		SELECT u.id, u.nickname, u.name, u.avatar_key, gm.state, gm.created_at, u.id = g.owner_id
+		SELECT u.id, u.nickname, u.name, u.avatar_key, gm.state, gm.created_at,
+			coalesce(u.id = g.owner_id, false)
 		FROM group_members gm
 		JOIN groups g ON g.id = gm.group_id
 		JOIN users u ON u.id = gm.user_id
 		WHERE gm.group_id = $1 AND gm.state = $2
 		  AND NOT `+blocks("u.id", "$3::uuid")+`
-		  AND ($2 = 'member' OR NOT `+blockedBetween("g.owner_id", "u.id")+`)
-		ORDER BY u.id = g.owner_id DESC, gm.created_at DESC, u.id`,
+		ORDER BY coalesce(u.id = g.owner_id, false) DESC, gm.created_at DESC, u.id`,
 		group.Id, state, current.user.Id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	list := gen.GroupMemberList{Items: []gen.GroupMember{}}
 	for rows.Next() {
 		member, err := s.scanGroupMember(rows)
 		if err != nil {
@@ -484,7 +453,12 @@ func (s *Server) scanGroupMember(row pgx.Row) (gen.GroupMember, error) {
 	return member, nil
 }
 
-// AddGroupMember — хозяин принимает заявку или приглашает (требование 22).
+// groupMember — смотрящий хозяин или участник группы.
+func groupMember(group gen.Group) bool {
+	return group.Membership == gen.GroupMembershipOwner || group.Membership == gen.GroupMembershipMember
+}
+
+// AddGroupMember — участник приглашает человека (требование 23).
 func (s *Server) AddGroupMember(ctx context.Context, request gen.AddGroupMemberRequestObject) (gen.AddGroupMemberResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -497,8 +471,8 @@ func (s *Server) AddGroupMember(ctx context.Context, request gen.AddGroupMemberR
 	if !found {
 		return gen.AddGroupMember404JSONResponse(errGroupNotFound), nil
 	}
-	if group.Membership != gen.GroupMembershipOwner {
-		return gen.AddGroupMember403JSONResponse(errNotGroupOwner), nil
+	if !groupMember(group) {
+		return gen.AddGroupMember403JSONResponse(errNotGroupMember), nil
 	}
 	if request.UserId == current.user.Id {
 		return gen.AddGroupMember400JSONResponse(errCannotInviteSelf), nil
@@ -507,7 +481,7 @@ func (s *Server) AddGroupMember(ctx context.Context, request gen.AddGroupMemberR
 		return gen.AddGroupMember404JSONResponse(errUserNotFound), nil
 	}
 
-	// Заблокировавшего хозяина для хозяина нет, а заблокированного им
+	// Заблокировавшего смотрящего для него нет, а заблокированного им
 	// сначала надо разблокировать — как с подпиской (022).
 	var theyBlocked, iBlocked bool
 	if err := s.db.QueryRow(ctx,
@@ -523,23 +497,23 @@ func (s *Server) AddGroupMember(ctx context.Context, request gen.AddGroupMemberR
 		return gen.AddGroupMember409JSONResponse(errUserBlocked), nil
 	}
 
-	// Нет строки — приглашение, заявка — участие, остальное как было.
+	// Нет строки — приглашение от смотрящего, остальное как было.
 	member, err := s.scanGroupMember(s.db.QueryRow(ctx, `
-		WITH upsert AS (
-			INSERT INTO group_members (group_id, user_id, state)
-			SELECT $1, u.id, 'invited' FROM users u WHERE u.id = $2
-			ON CONFLICT (group_id, user_id) DO UPDATE SET state = 'member', created_at = now()
-			WHERE group_members.state = 'requested'
+		WITH added AS (
+			INSERT INTO group_members (group_id, user_id, state, invited_by)
+			SELECT $1, u.id, 'invited', $3 FROM users u WHERE u.id = $2
+			ON CONFLICT (group_id, user_id) DO NOTHING
 			RETURNING user_id, state, created_at
 		), found AS (
-			SELECT user_id, state, created_at FROM upsert
+			SELECT user_id, state, created_at FROM added
 			UNION ALL
 			SELECT user_id, state, created_at FROM group_members
-			WHERE group_id = $1 AND user_id = $2 AND NOT EXISTS (SELECT 1 FROM upsert)
+			WHERE group_id = $1 AND user_id = $2 AND NOT EXISTS (SELECT 1 FROM added)
 		)
-		SELECT u.id, u.nickname, u.name, u.avatar_key, r.state, r.created_at, false
-		FROM found r JOIN users u ON u.id = r.user_id`,
-		group.Id, request.UserId))
+		SELECT u.id, u.nickname, u.name, u.avatar_key, r.state, r.created_at,
+			coalesce(u.id = g.owner_id, false)
+		FROM found r JOIN users u ON u.id = r.user_id JOIN groups g ON g.id = $1`,
+		group.Id, request.UserId, current.user.Id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.AddGroupMember404JSONResponse(errUserNotFound), nil
 	}
@@ -549,8 +523,8 @@ func (s *Server) AddGroupMember(ctx context.Context, request gen.AddGroupMemberR
 	return gen.AddGroupMember200JSONResponse(member), nil
 }
 
-// RemoveGroupMember — хозяин отклоняет заявку, отзывает приглашение или
-// убирает участника (требование 23).
+// RemoveGroupMember — хозяин группы по интересам отзывает приглашение
+// или убирает участника; в геогруппе хозяина нет (требование 24).
 func (s *Server) RemoveGroupMember(ctx context.Context, request gen.RemoveGroupMemberRequestObject) (gen.RemoveGroupMemberResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -580,26 +554,20 @@ func (s *Server) RemoveGroupMember(ctx context.Context, request gen.RemoveGroupM
 	return gen.RemoveGroupMember204Response{}, nil
 }
 
-// groupRequestRows — ждущие заявки в группы смотрящего ($1) и
-// приглашения ему (требования 25–26): вид, группа, человек, время.
+// groupRequestRows — ждущие приглашения смотрящему ($1) в видимые ему
+// группы (требование 26): вид, группа, пригласивший, время.
 var groupRequestRows = `
-	SELECT 'request' AS kind, g.id AS group_id, g.name AS group_name,
-		u.id AS user_id, u.nickname, u.name, u.avatar_key, gm.created_at
+	SELECT 'invite' AS kind, g.id AS group_id, g.name AS group_name,
+		o.id AS user_id, o.nickname, o.name, o.avatar_key, gm.created_at
 	FROM group_members gm
 	JOIN groups g ON g.id = gm.group_id
-	JOIN users u ON u.id = gm.user_id
-	WHERE g.owner_id = $1::uuid AND gm.state = 'requested'
-	  AND NOT ` + blockedBetween("$1::uuid", "u.id") + `
-	UNION ALL
-	SELECT 'invite', g.id, g.name, o.id, o.nickname, o.name, o.avatar_key, gm.created_at
-	FROM group_members gm
-	JOIN groups g ON g.id = gm.group_id
-	JOIN users o ON o.id = g.owner_id
+	JOIN users o ON o.id = gm.invited_by
 	WHERE gm.user_id = $1::uuid AND gm.state = 'invited'
-	  AND NOT ` + blocks("o.id", "$1::uuid")
+	  AND NOT ` + blocks("o.id", "$1::uuid") + `
+	  AND ` + groupVisible("$1::uuid")
 
-// GetGroupRequests отдаёт заявки и приглашения для раздела
-// «Уведомления», новые сверху (требование 25).
+// GetGroupRequests отдаёт приглашения для раздела «Уведомления», новые
+// сверху (требование 26).
 func (s *Server) GetGroupRequests(ctx context.Context, _ gen.GetGroupRequestsRequestObject) (gen.GetGroupRequestsResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
@@ -645,11 +613,11 @@ var (
 	}
 	errInvalidGroup = gen.Error{
 		Code:    "invalid_group",
-		Message: "Название — от 1 до 60 знаков, описание — до 500, радиус — от 1 до 100 км",
+		Message: "Название — от 1 до 60 знаков, описание — до 500",
 	}
-	errPlaceRequired = gen.Error{
-		Code:    "place_required",
-		Message: "Выберите место группы",
+	errNotGroupMember = gen.Error{
+		Code:    "not_group_member",
+		Message: "Сначала вступите в группу",
 	}
 	errCannotInviteSelf = gen.Error{
 		Code:    "cannot_invite_self",

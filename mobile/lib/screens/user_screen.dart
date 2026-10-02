@@ -276,17 +276,13 @@ class UserScreenState extends State<UserScreen> {
     }
   }
 
-  /// Свои группы и поиск групп (specs/029-groups.md, требование 29).
-  Future<void> _openGroups(UserProfile profile) =>
-      Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => GroupsScreen(
-            token: widget.token,
-            viewerId: widget.viewerId,
-            place: profile.place,
-          ),
-        ),
-      );
+  /// Свои группы и поиск групп (specs/029-groups.md, требование 32).
+  Future<void> _openGroups() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) =>
+          GroupsScreen(token: widget.token, viewerId: widget.viewerId),
+    ),
+  );
 
   /// Посты подряд, сразу на том, которого коснулись
   /// (specs/009-user-profile.md, требование 11).
@@ -479,7 +475,7 @@ class UserScreenState extends State<UserScreen> {
                   const SizedBox(width: AppGap.small),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _openGroups(profile),
+                      onPressed: _openGroups,
                       icon: const Icon(Icons.groups_outlined),
                       label: const Text('Группы'),
                     ),

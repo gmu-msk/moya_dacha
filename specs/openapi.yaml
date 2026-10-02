@@ -2178,10 +2178,10 @@ paths:
       operationId: getGroups
       summary: Мои группы или группы, куда можно вступить
       description: |
-        До 100 групп (specs/029-groups.md, требования 16–17). `mine` —
-        где смотрящий хозяин или участник, по названию; `available` —
-        остальные видимые ему: приглашения, потом группы рядом, потом
-        больше участников выше.
+        До 100 групп (specs/029-groups.md, требования 19–20). `mine` —
+        где смотрящий хозяин или участник: геогруппы первыми, внутри по
+        названию; `available` — остальные видимые ему: приглашения, потом
+        геогруппа его пункта, потом больше участников выше.
       tags: [groups]
       security:
         - bearerAuth: []
@@ -2225,10 +2225,10 @@ paths:
                 $ref: "#/components/schemas/Error"
     post:
       operationId: createGroup
-      summary: Создать группу
+      summary: Создать группу по интересам
       description: |
-        Создатель становится хозяином и первым участником
-        (specs/029-groups.md, требования 1–6).
+        Создатель становится хозяином и первым участником. Геогруппы
+        создаются сами (specs/029-groups.md, требование 10).
       tags: [groups]
       security:
         - bearerAuth: []
@@ -2247,11 +2247,9 @@ paths:
                 $ref: "#/components/schemas/Group"
         "400":
           description: |
-            Название, описание или радиус не подходят, место у группы по
-            интересам (`invalid_group`); группа по месту без места
-            (`place_required`); такого пункта сервер не отдавал
-            (`unknown_place`); неизвестный тип или правило, тело не
-            разбирается (`invalid_request`)
+            Название или описание не подходят, `kind: place`, место или
+            радиус со значением (`invalid_group`); неизвестный тип, тело
+            не разбирается (`invalid_request`)
           content:
             application/json:
               schema:
@@ -2293,10 +2291,10 @@ paths:
                 $ref: "#/components/schemas/Error"
     delete:
       operationId: deleteGroup
-      summary: Удалить свою группу
+      summary: Удалить свою группу по интересам
       description: |
-        Вместе с составом, заявками и приглашениями
-        (specs/029-groups.md, требование 7).
+        Вместе с составом и приглашениями. Геогруппу удалить нельзя
+        (specs/029-groups.md, требование 11).
       tags: [groups]
       security:
         - bearerAuth: []
@@ -2312,7 +2310,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: Смотрящий не хозяин группы (`not_group_owner`)
+          description: Смотрящий не хозяин группы или это геогруппа (`not_group_owner`)
           content:
             application/json:
               schema:
@@ -2327,12 +2325,10 @@ paths:
   /groups/{groupId}/membership:
     put:
       operationId: joinGroup
-      summary: Вступить в группу или попроситься
+      summary: Вступить в группу или принять приглашение
       description: |
-        Открытая — сразу участник, по заявке — заявка, приглашённый —
-        участник в группе любого правила (specs/029-groups.md,
-        требование 18). Повтор ничего не меняет. Группы по приглашению
-        без приглашения для смотрящего нет — `404`.
+        Все группы открытые: смотрящий сразу участник
+        (specs/029-groups.md, требование 17). Повтор ничего не меняет.
       tags: [groups]
       security:
         - bearerAuth: []
@@ -2359,10 +2355,10 @@ paths:
                 $ref: "#/components/schemas/Error"
     delete:
       operationId: leaveGroup
-      summary: Выйти, отозвать заявку или отклонить приглашение
+      summary: Выйти или отклонить приглашение
       description: |
         Строка смотрящего удаляется; без строки — не ошибка
-        (specs/029-groups.md, требование 19).
+        (specs/029-groups.md, требование 18).
       tags: [groups]
       security:
         - bearerAuth: []
@@ -2393,11 +2389,12 @@ paths:
   /groups/{groupId}/members:
     get:
       operationId: getGroupMembers
-      summary: Состав группы, заявки или приглашения
+      summary: Состав группы или приглашения
       description: |
         Без `state` — участники, хозяин первым, дальше новые выше; видят
-        все, кому видна группа. `requested` и `invited` — только хозяину,
-        новые сверху (specs/029-groups.md, требования 20–21).
+        все, кому видна группа. `invited` — только участникам, новые
+        сверху; `requested` — всегда пусто, заявок больше нет
+        (specs/029-groups.md, требования 21–22).
       tags: [groups]
       security:
         - bearerAuth: []
@@ -2406,7 +2403,7 @@ paths:
         - name: state
           in: query
           required: false
-          description: "`member` (по умолчанию), `requested` или `invited`"
+          description: "`member` (по умолчанию) или `invited`; `requested` — всегда пусто"
           schema:
             type: string
       responses:
@@ -2429,7 +2426,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: Заявки и приглашения видит только хозяин (`not_group_owner`)
+          description: Приглашения видят только участники (`not_group_member`)
           content:
             application/json:
               schema:
@@ -2444,11 +2441,10 @@ paths:
   /groups/{groupId}/members/{userId}:
     put:
       operationId: addGroupMember
-      summary: Принять заявку или пригласить
+      summary: Пригласить в группу
       description: |
-        Есть заявка — человек становится участником, нет ничего —
-        приглашение. Участник и приглашённый не меняются
-        (specs/029-groups.md, требование 22).
+        Приглашает любой участник. Участник и приглашённый не меняются
+        (specs/029-groups.md, требование 23).
       tags: [groups]
       security:
         - bearerAuth: []
@@ -2463,7 +2459,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GroupMember"
         "400":
-          description: Хозяин приглашает себя (`cannot_invite_self`)
+          description: Смотрящий приглашает себя (`cannot_invite_self`)
           content:
             application/json:
               schema:
@@ -2475,7 +2471,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: Смотрящий не хозяин группы (`not_group_owner`)
+          description: Смотрящий не участник группы (`not_group_member`)
           content:
             application/json:
               schema:
@@ -2483,22 +2479,23 @@ paths:
         "404":
           description: |
             Группы нет или она не видна (`group_not_found`); человека нет
-            или он заблокировал хозяина (`user_not_found`)
+            или он заблокировал смотрящего (`user_not_found`)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: Хозяин заблокировал этого человека (`user_blocked`)
+          description: Смотрящий заблокировал этого человека (`user_blocked`)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
     delete:
       operationId: removeGroupMember
-      summary: Отклонить заявку, отозвать приглашение или убрать участника
+      summary: Отозвать приглашение или убрать участника
       description: |
-        Без строки — не ошибка (specs/029-groups.md, требование 23).
+        Только хозяин группы по интересам; без строки — не ошибка
+        (specs/029-groups.md, требование 24).
       tags: [groups]
       security:
         - bearerAuth: []
@@ -2515,7 +2512,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: Смотрящий не хозяин группы (`not_group_owner`)
+          description: Смотрящий не хозяин группы или это геогруппа (`not_group_owner`)
           content:
             application/json:
               schema:
@@ -2536,17 +2533,17 @@ paths:
   /me/group-requests:
     get:
       operationId: getGroupRequests
-      summary: Ждущие заявки в мои группы и приглашения мне
+      summary: Ждущие приглашения мне в группы
       description: |
-        Новые сверху (specs/029-groups.md, требования 25–26). Это не
-        события раздела «Уведомления», а список над ними, как заявки на
-        подписку.
+        Новые сверху, `user` — кто пригласил (specs/029-groups.md,
+        требования 26–27). Это не события раздела «Уведомления», а список
+        над ними, как заявки на подписку.
       tags: [groups]
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Заявки и приглашения
+          description: Приглашения
           content:
             application/json:
               schema:
@@ -3373,8 +3370,11 @@ components:
 
     GroupDraft:
       type: object
-      description: Новая группа (specs/029-groups.md, требования 1–6).
-      required: [name, kind, join_policy]
+      description: |
+        Новая группа по интересам (specs/029-groups.md, требование 10).
+        `kind`, `join_policy`, `place_id` и `radius_km` — от первой
+        версии: их шлют старые сборки.
+      required: [name]
       properties:
         name:
           type: string
@@ -3386,27 +3386,26 @@ components:
           example: "Соседи по участкам: вода, дороги, взносы"
         kind:
           type: string
-          description: "`interest` — по интересам, `place` — по месту"
-          example: "place"
+          description: "Только `interest`; `place` — `invalid_group`"
+          example: "interest"
         join_policy:
           type: string
-          description: "`open`, `request` или `invite`"
-          example: "request"
+          description: Не учитывается — все группы открытые
+          example: "open"
         place_id:
           type: string
           nullable: true
-          description: Пункт из подсказок `GET /places`; только у `place`, там обязателен
+          description: Должен быть пустым
         radius_km:
           type: integer
           format: int32
           nullable: true
-          description: Радиус вокруг пункта, 1–100 км; только у `place`, необязателен
-          example: 5
+          description: Должен быть пустым
 
     Group:
       type: object
-      description: Группа, как её видит смотрящий (specs/029-groups.md, требования 9–12).
-      required: [id, name, description, kind, join_policy, owner, members, membership, near, created_at]
+      description: Группа, как её видит смотрящий (specs/029-groups.md, требования 12–16).
+      required: [id, name, description, kind, join_policy, members, membership, near, created_at]
       properties:
         id:
           type: string
@@ -3420,11 +3419,11 @@ components:
         kind:
           type: string
           enum: [interest, place]
-          description: "`interest` — по интересам, `place` — по месту"
+          description: "`interest` — по интересам, `place` — геогруппа"
         join_policy:
           type: string
           enum: [open, request, invite]
-          description: "`open` — сразу, `request` — по заявке, `invite` — по приглашению"
+          description: Всегда `open`; остальные значения — от первой версии
         owner:
           $ref: "#/components/schemas/Author"
         members:
@@ -3435,29 +3434,19 @@ components:
         membership:
           type: string
           enum: [owner, member, requested, invited, none]
-          description: Отношение смотрящего к группе
+          description: Отношение смотрящего к группе; `requested` больше не бывает
         place:
           $ref: "#/components/schemas/Place"
-        radius_km:
-          type: integer
-          format: int32
-          description: Радиус вокруг места, км; нет — только сам пункт
-          example: 5
         distance_km:
           type: integer
           format: int32
           description: |
-            Расстояние от пункта смотрящего до места группы, округлённое как
-            у поста; 0 — тот же пункт. Нет, если посчитать нельзя.
+            Расстояние от пункта смотрящего до места геогруппы, округлённое
+            как у поста; 0 — тот же пункт. Нет, если посчитать нельзя.
           example: 0
         near:
           type: boolean
-          description: Пункт смотрящего — место группы или в её радиусе
-        requests:
-          type: integer
-          format: int32
-          description: Только хозяину — сколько заявок ждут ответа
-          example: 2
+          description: Пункт смотрящего — место этой геогруппы
         created_at:
           type: string
           format: date-time
@@ -3473,7 +3462,7 @@ components:
 
     GroupMember:
       type: object
-      description: Человек в группе, заявитель или приглашённый (specs/029-groups.md, требование 20).
+      description: Участник или приглашённый (specs/029-groups.md, требования 21–22).
       required: [user, role, state, created_at]
       properties:
         user:
@@ -3487,7 +3476,7 @@ components:
         created_at:
           type: string
           format: date-time
-          description: Когда вступил, попросился или приглашён
+          description: Когда вступил или приглашён
 
     GroupMemberList:
       type: object
@@ -3512,9 +3501,9 @@ components:
     GroupRequest:
       type: object
       description: |
-        `request` — человек просится в группу смотрящего; `invite` —
-        хозяин группы приглашает смотрящего (specs/029-groups.md,
-        требование 25).
+        Приглашение смотрящему: `kind` всегда `invite`, `user` — кто
+        пригласил (specs/029-groups.md, требование 26). `request` — от
+        первой версии.
       required: [kind, group, user, created_at]
       properties:
         kind:
@@ -3555,8 +3544,8 @@ components:
           type: integer
           format: int32
           description: |
-            Сколько заявок в группы смотрящего и приглашений ему ждут
-            ответа (specs/029-groups.md, требование 27). Сервер отдаёт
+            Сколько приглашений в группы ждут ответа смотрящего
+            (specs/029-groups.md, требование 28). Сервер отдаёт
             всегда; необязательно, чтобы сборка новее сервера не падала.
           example: 1
 

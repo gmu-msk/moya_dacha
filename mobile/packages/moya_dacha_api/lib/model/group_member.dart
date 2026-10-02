@@ -25,7 +25,7 @@ class GroupMember {
 
   GroupMemberStateEnum state;
 
-  /// Когда вступил, попросился или приглашён
+  /// Когда вступил или приглашён
   DateTime createdAt;
 
   @override

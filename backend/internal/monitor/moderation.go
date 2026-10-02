@@ -8,10 +8,21 @@ import (
 )
 
 // Moderation — раздел «Модерация» дашборда (specs/023-moderation.md,
-// требования 3–6): на что жаловались и что появилось свежего.
+// требования 3–6): на что жаловались и что появилось свежего; и
+// геогруппы с участниками (specs/029-groups.md, требование 30).
 type Moderation struct {
 	Reported []ModerationItem `json:"reported"`
 	Recent   []ModerationItem `json:"recent"`
+	Groups   []PlaceGroup     `json:"groups"`
+}
+
+// PlaceGroup — геогруппа глазами владельца: убрать из неё может только
+// он (specs/029-groups.md, требования 30–31).
+type PlaceGroup struct {
+	ID      string         `json:"id"`
+	Name    string         `json:"name"`
+	Area    string         `json:"area"`
+	Members []ContentOwner `json:"members"`
 }
 
 // ModerationItem — пост или комментарий глазами владельца (требование 4).
@@ -80,7 +91,38 @@ func (m *Monitor) moderation(ctx context.Context, s *Snapshot) error {
 	s.Moderation.Recent, err = m.moderationList(ctx, moderationItems+`
 		ORDER BY i.created_at DESC, i.kind DESC, coalesce(i.comment_id, i.post_id)
 		LIMIT 30`)
+	if err != nil {
+		return err
+	}
+	s.Moderation.Groups, err = m.placeGroups(ctx)
 	return err
+}
+
+// placeGroups — геогруппы, больше участников выше; участники — по нику.
+// Ждущие приглашения — не участники.
+func (m *Monitor) placeGroups(ctx context.Context) ([]PlaceGroup, error) {
+	rows, err := m.db.Query(ctx, `
+		SELECT g.id::text, g.name, g.description,
+		       coalesce(json_agg(json_build_object('id', u.id::text, 'nickname', u.nickname, 'name', u.name)
+		                ORDER BY lower(u.nickname), u.id) FILTER (WHERE u.id IS NOT NULL), '[]')
+		FROM groups g
+		LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.state = 'member'
+		LEFT JOIN users u ON u.id = gm.user_id
+		WHERE g.kind = 'place'
+		GROUP BY g.id
+		ORDER BY count(u.id) DESC, lower(g.name), g.id`)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (PlaceGroup, error) {
+		var g PlaceGroup
+		err := row.Scan(&g.ID, &g.Name, &g.Area, &g.Members)
+		return g, err
+	})
+	if groups == nil {
+		groups = []PlaceGroup{}
+	}
+	return groups, err
 }
 
 func (m *Monitor) moderationList(ctx context.Context, query string) ([]ModerationItem, error) {

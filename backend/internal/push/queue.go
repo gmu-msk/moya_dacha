@@ -8,7 +8,7 @@ import (
 
 // Виды пушей: четыре события раздела (specs/014-notifications.md),
 // заявка на подписку, заявка в группу и приглашение в неё
-// (specs/029-groups.md, требование 28).
+// (specs/029-groups.md, требование 29).
 const (
 	KindFollow         = "follow"
 	KindFollowAccepted = "follow_accepted"

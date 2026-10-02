@@ -338,6 +338,7 @@ class _PlaceFieldState extends State<PlaceField> {
           decoration: InputDecoration(
             labelText: widget.label,
             helperText: widget.helper,
+            helperMaxLines: 3,
             suffixIcon: _loading
                 ? const Padding(
                     padding: EdgeInsets.all(AppGap.snug),

@@ -40,6 +40,41 @@ func (s *Server) mountModeration(mux *http.ServeMux) {
 			}
 		})))
 	}
+
+	// Убрать человека из геогруппы (specs/029-groups.md, требование 31).
+	mux.Handle("DELETE "+dashboardPath+"/groups/{group}/members/{user}", s.dashboardAuth(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			group, user := r.PathValue("group"), r.PathValue("user")
+			found := false
+			var err error
+			if isUUID(group) && isUUID(user) {
+				found, err = s.removeFromPlaceGroup(r.Context(), group, user)
+			}
+			switch {
+			case err != nil:
+				internalError(w, r, err)
+			case !found:
+				http.NotFound(w, r)
+			default:
+				w.WriteHeader(http.StatusNoContent)
+			}
+		})))
+}
+
+// removeFromPlaceGroup убирает участника или приглашение из геогруппы.
+// Группы по интересам — дело их хозяина, отсюда их не трогают.
+func (s *Server) removeFromPlaceGroup(ctx context.Context, group, user string) (bool, error) {
+	tag, err := s.db.Exec(ctx, `
+		DELETE FROM group_members gm USING groups g
+		WHERE g.id = gm.group_id AND g.kind = 'place' AND gm.group_id = $1 AND gm.user_id = $2`,
+		group, user)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() > 0 {
+		slog.Info("владелец убрал из геогруппы", "group", group, "user", user)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // moderatePost удаляет пост так же, как удалил бы его автор (007):

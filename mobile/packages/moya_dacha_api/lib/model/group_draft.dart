@@ -15,8 +15,8 @@ class GroupDraft {
   GroupDraft({
     required this.name,
     this.description,
-    required this.kind,
-    required this.joinPolicy,
+    this.kind,
+    this.joinPolicy,
     this.placeId,
     this.radiusKm,
   });
@@ -33,16 +33,28 @@ class GroupDraft {
   ///
   String? description;
 
-  /// `interest` — по интересам, `place` — по месту
-  String kind;
+  /// Только `interest`; `place` — `invalid_group`
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? kind;
 
-  /// `open`, `request` или `invite`
-  String joinPolicy;
+  /// Не учитывается — все группы открытые
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? joinPolicy;
 
-  /// Пункт из подсказок `GET /places`; только у `place`, там обязателен
+  /// Должен быть пустым
   String? placeId;
 
-  /// Радиус вокруг пункта, 1–100 км; только у `place`, необязателен
+  /// Должен быть пустым
   int? radiusKm;
 
   @override
@@ -59,8 +71,8 @@ class GroupDraft {
     // ignore: unnecessary_parenthesis
     (name.hashCode) +
     (description == null ? 0 : description!.hashCode) +
-    (kind.hashCode) +
-    (joinPolicy.hashCode) +
+    (kind == null ? 0 : kind!.hashCode) +
+    (joinPolicy == null ? 0 : joinPolicy!.hashCode) +
     (placeId == null ? 0 : placeId!.hashCode) +
     (radiusKm == null ? 0 : radiusKm!.hashCode);
 
@@ -75,8 +87,16 @@ class GroupDraft {
     } else {
       json[r'description'] = null;
     }
+    if (this.kind != null) {
       json[r'kind'] = this.kind;
+    } else {
+      json[r'kind'] = null;
+    }
+    if (this.joinPolicy != null) {
       json[r'join_policy'] = this.joinPolicy;
+    } else {
+      json[r'join_policy'] = null;
+    }
     if (this.placeId != null) {
       json[r'place_id'] = this.placeId;
     } else {
@@ -103,18 +123,14 @@ class GroupDraft {
       assert(() {
         assert(json.containsKey(r'name'), 'Required key "GroupDraft[name]" is missing from JSON.');
         assert(json[r'name'] != null, 'Required key "GroupDraft[name]" has a null value in JSON.');
-        assert(json.containsKey(r'kind'), 'Required key "GroupDraft[kind]" is missing from JSON.');
-        assert(json[r'kind'] != null, 'Required key "GroupDraft[kind]" has a null value in JSON.');
-        assert(json.containsKey(r'join_policy'), 'Required key "GroupDraft[join_policy]" is missing from JSON.');
-        assert(json[r'join_policy'] != null, 'Required key "GroupDraft[join_policy]" has a null value in JSON.');
         return true;
       }());
 
       return GroupDraft(
         name: mapValueOfType<String>(json, r'name')!,
         description: mapValueOfType<String>(json, r'description'),
-        kind: mapValueOfType<String>(json, r'kind')!,
-        joinPolicy: mapValueOfType<String>(json, r'join_policy')!,
+        kind: mapValueOfType<String>(json, r'kind'),
+        joinPolicy: mapValueOfType<String>(json, r'join_policy'),
         placeId: mapValueOfType<String>(json, r'place_id'),
         radiusKm: mapValueOfType<int>(json, r'radius_km'),
       );
@@ -165,8 +181,6 @@ class GroupDraft {
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
     'name',
-    'kind',
-    'join_policy',
   };
 }
 

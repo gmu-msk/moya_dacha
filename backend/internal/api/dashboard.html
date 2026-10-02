@@ -87,6 +87,8 @@
   <div class="errors" id="mod-reported"></div>
   <h3>Свежее</h3>
   <div class="errors" id="mod-recent"></div>
+  <h3>Геогруппы</h3>
+  <div class="errors" id="mod-groups"></div>
 
   <h2>Активность за 30 дней</h2>
   <div class="charts" id="activity"></div>
@@ -329,9 +331,23 @@ function modItem(it) {
     </div></div>`;
 }
 
+// Геогруппа с участниками; «Убрать» — specs/029-groups.md, требования 30–31.
+function modGroup(g) {
+  const base = `dashboard/groups/${encodeURIComponent(g.id)}/members/`;
+  const members = g.members.length
+    ? g.members.map((u) => `<div class="screen"><span>@${esc(u.nickname)}${u.name ? ` · ${esc(u.name)}` : ""}</span>
+        <span class="acts" style="margin-top:0"><button class="del" data-path="${esc(base + encodeURIComponent(u.id))}"
+          data-ask="Убрать @${esc(u.nickname)} из группы «${esc(g.name)}»?">Убрать</button></span></div>`).join("")
+    : `<div class="muted">Пока никого</div>`;
+  return `<div class="row"><div><b>${esc(g.name)}</b> · ${plural(g.members.length, "участник", "участника", "участников")}</div>
+    ${g.area ? `<div class="muted">${esc(g.area)}</div>` : ""}${members}</div>`;
+}
+
 function renderModeration(m) {
   $("mod-reported").innerHTML = m.reported.length ? m.reported.map(modItem).join("") : `<div class="row muted">Жалоб нет</div>`;
   $("mod-recent").innerHTML = m.recent.length ? m.recent.map(modItem).join("") : `<div class="row muted">Пока пусто</div>`;
+  const groups = m.groups || [];
+  $("mod-groups").innerHTML = groups.length ? groups.map(modGroup).join("") : `<div class="row muted">Геогрупп пока нет</div>`;
 }
 
 document.addEventListener("click", async (ev) => {
