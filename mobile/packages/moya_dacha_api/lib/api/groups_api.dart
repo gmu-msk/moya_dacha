@@ -318,6 +318,85 @@ class GroupsApi {
     return null;
   }
 
+  /// Лента группы
+  ///
+  /// Посты, выложенные в группе, новые сверху, в том же виде и с тем же курсором, что и лента; только видимые смотрящему (specs/030-group-posts.md, требования 9–11). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] groupId (required):
+  ///   Идентификатор группы (UUID)
+  ///
+  /// * [int] limit:
+  ///   Сколько постов вернуть, от 1 до 50
+  ///
+  /// * [String] cursor:
+  ///   Курсор из предыдущего ответа; без него — первая страница
+  Future<Response> getGroupPostsWithHttpInfo(String groupId, { int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/groups/{groupId}/posts'
+      .replaceAll('{groupId}', groupId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (cursor != null) {
+      queryParams.addAll(_queryParams('', 'cursor', cursor));
+    }
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Лента группы
+  ///
+  /// Посты, выложенные в группе, новые сверху, в том же виде и с тем же курсором, что и лента; только видимые смотрящему (specs/030-group-posts.md, требования 9–11). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] groupId (required):
+  ///   Идентификатор группы (UUID)
+  ///
+  /// * [int] limit:
+  ///   Сколько постов вернуть, от 1 до 50
+  ///
+  /// * [String] cursor:
+  ///   Курсор из предыдущего ответа; без него — первая страница
+  Future<Feed?> getGroupPosts(String groupId, { int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+    final response = await getGroupPostsWithHttpInfo(groupId, limit: limit, cursor: cursor, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Feed',) as Feed;
+    
+    }
+    return null;
+  }
+
   /// Ждущие приглашения мне в группы
   ///
   /// Новые сверху, `user` — кто пригласил (specs/029-groups.md, требования 26–27). Это не события раздела «Уведомления», а список над ними, как заявки на подписку. 
