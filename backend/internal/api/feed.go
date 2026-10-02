@@ -115,7 +115,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
 	// только отвечает на вопрос «есть ли что-то дальше».
 	rows, err := s.db.Query(ctx, `
-		SELECT p.id, p.created_at, p.edited_at, p.caption, p.visibility,
+		SELECT p.id, p.created_at, p.edited_at, p.caption, `+postVisibilityColumns+`,
 			u.id, u.nickname, u.name, u.avatar_key,
 			(SELECT count(*) FROM post_likes l WHERE l.post_id = p.id),
 			EXISTS (
@@ -126,6 +126,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 			`+postPlaceColumns("$4")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
 		`+postPlaceJoin+`
+		`+postVisibilityJoin+`
 		WHERE ($5::uuid IS NULL OR p.author_id = $5::uuid)
 		  AND `+postVisibleTo("$4")+`
 		  AND (NOT $6::boolean
@@ -161,15 +162,18 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 			post      gen.Post
 			avatarKey *string
 			place     postPlaceScan
+			group     visibilityGroupScan
 		)
-		if err := rows.Scan(append([]any{
-			&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption, &post.Visibility,
-			&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
-			&post.Likes, &post.Liked, &post.Comments,
-		}, place.targets()...)...); err != nil {
+		if err := rows.Scan(append(append([]any{&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption},
+			group.targets(&post)...),
+			append([]any{
+				&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
+				&post.Likes, &post.Liked, &post.Comments,
+			}, place.targets()...)...)...); err != nil {
 			return gen.Feed{}, err
 		}
 		place.apply(&post)
+		group.apply(&post)
 		if avatarKey != nil {
 			url := s.cfg.Media.URL(*avatarKey)
 			post.Author.AvatarUrl = &url
