@@ -11,6 +11,7 @@ import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
 import '../widgets/feed_view.dart';
+import 'group_screen.dart';
 import 'post_screen.dart';
 import 'tag_posts_screen.dart';
 import 'user_screen.dart';
@@ -137,6 +138,12 @@ class _UserPostsScreenState extends State<UserPostsScreen> {
         viewerId: widget.viewerId,
         tag: tag,
         onPostChanged: _changed,
+      ),
+      onOpenGroup: (group) => openGroup(
+        context,
+        token: widget.token,
+        viewerId: widget.viewerId,
+        groupId: group.id,
       ),
     ),
   );
