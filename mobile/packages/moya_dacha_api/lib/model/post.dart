@@ -26,6 +26,7 @@ class Post {
     this.place,
     this.distanceKm,
     this.tags = const [],
+    this.groups = const [],
   });
 
   /// Идентификатор поста (UUID)
@@ -70,6 +71,9 @@ class Post {
   /// Нормализованные тэги в порядке автора; нет тэгов — пустой массив (specs/028-post-tags.md) 
   List<String> tags;
 
+  /// Группы, в которых выложен пост и которые видны смотрящему, по названию; нет — пустой массив (specs/030-group-posts.md) 
+  List<GroupBrief> groups;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Post &&
     other.id == id &&
@@ -84,7 +88,8 @@ class Post {
     other.editedAt == editedAt &&
     other.place == place &&
     other.distanceKm == distanceKm &&
-    _deepEquality.equals(other.tags, tags);
+    _deepEquality.equals(other.tags, tags) &&
+    _deepEquality.equals(other.groups, groups);
 
   @override
   int get hashCode =>
@@ -101,10 +106,11 @@ class Post {
     (editedAt == null ? 0 : editedAt!.hashCode) +
     (place == null ? 0 : place!.hashCode) +
     (distanceKm == null ? 0 : distanceKm!.hashCode) +
-    (tags.hashCode);
+    (tags.hashCode) +
+    (groups.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags, groups=$groups]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -133,6 +139,7 @@ class Post {
       json[r'distance_km'] = null;
     }
       json[r'tags'] = this.tags;
+      json[r'groups'] = this.groups;
     return json;
   }
 
@@ -184,6 +191,7 @@ class Post {
         tags: json[r'tags'] is Iterable
             ? (json[r'tags'] as Iterable).cast<String>().toList(growable: false)
             : const [],
+        groups: GroupBrief.listFromJson(json[r'groups']),
       );
     }
     return null;

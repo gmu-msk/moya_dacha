@@ -18,6 +18,7 @@ class PostDraft {
     this.visibility,
     this.placeId,
     this.tags = const [],
+    this.groupIds = const [],
   });
 
   /// Идентификаторы уже загруженных фотографий, в том порядке, в котором они должны стоять в посте. 
@@ -46,13 +47,17 @@ class PostDraft {
   /// Тэги поста, до десяти; сервер нормализует их: без `#` в начале, в нижнем регистре, без повторов (specs/028-post-tags.md) 
   List<String>? tags;
 
+  /// Группы, в которых выложить пост: только те, где автор — участник; нет, `null` или пусто — ни в какой (specs/030-group-posts.md) 
+  List<String>? groupIds;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is PostDraft &&
     _deepEquality.equals(other.mediaIds, mediaIds) &&
     other.caption == caption &&
     other.visibility == visibility &&
     other.placeId == placeId &&
-    _deepEquality.equals(other.tags, tags);
+    _deepEquality.equals(other.tags, tags) &&
+    _deepEquality.equals(other.groupIds, groupIds);
 
   @override
   int get hashCode =>
@@ -61,10 +66,11 @@ class PostDraft {
     (caption == null ? 0 : caption!.hashCode) +
     (visibility == null ? 0 : visibility!.hashCode) +
     (placeId == null ? 0 : placeId!.hashCode) +
-    (tags == null ? 0 : tags!.hashCode);
+    (tags == null ? 0 : tags!.hashCode) +
+    (groupIds == null ? 0 : groupIds!.hashCode);
 
   @override
-  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, tags=$tags]';
+  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, tags=$tags, groupIds=$groupIds]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -88,6 +94,11 @@ class PostDraft {
       json[r'tags'] = this.tags;
     } else {
       json[r'tags'] = null;
+    }
+    if (this.groupIds != null) {
+      json[r'group_ids'] = this.groupIds;
+    } else {
+      json[r'group_ids'] = null;
     }
     return json;
   }
@@ -117,6 +128,9 @@ class PostDraft {
         placeId: mapValueOfType<String>(json, r'place_id'),
         tags: json[r'tags'] is Iterable
             ? (json[r'tags'] as Iterable).cast<String>().toList(growable: false)
+            : const [],
+        groupIds: json[r'group_ids'] is Iterable
+            ? (json[r'group_ids'] as Iterable).cast<String>().toList(growable: false)
             : const [],
       );
     }

@@ -108,3 +108,6 @@ Android, раздача через **внутреннее тестировани
 - [specs/025-places.md](025-places.md) — населённый пункт в профиле из справочника ФИАС
 - [specs/026-places-nearby.md](026-places-nearby.md) — населённый пункт по геолокации
 - [specs/027-post-place.md](027-post-place.md) — геометка поста и расстояние до него
+- [specs/028-post-tags.md](028-post-tags.md) — тэги у поста и подсказки тэгов
+- [specs/029-groups.md](029-groups.md) — геогруппы и группы по интересам
+- [specs/030-group-posts.md](030-group-posts.md) — посты в группах и лента группы
