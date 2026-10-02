@@ -4,6 +4,9 @@
 // отношению смотрящего к группе. Участнику — «Пригласить» и
 // приглашённые; хозяину группы по интересам — ещё «Убрать», «Отозвать»
 // и «Удалить группу». У геогруппы хозяина нет.
+//
+// Под шапкой — вкладки «Посты» (лента группы, specs/030-group-posts.md,
+// требование 18) и «Участники».
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
@@ -14,10 +17,14 @@ import '../widgets/app_screen.dart';
 import '../widgets/confirm.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
+import '../widgets/feed_view.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/person_row.dart';
 import '../widgets/place_field.dart';
+import '../widgets/segment_tabs.dart';
 import 'groups_screen.dart';
+import 'post_screen.dart';
+import 'tag_posts_screen.dart';
 import 'user_screen.dart';
 
 /// Открыть группу поверх текущего экрана. [group] — то, что уже известно
@@ -66,6 +73,10 @@ class _GroupScreenState extends State<GroupScreen> {
   /// Группы больше нет (или она стала не видна).
   bool _gone = false;
   bool _busy = false;
+
+  /// Вкладка под шапкой: 0 — «Посты», 1 — «Участники».
+  int _tab = 0;
+  final _feed = GlobalKey<FeedViewState>();
 
   GroupsApi get _api => GroupsApi(apiClient(token: widget.token));
 
@@ -269,15 +280,14 @@ class _GroupScreenState extends State<GroupScreen> {
     } else if (group == null) {
       body = const LoadingView(label: 'Открываю группу…');
     } else {
-      body = RefreshIndicator(
+      final members = RefreshIndicator(
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.only(bottom: AppGap.large),
           children: [
-            _header(group),
+            _top(group),
             if (_member) ..._invitedSection(),
-            _SectionTitle('Участники · ${group.members}'),
             ..._memberRows(group),
             if (error != null)
               Padding(
@@ -303,6 +313,35 @@ class _GroupScreenState extends State<GroupScreen> {
           ],
         ),
       );
+      body = IndexedStack(
+        index: _tab,
+        children: [
+          FeedView(
+            key: _feed,
+            token: widget.token,
+            groupId: widget.groupId,
+            header: _top(group),
+            onOpenPost: _openPost,
+            onNewPost: () {},
+            onRefreshed: _load,
+            onOpenAuthor: (author) => openUserProfile(
+              context,
+              token: widget.token,
+              viewerId: widget.viewerId,
+              userId: author.id,
+            ),
+            onOpenTag: (tag) => openTagPosts(
+              context,
+              token: widget.token,
+              viewerId: widget.viewerId,
+              tag: tag,
+              onPostChanged: _postChanged,
+            ),
+            onOpenGroup: _openGroup,
+          ),
+          members,
+        ],
+      );
     }
 
     return AppScreen(
@@ -310,6 +349,52 @@ class _GroupScreenState extends State<GroupScreen> {
       padded: false,
       showServerStatus: false,
       child: body,
+    );
+  }
+
+  /// Шапка и вкладки — над лентой и над участниками.
+  Widget _top(Group group) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _header(group),
+      SegmentTabs(
+        labels: ['Посты', 'Участники · ${group.members}'],
+        selected: _tab,
+        onSelect: (index) => setState(() => _tab = index),
+      ),
+    ],
+  );
+
+  void _postChanged(Post post) => _feed.currentState?.replace(post);
+
+  Future<void> _openPost(Post post) async {
+    final deleted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PostScreen(
+          post: post,
+          token: widget.token,
+          viewerId: widget.viewerId,
+          heroTag: postHeroTag(post),
+          onChanged: _postChanged,
+        ),
+      ),
+    );
+    if (deleted == true) {
+      await _feed.currentState?.refresh();
+    }
+  }
+
+  /// Касание группы в карточке: эта же — наверх, другая — поверх.
+  void _openGroup(GroupBrief group) {
+    if (group.id == widget.groupId) {
+      _feed.currentState?.scrollToTop();
+      return;
+    }
+    openGroup(
+      context,
+      token: widget.token,
+      viewerId: widget.viewerId,
+      groupId: group.id,
     );
   }
 

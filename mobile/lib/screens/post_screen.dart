@@ -17,9 +17,11 @@ import '../widgets/edit_text_dialog.dart';
 import '../widgets/feed_view.dart';
 import '../widgets/like_button.dart';
 import '../widgets/place_field.dart';
+import '../widgets/post_groups_line.dart';
 import '../widgets/report_dialog.dart';
 import '../widgets/tag_field.dart';
 import '../widgets/visibility_picker.dart';
+import 'group_screen.dart';
 import 'tag_posts_screen.dart';
 import 'user_screen.dart';
 
@@ -300,6 +302,18 @@ class _PostScreenState extends State<PostScreen> {
                   edited: post.editedAt != null,
                   onTap: () => _openAuthor(post.author),
                 ),
+                if (post.groups.isNotEmpty) ...[
+                  const SizedBox(height: AppGap.small),
+                  PostGroupsLine(
+                    groups: post.groups,
+                    onOpen: (group) => openGroup(
+                      context,
+                      token: widget.token,
+                      viewerId: widget.viewerId,
+                      groupId: group.id,
+                    ),
+                  ),
+                ],
                 if (post.place case final place?) ...[
                   const SizedBox(height: AppGap.small),
                   PostPlaceLine(place: place, distanceKm: post.distanceKm),

@@ -23,6 +23,7 @@ import '../theme.dart';
 import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/error_view.dart';
+import '../widgets/group_picker.dart';
 import '../widgets/place_field.dart';
 import '../widgets/tag_field.dart';
 import '../widgets/visibility_picker.dart';
@@ -93,6 +94,9 @@ class _NewPostScreenState extends State<NewPostScreen> {
   /// Тэги поста (specs/028-post-tags.md, требования 20–22).
   List<String> _tags = const [];
   final _tagField = GlobalKey<TagFieldState>();
+
+  /// Группы поста (specs/030-group-posts.md, требование 16).
+  List<String> _groupIds = const [];
 
   /// Место поста; в профиль не попадает.
   late Place? _place = widget.place;
@@ -302,6 +306,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
           visibility: _visibility,
           placeId: _place?.id,
           tags: tags,
+          groupIds: _groupIds,
         ),
       );
       debugPrint('$logMarker post=published id=${post?.id}');
@@ -379,6 +384,12 @@ class _NewPostScreenState extends State<NewPostScreen> {
                   closed: widget.closed,
                   enabled: !_publishing,
                   onChanged: (picked) => setState(() => _visibility = picked),
+                ),
+                const SizedBox(height: AppGap.small),
+                GroupPicker(
+                  token: widget.token,
+                  enabled: !_publishing,
+                  onChanged: (ids) => _groupIds = ids,
                 ),
                 const SizedBox(height: AppGap.medium),
                 PlaceField(

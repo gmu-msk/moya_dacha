@@ -22,6 +22,7 @@ import '../widgets/error_view.dart';
 import '../widgets/feed_view.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/slide_up_route.dart';
+import 'group_screen.dart';
 import 'groups_screen.dart';
 import 'intro_screen.dart';
 import 'notifications_screen.dart';
@@ -400,6 +401,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Группа поста — поверх ленты (specs/030-group-posts.md, требование 17).
+  Future<void> _openGroup(GroupBrief group) async {
+    final user = _user;
+    if (user == null) {
+      return;
+    }
+    await openGroup(
+      _feedStack.context,
+      token: widget.token,
+      viewerId: user.id,
+      groupId: group.id,
+    );
+  }
+
   /// Посты с тэгом — поверх ленты (specs/028-post-tags.md, требование 24).
   Future<void> _openTag(String tag) async {
     final user = _user;
@@ -506,6 +521,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onNewPost: _newPost,
                   onOpenAuthor: (author) => _openProfile(author.id),
                   onOpenTag: _openTag,
+                  onOpenGroup: _openGroup,
                   onOpenGroups: _openGroups,
                 ),
               ),

@@ -9,6 +9,7 @@ import 'package:moya_dacha_api/api.dart';
 import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/feed_view.dart';
+import 'group_screen.dart';
 import 'post_screen.dart';
 import 'user_screen.dart';
 
@@ -106,6 +107,12 @@ class _TagPostsScreenState extends State<TagPostsScreen> {
         onOpenPost: _open,
         onNewPost: () {},
         onOpenTag: _openTag,
+        onOpenGroup: (group) => openGroup(
+          context,
+          token: widget.token,
+          viewerId: widget.viewerId,
+          groupId: group.id,
+        ),
         onOpenAuthor: (author) => openUserProfile(
           context,
           token: widget.token,

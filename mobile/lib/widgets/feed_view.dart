@@ -17,6 +17,7 @@ import 'empty_view.dart';
 import 'error_view.dart';
 import 'like_button.dart';
 import 'post_action.dart';
+import 'post_groups_line.dart';
 import 'loading_view.dart';
 import 'place_field.dart';
 import 'segment_tabs.dart';
@@ -46,6 +47,7 @@ class FeedTabs extends StatefulWidget {
     required this.onNewPost,
     this.onOpenAuthor,
     this.onOpenTag,
+    this.onOpenGroup,
     this.onOpenGroups,
     this.onRefreshed,
   });
@@ -54,6 +56,7 @@ class FeedTabs extends StatefulWidget {
   final void Function(Post post) onOpenPost;
   final void Function(Author author)? onOpenAuthor;
   final void Function(String tag)? onOpenTag;
+  final void Function(GroupBrief group)? onOpenGroup;
 
   /// Значок «Группы» справа от вкладок (specs/029-groups.md, требование 32).
   final VoidCallback? onOpenGroups;
@@ -113,6 +116,7 @@ class FeedTabsState extends State<FeedTabs> {
       onNewPost: widget.onNewPost,
       onOpenAuthor: widget.onOpenAuthor,
       onOpenTag: widget.onOpenTag,
+      onOpenGroup: widget.onOpenGroup,
       onShowAll: () => _select(FeedScope.all),
       onRefreshed: widget.onRefreshed,
     ),
@@ -182,8 +186,11 @@ class FeedView extends StatefulWidget {
     required this.onNewPost,
     this.onOpenAuthor,
     this.onOpenTag,
+    this.onOpenGroup,
     this.scope = FeedScope.all,
     this.tag,
+    this.groupId,
+    this.header,
     this.onShowAll,
     this.onRefreshed,
   });
@@ -193,7 +200,14 @@ class FeedView extends StatefulWidget {
 
   /// Только посты с этим тэгом (specs/028-post-tags.md, требование 24).
   final String? tag;
+
+  /// Лента группы (specs/030-group-posts.md, требование 18).
+  final String? groupId;
+
+  /// То, что прокручивается над постами, — шапка экрана группы.
+  final Widget? header;
   final void Function(String tag)? onOpenTag;
+  final void Function(GroupBrief group)? onOpenGroup;
   final VoidCallback? onShowAll;
   final VoidCallback? onRefreshed;
   final void Function(Post post) onOpenPost;
@@ -221,6 +235,21 @@ class FeedViewState extends State<FeedView> {
   int _generation = 0;
 
   PostsApi get _api => PostsApi(apiClient(token: widget.token));
+
+  /// Страница ленты: лента группы — своя ручка, остальное — общая лента.
+  Future<Feed?> _page({String? cursor}) {
+    final groupId = widget.groupId;
+    if (groupId != null) {
+      return GroupsApi(apiClient(token: widget.token))
+          .getGroupPosts(groupId, limit: feedPageSize, cursor: cursor);
+    }
+    return _api.getFeed(
+      scope: widget.scope.name,
+      limit: feedPageSize,
+      cursor: cursor,
+      tag: widget.tag,
+    );
+  }
 
   @override
   void initState() {
@@ -281,11 +310,7 @@ class FeedViewState extends State<FeedView> {
     });
 
     try {
-      final page = await _api.getFeed(
-        scope: widget.scope.name,
-        limit: feedPageSize,
-        tag: widget.tag,
-      );
+      final page = await _page();
       debugPrint(
         '$logMarker feed=loaded scope=${widget.scope.name} '
         'posts=${page?.items.length}',
@@ -325,12 +350,7 @@ class FeedViewState extends State<FeedView> {
     });
 
     try {
-      final page = await _api.getFeed(
-        scope: widget.scope.name,
-        limit: feedPageSize,
-        cursor: cursor,
-        tag: widget.tag,
-      );
+      final page = await _page(cursor: cursor);
       debugPrint('$logMarker feed=page posts=${page?.items.length}');
       if (!mounted) {
         return;
@@ -356,20 +376,31 @@ class FeedViewState extends State<FeedView> {
   Widget build(BuildContext context) {
     final error = _error;
 
+    final header = widget.header;
+
     if (_loading) {
-      return const LoadingView(label: 'Открываю ленту…');
+      return _underHeader(const LoadingView(label: 'Открываю ленту…'));
     }
     if (error != null && _posts.isEmpty) {
-      return ErrorView(message: error, onRetry: _refresh);
+      return _underHeader(ErrorView(message: error, onRetry: _refresh));
     }
     if (_posts.isEmpty) {
       return RefreshIndicator(
         onRefresh: _pulled,
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
+            ?header,
             SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.6,
-              child: widget.tag != null
+              height:
+                  MediaQuery.sizeOf(context).height *
+                  (header == null ? 0.6 : 0.4),
+              child: widget.groupId != null
+                  ? const EmptyView(
+                      icon: Icons.groups_outlined,
+                      title: 'В группе пока нет постов',
+                    )
+                  : widget.tag != null
                   ? EmptyView(
                       icon: Icons.tag,
                       title: 'Постов с тэгом #${widget.tag} пока нет',
@@ -403,42 +434,82 @@ class FeedViewState extends State<FeedView> {
       );
     }
 
+    // Шапка — во всю ширину, посты — с полями.
+    final skip = header == null ? 0 : 1;
     return RefreshIndicator(
       onRefresh: _pulled,
       child: ListView.separated(
         controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(
-          AppGap.medium,
-          AppGap.tiny,
-          AppGap.medium,
+        padding: EdgeInsets.fromLTRB(
+          header == null ? AppGap.medium : 0,
+          header == null ? AppGap.tiny : 0,
+          header == null ? AppGap.medium : 0,
           AppGap.large,
         ),
-        itemCount: _posts.length + 1,
-        separatorBuilder: (_, _) => const SizedBox(height: AppGap.loose),
-        itemBuilder: (context, index) {
+        itemCount: _posts.length + 1 + skip,
+        separatorBuilder: (_, index) =>
+            SizedBox(height: index < skip ? AppGap.tiny : AppGap.loose),
+        itemBuilder: (context, at) {
+          if (header != null && at == 0) {
+            return header;
+          }
+          final index = at - skip;
           if (index == _posts.length) {
-            return _footer();
+            return _inset(_footer());
           }
           final post = _posts[index];
           final fresh = DateTime.now().difference(_shownAt) < _entranceWindow;
-          return Entrance(
-            key: ValueKey('${post.id}-$_generation'),
-            animate: fresh,
-            delay: fresh && index < _staggered
-                ? AppMotion.stagger * index
-                : Duration.zero,
-            child: FeedPostCard(
-              key: ValueKey(post.id),
-              post: post,
-              token: widget.token,
-              heroTag: postHeroTag(post),
-              onTap: () => widget.onOpenPost(post),
-              onChanged: replace,
-              onOpenAuthor: widget.onOpenAuthor,
-              onOpenTag: widget.onOpenTag,
+          return _inset(
+            Entrance(
+              key: ValueKey('${post.id}-$_generation'),
+              animate: fresh,
+              delay: fresh && index < _staggered
+                  ? AppMotion.stagger * index
+                  : Duration.zero,
+              child: FeedPostCard(
+                key: ValueKey(post.id),
+                post: post,
+                token: widget.token,
+                heroTag: postHeroTag(post),
+                onTap: () => widget.onOpenPost(post),
+                onChanged: replace,
+                onOpenAuthor: widget.onOpenAuthor,
+                onOpenTag: widget.onOpenTag,
+                onOpenGroup: widget.onOpenGroup,
+              ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// Поля у постов, когда над ними шапка во всю ширину.
+  Widget _inset(Widget child) => widget.header == null
+      ? child
+      : Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppGap.medium),
+          child: child,
+        );
+
+  /// Ожидание и ошибка — под шапкой, если она есть: шапка экрана группы
+  /// видна, пока лента грузится.
+  Widget _underHeader(Widget state) {
+    final header = widget.header;
+    if (header == null) {
+      return state;
+    }
+    return RefreshIndicator(
+      onRefresh: _pulled,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          header,
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.4,
+            child: state,
+          ),
+        ],
       ),
     );
   }
@@ -534,6 +605,7 @@ class FeedPostCard extends StatefulWidget {
     required this.onChanged,
     this.onOpenAuthor,
     this.onOpenTag,
+    this.onOpenGroup,
     this.showAuthor = true,
     this.heroTag,
   });
@@ -546,6 +618,9 @@ class FeedPostCard extends StatefulWidget {
 
   /// Касание тэга (specs/028-post-tags.md, требование 23).
   final void Function(String tag)? onOpenTag;
+
+  /// Касание группы поста (specs/030-group-posts.md, требование 17).
+  final void Function(GroupBrief group)? onOpenGroup;
   final bool showAuthor;
 
   /// Тег перехода «фото → пост»; без него фото не летит.
@@ -603,6 +678,14 @@ class _FeedPostCardState extends State<FeedPostCard> {
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
+            ),
+          ),
+        if (post.groups.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppGap.tiny),
+            child: PostGroupsLine(
+              groups: post.groups,
+              onOpen: widget.onOpenGroup,
             ),
           ),
         if (post.place case final place?)
