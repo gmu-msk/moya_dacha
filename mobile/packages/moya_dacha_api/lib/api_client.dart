@@ -221,6 +221,22 @@ class ApiClient {
           return FollowList.fromJson(value);
         case 'FollowUser':
           return FollowUser.fromJson(value);
+        case 'Group':
+          return Group.fromJson(value);
+        case 'GroupBrief':
+          return GroupBrief.fromJson(value);
+        case 'GroupDraft':
+          return GroupDraft.fromJson(value);
+        case 'GroupList':
+          return GroupList.fromJson(value);
+        case 'GroupMember':
+          return GroupMember.fromJson(value);
+        case 'GroupMemberList':
+          return GroupMemberList.fromJson(value);
+        case 'GroupRequest':
+          return GroupRequest.fromJson(value);
+        case 'GroupRequestList':
+          return GroupRequestList.fromJson(value);
         case 'Health':
           return Health.fromJson(value);
         case 'Media':

@@ -3,6 +3,7 @@ lib/api.dart
 lib/api/auth_api.dart
 lib/api/feedback_api.dart
 lib/api/follows_api.dart
+lib/api/groups_api.dart
 lib/api/notifications_api.dart
 lib/api/operations_api.dart
 lib/api/posts_api.dart
@@ -36,6 +37,14 @@ lib/model/feedback.dart
 lib/model/feedback_list.dart
 lib/model/follow_list.dart
 lib/model/follow_user.dart
+lib/model/group.dart
+lib/model/group_brief.dart
+lib/model/group_draft.dart
+lib/model/group_list.dart
+lib/model/group_member.dart
+lib/model/group_member_list.dart
+lib/model/group_request.dart
+lib/model/group_request_list.dart
 lib/model/health.dart
 lib/model/media.dart
 lib/model/nickname_update.dart

@@ -151,23 +151,29 @@ func (s *Server) GetNotifications(ctx context.Context, request gen.GetNotificati
 	return gen.GetNotifications200JSONResponse(list), nil
 }
 
-// GetUnreadNotifications считает непрочитанные строки и ждущие заявки:
-// по ним горит точка на колокольчике (требование 5).
+// GetUnreadNotifications считает непрочитанные строки, ждущие заявки на
+// подписку и заявки с приглашениями в группы: по ним горит точка на
+// колокольчике (требование 5; specs/029-groups.md, требование 27).
 func (s *Server) GetUnreadNotifications(ctx context.Context, _ gen.GetUnreadNotificationsRequestObject) (gen.GetUnreadNotificationsResponseObject, error) {
 	current, ok := sessionFrom(ctx)
 	if !ok {
 		return gen.GetUnreadNotifications401JSONResponse(errUnauthorized), nil
 	}
-	var counts gen.UnreadNotifications
+	var (
+		counts gen.UnreadNotifications
+		groups int32
+	)
 	if err := s.db.QueryRow(ctx, `
 		SELECT
 			(SELECT count(*) FROM (`+notificationRows+`) r
 			 WHERE r.unread AND r.created_at >= $2),
-			(SELECT count(*) FROM follows f WHERE f.followee_id = $1 AND NOT f.accepted)`,
+			(SELECT count(*) FROM follows f WHERE f.followee_id = $1 AND NOT f.accepted),
+			(SELECT count(*) FROM (`+groupRequestRows+`) g)`,
 		current.user.Id, time.Now().Add(-NotificationsKeptFor),
-	).Scan(&counts.Unread, &counts.Requests); err != nil {
+	).Scan(&counts.Unread, &counts.Requests, &groups); err != nil {
 		return nil, err
 	}
+	counts.Groups = &groups
 	return gen.GetUnreadNotifications200JSONResponse(counts), nil
 }
 

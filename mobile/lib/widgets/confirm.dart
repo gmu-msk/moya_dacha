@@ -9,6 +9,7 @@ Future<bool> confirmDelete(
   BuildContext context, {
   required String title,
   required String question,
+  String action = 'Удалить',
 }) async {
   final agreed = await showDialog<bool>(
     context: context,
@@ -25,7 +26,7 @@ Future<bool> confirmDelete(
           style: FilledButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
-          child: const Text('Удалить'),
+          child: Text(action),
         ),
       ],
     ),
