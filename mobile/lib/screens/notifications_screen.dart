@@ -236,23 +236,17 @@ class NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  /// Ответ на заявку в свою группу или на приглашение в чужую
-  /// (specs/029-groups.md, требование 34). Строка уходит, когда сервис
-  /// ответил; группы, которой уже нет, — тоже.
+  /// Ответ на приглашение в группу (specs/029-groups.md, требование 36).
+  /// Строка уходит, когда сервис ответил; группы, которой уже нет, — тоже.
   Future<void> _answerGroup(GroupRequest item, {required bool accept}) async {
     final key = _groupKey(item);
     setState(() => _busy.add(key));
     final groupId = item.group.id;
     try {
-      switch ((item.kind, accept)) {
-        case (GroupRequestKindEnum.request, true):
-          await _groups.addGroupMember(groupId, item.user.id);
-        case (GroupRequestKindEnum.request, false):
-          await _groups.removeGroupMember(groupId, item.user.id);
-        case (_, true):
-          await _groups.joinGroup(groupId);
-        case (_, false):
-          await _groups.leaveGroup(groupId);
+      if (accept) {
+        await _groups.joinGroup(groupId);
+      } else {
+        await _groups.leaveGroup(groupId);
       }
       debugPrint(
         '$logMarker group_request=${accept ? 'accepted' : 'declined'} '
@@ -389,7 +383,6 @@ class NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _groupRequestRow(GroupRequest item) {
     final busy = _busy.contains(_groupKey(item));
-    final request = item.kind == GroupRequestKindEnum.request;
 
     return Column(
       key: ValueKey(_groupKey(item)),
@@ -398,9 +391,7 @@ class NotificationsScreenState extends State<NotificationsScreen> {
         _Row(
           nickname: item.user.nickname,
           avatarUrl: item.user.avatarUrl,
-          text: request
-              ? 'просится в группу «${item.group.name}»'
-              : 'приглашает вас в группу «${item.group.name}»',
+          text: 'приглашает вас в группу «${item.group.name}»',
           when: item.createdAt,
           onTap: () => _openGroup(item.group.id),
         ),
@@ -417,7 +408,7 @@ class NotificationsScreenState extends State<NotificationsScreen> {
             children: [
               FilledButton(
                 onPressed: busy ? null : () => _answerGroup(item, accept: true),
-                child: Text(request ? 'Принять' : 'Вступить'),
+                child: const Text('Вступить'),
               ),
               OutlinedButton(
                 onPressed: busy

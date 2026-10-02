@@ -46,6 +46,7 @@ class FeedTabs extends StatefulWidget {
     required this.onNewPost,
     this.onOpenAuthor,
     this.onOpenTag,
+    this.onOpenGroups,
     this.onRefreshed,
   });
 
@@ -53,6 +54,9 @@ class FeedTabs extends StatefulWidget {
   final void Function(Post post) onOpenPost;
   final void Function(Author author)? onOpenAuthor;
   final void Function(String tag)? onOpenTag;
+
+  /// Значок «Группы» справа от вкладок (specs/029-groups.md, требование 32).
+  final VoidCallback? onOpenGroups;
   final VoidCallback onNewPost;
   final VoidCallback? onRefreshed;
 
@@ -116,13 +120,43 @@ class FeedTabsState extends State<FeedTabs> {
 
   @override
   Widget build(BuildContext context) {
+    final onOpenGroups = widget.onOpenGroups;
+    final tabs = SegmentTabs(
+      labels: const ['Все', 'Подписки'],
+      selected: _scope.index,
+      onSelect: (index) => _select(FeedScope.values[index]),
+    );
     return Column(
       children: [
-        SegmentTabs(
-          labels: const ['Все', 'Подписки'],
-          selected: _scope.index,
-          onSelect: (index) => _select(FeedScope.values[index]),
-        ),
+        if (onOpenGroups == null)
+          tabs
+        else
+          Padding(
+            padding: const EdgeInsets.only(right: AppGap.tiny),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: SegmentTabs(
+                    labels: tabs.labels,
+                    selected: tabs.selected,
+                    onSelect: tabs.onSelect,
+                    margin: const EdgeInsets.fromLTRB(
+                      AppGap.medium,
+                      0,
+                      AppGap.tiny,
+                      AppGap.small,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Группы',
+                  onPressed: onOpenGroups,
+                  icon: const Icon(Icons.groups_outlined),
+                ),
+              ],
+            ),
+          ),
         Expanded(
           child: IndexedStack(
             index: _scope.index,

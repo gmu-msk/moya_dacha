@@ -306,6 +306,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               token: widget.token,
               place: _place,
               enabled: !_busy,
+              // По пункту человек попадает в геогруппу соседей
+              // (specs/029-groups.md, требование 37).
+              helper:
+                  'Где ваша дача: СНТ, деревня, посёлок — выберите из '
+                  'подсказок',
               onChanged: (place) => setState(() => _place = place),
             ),
             const SizedBox(height: AppGap.medium),

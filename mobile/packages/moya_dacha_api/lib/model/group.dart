@@ -18,14 +18,12 @@ class Group {
     required this.description,
     required this.kind,
     required this.joinPolicy,
-    required this.owner,
+    this.owner,
     required this.members,
     required this.membership,
     this.place,
-    this.radiusKm,
     this.distanceKm,
     required this.near,
-    this.requests,
     required this.createdAt,
   });
 
@@ -37,18 +35,24 @@ class Group {
   /// Может быть пустым
   String description;
 
-  /// `interest` — по интересам, `place` — по месту
+  /// `interest` — по интересам, `place` — геогруппа
   GroupKindEnum kind;
 
-  /// `open` — сразу, `request` — по заявке, `invite` — по приглашению
+  /// Всегда `open`; остальные значения — от первой версии
   GroupJoinPolicyEnum joinPolicy;
 
-  Author owner;
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  Author? owner;
 
   /// Сколько участников, с хозяином
   int members;
 
-  /// Отношение смотрящего к группе
+  /// Отношение смотрящего к группе; `requested` больше не бывает
   GroupMembershipEnum membership;
 
   ///
@@ -59,16 +63,7 @@ class Group {
   ///
   Place? place;
 
-  /// Радиус вокруг места, км; нет — только сам пункт
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  int? radiusKm;
-
-  /// Расстояние от пункта смотрящего до места группы, округлённое как у поста; 0 — тот же пункт. Нет, если посчитать нельзя. 
+  /// Расстояние от пункта смотрящего до места геогруппы, округлённое как у поста; 0 — тот же пункт. Нет, если посчитать нельзя. 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -77,17 +72,8 @@ class Group {
   ///
   int? distanceKm;
 
-  /// Пункт смотрящего — место группы или в её радиусе
+  /// Пункт смотрящего — место этой геогруппы
   bool near;
-
-  /// Только хозяину — сколько заявок ждут ответа
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  int? requests;
 
   DateTime createdAt;
 
@@ -102,10 +88,8 @@ class Group {
     other.members == members &&
     other.membership == membership &&
     other.place == place &&
-    other.radiusKm == radiusKm &&
     other.distanceKm == distanceKm &&
     other.near == near &&
-    other.requests == requests &&
     other.createdAt == createdAt;
 
   @override
@@ -116,18 +100,16 @@ class Group {
     (description.hashCode) +
     (kind.hashCode) +
     (joinPolicy.hashCode) +
-    (owner.hashCode) +
+    (owner == null ? 0 : owner!.hashCode) +
     (members.hashCode) +
     (membership.hashCode) +
     (place == null ? 0 : place!.hashCode) +
-    (radiusKm == null ? 0 : radiusKm!.hashCode) +
     (distanceKm == null ? 0 : distanceKm!.hashCode) +
     (near.hashCode) +
-    (requests == null ? 0 : requests!.hashCode) +
     (createdAt.hashCode);
 
   @override
-  String toString() => 'Group[id=$id, name=$name, description=$description, kind=$kind, joinPolicy=$joinPolicy, owner=$owner, members=$members, membership=$membership, place=$place, radiusKm=$radiusKm, distanceKm=$distanceKm, near=$near, requests=$requests, createdAt=$createdAt]';
+  String toString() => 'Group[id=$id, name=$name, description=$description, kind=$kind, joinPolicy=$joinPolicy, owner=$owner, members=$members, membership=$membership, place=$place, distanceKm=$distanceKm, near=$near, createdAt=$createdAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -136,7 +118,11 @@ class Group {
       json[r'description'] = this.description;
       json[r'kind'] = this.kind;
       json[r'join_policy'] = this.joinPolicy;
+    if (this.owner != null) {
       json[r'owner'] = this.owner;
+    } else {
+      json[r'owner'] = null;
+    }
       json[r'members'] = this.members;
       json[r'membership'] = this.membership;
     if (this.place != null) {
@@ -144,22 +130,12 @@ class Group {
     } else {
       json[r'place'] = null;
     }
-    if (this.radiusKm != null) {
-      json[r'radius_km'] = this.radiusKm;
-    } else {
-      json[r'radius_km'] = null;
-    }
     if (this.distanceKm != null) {
       json[r'distance_km'] = this.distanceKm;
     } else {
       json[r'distance_km'] = null;
     }
       json[r'near'] = this.near;
-    if (this.requests != null) {
-      json[r'requests'] = this.requests;
-    } else {
-      json[r'requests'] = null;
-    }
       json[r'created_at'] = this.createdAt.toUtc().toIso8601String();
     return json;
   }
@@ -185,8 +161,6 @@ class Group {
         assert(json[r'kind'] != null, 'Required key "Group[kind]" has a null value in JSON.');
         assert(json.containsKey(r'join_policy'), 'Required key "Group[join_policy]" is missing from JSON.');
         assert(json[r'join_policy'] != null, 'Required key "Group[join_policy]" has a null value in JSON.');
-        assert(json.containsKey(r'owner'), 'Required key "Group[owner]" is missing from JSON.');
-        assert(json[r'owner'] != null, 'Required key "Group[owner]" has a null value in JSON.');
         assert(json.containsKey(r'members'), 'Required key "Group[members]" is missing from JSON.');
         assert(json[r'members'] != null, 'Required key "Group[members]" has a null value in JSON.');
         assert(json.containsKey(r'membership'), 'Required key "Group[membership]" is missing from JSON.');
@@ -204,14 +178,12 @@ class Group {
         description: mapValueOfType<String>(json, r'description')!,
         kind: GroupKindEnum.fromJson(json[r'kind'])!,
         joinPolicy: GroupJoinPolicyEnum.fromJson(json[r'join_policy'])!,
-        owner: Author.fromJson(json[r'owner'])!,
+        owner: Author.fromJson(json[r'owner']),
         members: mapValueOfType<int>(json, r'members')!,
         membership: GroupMembershipEnum.fromJson(json[r'membership'])!,
         place: Place.fromJson(json[r'place']),
-        radiusKm: mapValueOfType<int>(json, r'radius_km'),
         distanceKm: mapValueOfType<int>(json, r'distance_km'),
         near: mapValueOfType<bool>(json, r'near')!,
-        requests: mapValueOfType<int>(json, r'requests'),
         createdAt: mapDateTime(json, r'created_at', r'')!,
       );
     }
@@ -265,7 +237,6 @@ class Group {
     'description',
     'kind',
     'join_policy',
-    'owner',
     'members',
     'membership',
     'near',
@@ -273,7 +244,7 @@ class Group {
   };
 }
 
-/// `interest` — по интересам, `place` — по месту
+/// `interest` — по интересам, `place` — геогруппа
 enum GroupKindEnum {
   interest._(r'interest'),
   place._(r'place'),
@@ -351,7 +322,7 @@ class GroupKindEnumTypeTransformer {
 }
 
 
-/// `open` — сразу, `request` — по заявке, `invite` — по приглашению
+/// Всегда `open`; остальные значения — от первой версии
 enum GroupJoinPolicyEnum {
   open._(r'open'),
   request._(r'request'),
@@ -431,7 +402,7 @@ class GroupJoinPolicyEnumTypeTransformer {
 }
 
 
-/// Отношение смотрящего к группе
+/// Отношение смотрящего к группе; `requested` больше не бывает
 enum GroupMembershipEnum {
   owner._(r'owner'),
   member._(r'member'),

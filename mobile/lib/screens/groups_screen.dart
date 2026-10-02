@@ -1,4 +1,4 @@
-// Группы: specs/029-groups.md, требования 29–30.
+// Группы: specs/029-groups.md, требования 32–33.
 //
 // Вкладки «Мои» и «Найти», поиск по названию и описанию, фильтр по типу и
 // «Создать» справа вверху. Списки приходят целиком: групп в сообществе
@@ -32,18 +32,10 @@ const _kinds = <(String, String?)>[
 ];
 
 class GroupsScreen extends StatefulWidget {
-  const GroupsScreen({
-    super.key,
-    required this.token,
-    required this.viewerId,
-    this.place,
-  });
+  const GroupsScreen({super.key, required this.token, required this.viewerId});
 
   final String token;
   final String viewerId;
-
-  /// Пункт из профиля: подставляется в новую группу по месту.
-  final Place? place;
 
   @override
   State<GroupsScreen> createState() => _GroupsScreenState();
@@ -131,10 +123,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   Future<void> _create() async {
     final created = await Navigator.of(context).push<Group>(
-      MaterialPageRoute(
-        builder: (_) =>
-            NewGroupScreen(token: widget.token, place: widget.place),
-      ),
+      MaterialPageRoute(builder: (_) => NewGroupScreen(token: widget.token)),
     );
     if (created == null || !mounted) {
       return;
@@ -181,8 +170,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
         title: searching
             ? 'Ничего не нашлось'
             : _tab == 0
-            ? 'Вы пока ни в одной группе. Найдите группу соседей '
-                  'или по интересам — или создайте свою'
+            ? 'Вы пока ни в одной группе. Выберите пункт в профиле — '
+                  'и окажетесь в группе соседей, или найдите группу '
+                  'по интересам'
             : 'Групп пока нет. Создайте первую',
         action: _tab == 0 && !searching
             ? OutlinedButton(
@@ -268,7 +258,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 }
 
-/// «По месту · 12 участников» — тип и число участников (требование 30).
+/// «По месту · 12 участников» — тип и число участников (требование 33).
 String groupSummary(Group group) {
   final kind = group.kind == GroupKindEnum.place ? 'По месту' : 'По интересам';
   return '$kind · ${membersText(group.members)}';
@@ -286,17 +276,21 @@ String membersText(int n) {
   return '$n $word';
 }
 
-/// Место группы с радиусом: «снт Ромашка и 5 км вокруг».
+/// Где геогруппа: район и область пункта, а без них — сам пункт.
 String groupPlaceText(Group group) {
   final place = group.place;
   if (place == null) {
     return '';
   }
-  final radius = group.radiusKm;
-  return radius == null ? place.name : '${place.name} и $radius км вокруг';
+  return place.area.isEmpty ? place.name : place.area;
 }
 
-/// Строка группы в списке (требование 30).
+/// Смотрящий — хозяин или участник группы.
+bool isGroupMember(Group? group) =>
+    group?.membership == GroupMembershipEnum.owner ||
+    group?.membership == GroupMembershipEnum.member;
+
+/// Строка группы в списке (требование 33).
 class GroupTile extends StatelessWidget {
   const GroupTile({super.key, required this.group, required this.onTap});
 
@@ -313,7 +307,6 @@ class GroupTile extends StatelessWidget {
     final distance = group.distanceKm;
     final badge = switch (group.membership) {
       GroupMembershipEnum.invited => 'Вас пригласили',
-      GroupMembershipEnum.requested => 'Заявка отправлена',
       GroupMembershipEnum.owner => 'Вы создатель',
       _ => group.near ? 'Рядом с вами' : null,
     };

@@ -1,8 +1,9 @@
-// Экран группы: specs/029-groups.md, требования 32–33.
+// Экран группы: specs/029-groups.md, требование 35.
 //
-// Название, тип, место, описание, хозяин и участники; кнопка — по
-// отношению смотрящего к группе. Хозяину — заявки, приглашённые,
-// «Пригласить», «Убрать» и «Удалить группу».
+// Название, тип, место, описание, создатель и участники; кнопка — по
+// отношению смотрящего к группе. Участнику — «Пригласить» и
+// приглашённые; хозяину группы по интересам — ещё «Убрать», «Отозвать»
+// и «Удалить группу». У геогруппы хозяина нет.
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
@@ -59,7 +60,6 @@ class GroupScreen extends StatefulWidget {
 class _GroupScreenState extends State<GroupScreen> {
   late Group? _group = widget.group;
   List<GroupMember>? _members;
-  List<GroupMember> _requested = const [];
   List<GroupMember> _invited = const [];
   String? _error;
 
@@ -70,6 +70,9 @@ class _GroupScreenState extends State<GroupScreen> {
   GroupsApi get _api => GroupsApi(apiClient(token: widget.token));
 
   bool get _owner => _group?.membership == GroupMembershipEnum.owner;
+
+  /// Хозяин или участник: может приглашать и видит приглашённых.
+  bool get _member => isGroupMember(_group);
 
   @override
   void initState() {
@@ -83,15 +86,8 @@ class _GroupScreenState extends State<GroupScreen> {
     try {
       final group = await _api.getGroup(widget.groupId);
       final members = await _api.getGroupMembers(widget.groupId);
-      var requested = const <GroupMember>[];
       var invited = const <GroupMember>[];
-      if (group?.membership == GroupMembershipEnum.owner) {
-        requested =
-            (await _api.getGroupMembers(
-              widget.groupId,
-              state: 'requested',
-            ))?.items ??
-            const [];
+      if (isGroupMember(group)) {
         invited =
             (await _api.getGroupMembers(
               widget.groupId,
@@ -101,7 +97,7 @@ class _GroupScreenState extends State<GroupScreen> {
       }
       debugPrint(
         '$logMarker screen=group membership=${group?.membership} '
-        'members=${members?.items.length} requested=${requested.length}',
+        'members=${members?.items.length} invited=${invited.length}',
       );
       if (!mounted) {
         return;
@@ -109,7 +105,6 @@ class _GroupScreenState extends State<GroupScreen> {
       setState(() {
         _group = group;
         _members = members?.items ?? const [];
-        _requested = requested;
         _invited = invited;
       });
     } on Exception catch (error) {
@@ -178,11 +173,6 @@ class _GroupScreenState extends State<GroupScreen> {
     await _act(() => _api.leaveGroup(widget.groupId), 'left');
   }
 
-  Future<void> _accept(GroupMember person) => _act(
-    () => _api.addGroupMember(widget.groupId, person.user.id),
-    'member_added',
-  );
-
   Future<void> _remove(GroupMember person, {bool ask = false}) async {
     if (ask) {
       final agreed = await confirmDelete(
@@ -231,7 +221,7 @@ class _GroupScreenState extends State<GroupScreen> {
     }
   }
 
-  /// Пригласить — выбор из своих подписок и подписчиков (требование 33).
+  /// Пригласить — выбор из своих подписок и подписчиков (требование 35).
   Future<void> _invite() async {
     final taken = {
       ...?_members?.map((m) => m.user.id),
@@ -286,7 +276,7 @@ class _GroupScreenState extends State<GroupScreen> {
           padding: const EdgeInsets.only(bottom: AppGap.large),
           children: [
             _header(group),
-            if (_owner) ..._ownerSections(),
+            if (_member) ..._invitedSection(),
             _SectionTitle('Участники · ${group.members}'),
             ..._memberRows(group),
             if (error != null)
@@ -330,11 +320,7 @@ class _GroupScreenState extends State<GroupScreen> {
     );
     final place = group.place;
     final distance = group.distanceKm;
-    final policy = switch (group.joinPolicy) {
-      GroupJoinPolicyEnum.open => 'Открытая',
-      GroupJoinPolicyEnum.request => 'По заявке',
-      GroupJoinPolicyEnum.invite => 'По приглашению',
-    };
+    final owner = group.owner;
 
     return Padding(
       padding: const EdgeInsets.all(AppGap.medium),
@@ -343,7 +329,7 @@ class _GroupScreenState extends State<GroupScreen> {
         children: [
           Text(group.name, style: theme.textTheme.headlineSmall),
           const SizedBox(height: AppGap.tiny),
-          Text('${groupSummary(group)} · $policy', style: quiet),
+          Text(groupSummary(group), style: quiet),
           if (place != null) ...[
             const SizedBox(height: AppGap.small),
             Row(
@@ -378,13 +364,22 @@ class _GroupScreenState extends State<GroupScreen> {
                   ),
                 ),
               ),
+            Padding(
+              padding: const EdgeInsets.only(top: AppGap.small),
+              child: Text(
+                'Группа создана автоматически для всех, кто выбрал этот пункт',
+                style: quiet,
+              ),
+            ),
           ],
           if (group.description.isNotEmpty) ...[
             const SizedBox(height: AppGap.medium),
             Text(group.description, style: theme.textTheme.bodyLarge),
           ],
-          const SizedBox(height: AppGap.small),
-          Text('Создатель — ${group.owner.nickname}', style: quiet),
+          if (owner != null) ...[
+            const SizedBox(height: AppGap.small),
+            Text('Создатель — ${owner.nickname}', style: quiet),
+          ],
           const SizedBox(height: AppGap.medium),
           _membershipButtons(group),
         ],
@@ -392,76 +387,48 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
-  /// Кнопка по отношению смотрящего (требование 32).
+  /// Кнопки по отношению смотрящего (требование 35).
   Widget _membershipButtons(Group group) {
     final busy = _busy;
-    return switch (group.membership) {
-      GroupMembershipEnum.owner => FilledButton.icon(
-        onPressed: busy ? null : _invite,
-        icon: const Icon(Icons.person_add_alt_outlined),
-        label: const Text('Пригласить'),
-      ),
-      GroupMembershipEnum.member => OutlinedButton(
-        onPressed: busy ? null : _leave,
-        child: const Text('Выйти'),
-      ),
-      GroupMembershipEnum.requested => OutlinedButton(
-        onPressed: busy ? null : _leave,
-        child: const Text('Заявка отправлена'),
-      ),
-      GroupMembershipEnum.invited => Wrap(
-        spacing: AppGap.small,
-        runSpacing: AppGap.small,
-        children: [
+    final invite = FilledButton.icon(
+      onPressed: busy ? null : _invite,
+      icon: const Icon(Icons.person_add_alt_outlined),
+      label: const Text('Пригласить'),
+    );
+    return Wrap(
+      spacing: AppGap.small,
+      runSpacing: AppGap.small,
+      children: switch (group.membership) {
+        GroupMembershipEnum.owner => [invite],
+        GroupMembershipEnum.member => [
+          invite,
+          OutlinedButton(
+            onPressed: busy ? null : _leave,
+            child: const Text('Выйти'),
+          ),
+        ],
+        GroupMembershipEnum.invited => [
           FilledButton(
             onPressed: busy ? null : _join,
-            child: const Text('Принять приглашение'),
+            child: const Text('Вступить'),
           ),
           OutlinedButton(
             onPressed: busy ? null : _leave,
             child: const Text('Отклонить'),
           ),
         ],
-      ),
-      _ => FilledButton(
-        onPressed: busy ? null : _join,
-        child: Text(
-          group.joinPolicy == GroupJoinPolicyEnum.request
-              ? 'Попроситься'
-              : 'Вступить',
-        ),
-      ),
-    };
+        _ => [
+          FilledButton(
+            onPressed: busy ? null : _join,
+            child: const Text('Вступить'),
+          ),
+        ],
+      },
+    );
   }
 
-  /// Заявки и приглашённые — только хозяину (требование 33).
-  List<Widget> _ownerSections() => [
-    if (_requested.isNotEmpty) ...[
-      const _SectionTitle('Заявки'),
-      for (final person in _requested)
-        PersonRow(
-          key: ValueKey('requested-${person.user.id}'),
-          nickname: person.user.nickname,
-          name: person.user.name,
-          avatarUrl: person.user.avatarUrl,
-          onTap: () => _openPerson(person.user.id),
-          trailing: Wrap(
-            spacing: AppGap.tiny,
-            children: [
-              IconButton.filled(
-                tooltip: 'Принять',
-                onPressed: _busy ? null : () => _accept(person),
-                icon: const Icon(Icons.check),
-              ),
-              IconButton.outlined(
-                tooltip: 'Отклонить',
-                onPressed: _busy ? null : () => _remove(person),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-        ),
-    ],
+  /// Приглашённые — участникам; отозвать может хозяин (требование 35).
+  List<Widget> _invitedSection() => [
     if (_invited.isNotEmpty) ...[
       const _SectionTitle('Приглашены'),
       for (final person in _invited)
@@ -471,10 +438,12 @@ class _GroupScreenState extends State<GroupScreen> {
           name: person.user.name,
           avatarUrl: person.user.avatarUrl,
           onTap: () => _openPerson(person.user.id),
-          trailing: TextButton(
-            onPressed: _busy ? null : () => _remove(person),
-            child: const Text('Отозвать'),
-          ),
+          trailing: _owner
+              ? TextButton(
+                  onPressed: _busy ? null : () => _remove(person),
+                  child: const Text('Отозвать'),
+                )
+              : null,
         ),
     ],
   ];
@@ -507,14 +476,16 @@ class _GroupScreenState extends State<GroupScreen> {
                 )
               : null,
         ),
-      if (members.length <= 1)
+      if (members.isEmpty ||
+          (members.length == 1 &&
+              members.first.role == GroupMemberRoleEnum.owner))
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppGap.medium,
             vertical: AppGap.small,
           ),
           child: Text(
-            'Пока только создатель группы',
+            members.isEmpty ? 'Пока никого' : 'Пока только создатель группы',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
