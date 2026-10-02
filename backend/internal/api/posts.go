@@ -127,6 +127,23 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		tags = normalized
 	}
 
+	// Группы — после тэгов, до места (specs/030-group-posts.md,
+	// требование 2).
+	var groupIDs []string
+	if request.Body.GroupIds != nil {
+		ids, err := uniqueGroupIDs(*request.Body.GroupIds)
+		if err == nil {
+			err = s.checkPostGroups(ctx, current.user.Id, ids)
+		}
+		if errors.Is(err, errNotInGroup) {
+			return gen.CreatePost403JSONResponse(errPostGroupNotMember), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		groupIDs = ids
+	}
+
 	// Место поста — по желанию, только из подсказок
 	// (specs/027-post-place.md, требование 1).
 	var placeID *string
@@ -135,7 +152,7 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		placeID = &trimmed
 	}
 
-	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, placeID, tags, request.Body.MediaIds)
+	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, placeID, tags, groupIDs, request.Body.MediaIds)
 	if errors.Is(err, errMediaUnusable) {
 		return gen.CreatePost400JSONResponse(errInvalidMedia), nil
 	}
@@ -188,7 +205,7 @@ var errPlaceUnknown = errors.New("место поста не из подсказ
 // фотографии — это перевод строки из «загружено» в «опубликовано», и
 // если хоть один перевод не удался, транзакция откатывается целиком
 // (specs/003-posts.md).
-func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, placeID *string, tags []string, mediaIDs []string) (string, error) {
+func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, placeID *string, tags, groupIDs, mediaIDs []string) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -210,6 +227,9 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, visib
 	}
 
 	if err := writeTags(ctx, tx, id, tags); err != nil {
+		return "", err
+	}
+	if err := writePostGroups(ctx, tx, id, groupIDs); err != nil {
 		return "", err
 	}
 
@@ -327,6 +347,9 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 
 	posts := []gen.Post{post}
 	if err := s.attachTags(ctx, posts); err != nil {
+		return gen.Post{}, err
+	}
+	if err := s.attachGroups(ctx, viewerID, posts); err != nil {
 		return gen.Post{}, err
 	}
 	return posts[0], nil
