@@ -3,22 +3,29 @@
 //
 // Галочка, под ней — свои группы с галочками и напоминание, что «Кто
 // увидит» главнее. Групп нет или список не пришёл — ничего не видно:
-// публикации это не мешает.
+// публикации это не мешает. Список грузит экран нового поста: он нужен
+// и «Кто увидит» (specs/031-group-visibility.md, требование 14).
 import 'package:flutter/material.dart';
 import 'package:moya_dacha_api/api.dart';
 
-import '../api.dart';
 import '../theme.dart';
 
 class GroupPicker extends StatefulWidget {
   const GroupPicker({
     super.key,
-    required this.token,
+    required this.groups,
     required this.onChanged,
+    this.lockedId,
     this.enabled = true,
   });
 
-  final String token;
+  /// Свои группы (029, `scope=mine`).
+  final List<Group> groups;
+
+  /// Группа из «Кто увидит»: пост сам выкладывается в неё, поэтому она
+  /// отмечена вместе с галочкой и снять её нельзя
+  /// (specs/031-group-visibility.md, требование 16).
+  final String? lockedId;
   final bool enabled;
 
   /// Отмеченные группы; галочка «Выложить в группе» снята — пусто.
@@ -29,45 +36,39 @@ class GroupPicker extends StatefulWidget {
 }
 
 class _GroupPickerState extends State<GroupPicker> {
-  List<Group> _groups = const [];
   bool _on = false;
   final Set<String> _picked = {};
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  bool get _effectiveOn => _on || widget.lockedId != null;
 
-  Future<void> _load() async {
-    try {
-      final list = await GroupsApi(apiClient(token: widget.token))
-          .getGroups(scope: 'mine');
-      debugPrint('$logMarker post=groups count=${list?.items.length}');
-      if (mounted) {
-        setState(() => _groups = list?.items ?? const []);
-      }
-    } on Exception catch (error) {
-      debugPrint('$logMarker post=groups_failed error=$error');
+  bool _checked(String id) => _picked.contains(id) || id == widget.lockedId;
+
+  @override
+  void didUpdateWidget(GroupPicker old) {
+    super.didUpdateWidget(old);
+    if (old.lockedId != widget.lockedId) {
+      _report();
     }
   }
 
   void _report() => widget.onChanged(
-    _on
+    _effectiveOn
         ? [
-            for (final g in _groups)
-              if (_picked.contains(g.id)) g.id,
+            for (final g in widget.groups)
+              if (_checked(g.id)) g.id,
           ]
         : [],
   );
 
   @override
   Widget build(BuildContext context) {
-    if (_groups.isEmpty) {
+    final groups = widget.groups;
+    if (groups.isEmpty) {
       return const SizedBox.shrink();
     }
     final theme = Theme.of(context);
     final enabled = widget.enabled;
+    final locked = widget.lockedId;
 
     return AnimatedSize(
       duration: AppMotion.standard,
@@ -77,26 +78,26 @@ class _GroupPickerState extends State<GroupPicker> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CheckboxListTile(
-            value: _on,
+            value: _effectiveOn,
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
             title: const Text('Выложить в группе'),
-            onChanged: enabled
+            onChanged: enabled && locked == null
                 ? (value) {
                     setState(() => _on = value ?? false);
                     _report();
                   }
                 : null,
           ),
-          if (_on) ...[
-            for (final group in _groups)
+          if (_effectiveOn) ...[
+            for (final group in groups)
               CheckboxListTile(
-                value: _picked.contains(group.id),
+                value: _checked(group.id),
                 dense: true,
                 contentPadding: const EdgeInsets.only(left: AppGap.large),
                 controlAffinity: ListTileControlAffinity.leading,
                 title: Text(group.name),
-                onChanged: enabled
+                onChanged: enabled && group.id != locked
                     ? (value) {
                         setState(() {
                           if (value ?? false) {

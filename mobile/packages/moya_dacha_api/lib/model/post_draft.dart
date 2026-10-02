@@ -19,6 +19,7 @@ class PostDraft {
     this.placeId,
     this.tags = const [],
     this.groupIds = const [],
+    this.visibilityGroupId,
   });
 
   /// Идентификаторы уже загруженных фотографий, в том порядке, в котором они должны стоять в посте. 
@@ -50,6 +51,9 @@ class PostDraft {
   /// Группы, в которых выложить пост: только те, где автор — участник; нет, `null` или пусто — ни в какой (specs/030-group-posts.md) 
   List<String>? groupIds;
 
+  /// Пост увидят только участники этой группы; автор должен быть её участником. Тогда `visibility` не учитывается — приложение шлёт `me`, чтобы сервер без этой фичи не выложил пост всем. Группа сама добавляется к `group_ids`. Нет, `null` или пусто — видимость по `visibility` (specs/031-group-visibility.md) 
+  String? visibilityGroupId;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is PostDraft &&
     _deepEquality.equals(other.mediaIds, mediaIds) &&
@@ -57,7 +61,8 @@ class PostDraft {
     other.visibility == visibility &&
     other.placeId == placeId &&
     _deepEquality.equals(other.tags, tags) &&
-    _deepEquality.equals(other.groupIds, groupIds);
+    _deepEquality.equals(other.groupIds, groupIds) &&
+    other.visibilityGroupId == visibilityGroupId;
 
   @override
   int get hashCode =>
@@ -67,10 +72,11 @@ class PostDraft {
     (visibility == null ? 0 : visibility!.hashCode) +
     (placeId == null ? 0 : placeId!.hashCode) +
     (tags == null ? 0 : tags!.hashCode) +
-    (groupIds == null ? 0 : groupIds!.hashCode);
+    (groupIds == null ? 0 : groupIds!.hashCode) +
+    (visibilityGroupId == null ? 0 : visibilityGroupId!.hashCode);
 
   @override
-  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, tags=$tags, groupIds=$groupIds]';
+  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, tags=$tags, groupIds=$groupIds, visibilityGroupId=$visibilityGroupId]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -99,6 +105,11 @@ class PostDraft {
       json[r'group_ids'] = this.groupIds;
     } else {
       json[r'group_ids'] = null;
+    }
+    if (this.visibilityGroupId != null) {
+      json[r'visibility_group_id'] = this.visibilityGroupId;
+    } else {
+      json[r'visibility_group_id'] = null;
     }
     return json;
   }
@@ -132,6 +143,7 @@ class PostDraft {
         groupIds: json[r'group_ids'] is Iterable
             ? (json[r'group_ids'] as Iterable).cast<String>().toList(growable: false)
             : const [],
+        visibilityGroupId: mapValueOfType<String>(json, r'visibility_group_id'),
       );
     }
     return null;

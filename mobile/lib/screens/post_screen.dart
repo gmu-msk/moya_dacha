@@ -161,16 +161,22 @@ class _PostScreenState extends State<PostScreen> {
         return;
       }
       final closed = me?.closed ?? false;
+      final current = audienceOf(post);
       final picked = await pickVisibility(
         context,
-        current: post.visibility,
+        current: current,
         closed: closed,
       );
-      if (picked == null || picked == post.visibility) {
+      // Группу опубликованному посту не поставить: в списке только
+      // текущая (specs/031-group-visibility.md, требование 13).
+      if (picked == null || picked == current || picked.group != null) {
         return;
       }
       final updated = await PostsApi(apiClient(token: widget.token))
-          .setPostVisibility(post.id, PostVisibilityUpdate(visibility: picked));
+          .setPostVisibility(
+            post.id,
+            PostVisibilityUpdate(visibility: picked.visibility),
+          );
       debugPrint('$logMarker post=visibility id=${post.id} value=$picked');
       if (!mounted || updated == null) {
         return;
@@ -242,7 +248,7 @@ class _PostScreenState extends State<PostScreen> {
           IconButton(
             tooltip: 'Кто увидит',
             onPressed: _deleting ? null : _changeVisibility,
-            icon: Icon(visibilityIcon(post.visibility)),
+            icon: Icon(visibilityIcon(audienceOf(post))),
           ),
         if (_mine)
           IconButton(
@@ -298,7 +304,7 @@ class _PostScreenState extends State<PostScreen> {
                 AuthorLine(
                   author: post.author,
                   when: post.createdAt,
-                  visibility: post.visibility,
+                  audience: audienceOf(post),
                   edited: post.editedAt != null,
                   onTap: () => _openAuthor(post.author),
                 ),

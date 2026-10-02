@@ -18,6 +18,7 @@ import 'error_view.dart';
 import 'like_button.dart';
 import 'post_action.dart';
 import 'post_groups_line.dart';
+import 'visibility_picker.dart' show audienceOf;
 import 'loading_view.dart';
 import 'place_field.dart';
 import 'segment_tabs.dart';
@@ -661,7 +662,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
             child: AuthorLine(
               author: post.author,
               when: post.createdAt,
-              visibility: post.visibility,
+              audience: audienceOf(post),
               edited: post.editedAt != null,
               onTap: widget.onOpenAuthor == null
                   ? null
@@ -673,7 +674,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
             padding: const EdgeInsets.only(bottom: AppGap.small),
             child: PostedLine(
               when: post.createdAt,
-              visibility: post.visibility,
+              audience: audienceOf(post),
               edited: post.editedAt != null,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

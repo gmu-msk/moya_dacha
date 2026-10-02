@@ -27,6 +27,7 @@ class Post {
     this.distanceKm,
     this.tags = const [],
     this.groups = const [],
+    this.visibilityGroup,
   });
 
   /// Идентификатор поста (UUID)
@@ -74,6 +75,9 @@ class Post {
   /// Группы, в которых выложен пост и которые видны смотрящему, по названию; нет — пустой массив (specs/030-group-posts.md) 
   List<GroupBrief> groups;
 
+  /// Пост видят только участники этой группы (specs/031-group-visibility.md). Тогда `visibility` — `friends`, чтобы старые сборки разбирали ответ; приложение смотрит сюда. Нет или `null` — видимость по `visibility`. 
+  GroupBrief? visibilityGroup;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Post &&
     other.id == id &&
@@ -89,7 +93,8 @@ class Post {
     other.place == place &&
     other.distanceKm == distanceKm &&
     _deepEquality.equals(other.tags, tags) &&
-    _deepEquality.equals(other.groups, groups);
+    _deepEquality.equals(other.groups, groups) &&
+    other.visibilityGroup == visibilityGroup;
 
   @override
   int get hashCode =>
@@ -107,10 +112,11 @@ class Post {
     (place == null ? 0 : place!.hashCode) +
     (distanceKm == null ? 0 : distanceKm!.hashCode) +
     (tags.hashCode) +
-    (groups.hashCode);
+    (groups.hashCode) +
+    (visibilityGroup == null ? 0 : visibilityGroup!.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags, groups=$groups]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags, groups=$groups, visibilityGroup=$visibilityGroup]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -140,6 +146,11 @@ class Post {
     }
       json[r'tags'] = this.tags;
       json[r'groups'] = this.groups;
+    if (this.visibilityGroup != null) {
+      json[r'visibility_group'] = this.visibilityGroup;
+    } else {
+      json[r'visibility_group'] = null;
+    }
     return json;
   }
 
@@ -192,6 +203,7 @@ class Post {
             ? (json[r'tags'] as Iterable).cast<String>().toList(growable: false)
             : const [],
         groups: GroupBrief.listFromJson(json[r'groups']),
+        visibilityGroup: GroupBrief.fromJson(json[r'visibility_group']),
       );
     }
     return null;
