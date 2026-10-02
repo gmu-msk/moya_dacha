@@ -25,6 +25,7 @@ import '../widgets/loading_view.dart';
 import '../widgets/place_field.dart';
 import '../widgets/user_avatar.dart';
 import 'follow_list_screen.dart';
+import 'groups_screen.dart';
 import 'profile_screen.dart';
 import 'user_posts_screen.dart';
 
@@ -275,6 +276,18 @@ class UserScreenState extends State<UserScreen> {
     }
   }
 
+  /// Свои группы и поиск групп (specs/029-groups.md, требование 29).
+  Future<void> _openGroups(UserProfile profile) =>
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => GroupsScreen(
+            token: widget.token,
+            viewerId: widget.viewerId,
+            place: profile.place,
+          ),
+        ),
+      );
+
   /// Посты подряд, сразу на том, которого коснулись
   /// (specs/009-user-profile.md, требование 11).
   Future<void> _openPosts(int index, UserProfile profile) =>
@@ -451,11 +464,27 @@ class UserScreenState extends State<UserScreen> {
               AppGap.medium,
               0,
             ),
+            // «Группы» — рядом с правкой профиля (specs/029-groups.md,
+            // требование 29).
             sliver: SliverToBoxAdapter(
-              child: OutlinedButton.icon(
-                onPressed: _editing ? null : _edit,
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Изменить профиль'),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _editing ? null : _edit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Изменить профиль'),
+                    ),
+                  ),
+                  const SizedBox(width: AppGap.small),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openGroups(profile),
+                      icon: const Icon(Icons.groups_outlined),
+                      label: const Text('Группы'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -16,7 +16,8 @@ info:
     подписки и закрытые профили (specs/012-follows.md), видимость
     постов (specs/013-post-visibility.md), уведомления
     (specs/014-notifications.md), правка, блокировка и удаление
-    аккаунта (specs/022-edit-block-delete.md) и операционная проверка живости.
+    аккаунта (specs/022-edit-block-delete.md), группы (specs/029-groups.md)
+    и операционная проверка живости.
 
 servers:
   - url: /api
@@ -2172,6 +2173,391 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /groups:
+    get:
+      operationId: getGroups
+      summary: Мои группы или группы, куда можно вступить
+      description: |
+        До 100 групп (specs/029-groups.md, требования 16–17). `mine` —
+        где смотрящий хозяин или участник, по названию; `available` —
+        остальные видимые ему: приглашения, потом группы рядом, потом
+        больше участников выше.
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          description: "`mine` (по умолчанию) или `available`"
+          schema:
+            type: string
+        - name: kind
+          in: query
+          required: false
+          description: "`interest` или `place` — только группы этого типа"
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          description: Поиск по названию и описанию без учёта регистра
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Группы
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupList"
+        "400":
+          description: Неизвестные `scope` или `kind` (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createGroup
+      summary: Создать группу
+      description: |
+        Создатель становится хозяином и первым участником
+        (specs/029-groups.md, требования 1–6).
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupDraft"
+      responses:
+        "201":
+          description: Группа создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "400":
+          description: |
+            Название, описание или радиус не подходят, место у группы по
+            интересам (`invalid_group`); группа по месту без места
+            (`place_required`); такого пункта сервер не отдавал
+            (`unknown_place`); неизвестный тип или правило, тело не
+            разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /groups/{groupId}:
+    get:
+      operationId: getGroup
+      summary: Группа
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: Группа
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Группы нет или смотрящему она не видна (`group_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteGroup
+      summary: Удалить свою группу
+      description: |
+        Вместе с составом, заявками и приглашениями
+        (specs/029-groups.md, требование 7).
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "204":
+          description: Группа удалена
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Смотрящий не хозяин группы (`not_group_owner`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Группы нет или смотрящему она не видна (`group_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /groups/{groupId}/membership:
+    put:
+      operationId: joinGroup
+      summary: Вступить в группу или попроситься
+      description: |
+        Открытая — сразу участник, по заявке — заявка, приглашённый —
+        участник в группе любого правила (specs/029-groups.md,
+        требование 18). Повтор ничего не меняет. Группы по приглашению
+        без приглашения для смотрящего нет — `404`.
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: Группа с новым отношением смотрящего
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Группы нет или смотрящему она не видна (`group_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: leaveGroup
+      summary: Выйти, отозвать заявку или отклонить приглашение
+      description: |
+        Строка смотрящего удаляется; без строки — не ошибка
+        (specs/029-groups.md, требование 19).
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "204":
+          description: Готово
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Группы нет или смотрящему она не видна (`group_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Хозяин не может выйти из своей группы (`owner_cannot_leave`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /groups/{groupId}/members:
+    get:
+      operationId: getGroupMembers
+      summary: Состав группы, заявки или приглашения
+      description: |
+        Без `state` — участники, хозяин первым, дальше новые выше; видят
+        все, кому видна группа. `requested` и `invited` — только хозяину,
+        новые сверху (specs/029-groups.md, требования 20–21).
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - name: state
+          in: query
+          required: false
+          description: "`member` (по умолчанию), `requested` или `invited`"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Люди
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupMemberList"
+        "400":
+          description: Неизвестный `state` (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Заявки и приглашения видит только хозяин (`not_group_owner`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Группы нет или смотрящему она не видна (`group_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /groups/{groupId}/members/{userId}:
+    put:
+      operationId: addGroupMember
+      summary: Принять заявку или пригласить
+      description: |
+        Есть заявка — человек становится участником, нет ничего —
+        приглашение. Участник и приглашённый не меняются
+        (specs/029-groups.md, требование 22).
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Строка человека в группе
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupMember"
+        "400":
+          description: Хозяин приглашает себя (`cannot_invite_self`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Смотрящий не хозяин группы (`not_group_owner`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: |
+            Группы нет или она не видна (`group_not_found`); человека нет
+            или он заблокировал хозяина (`user_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Хозяин заблокировал этого человека (`user_blocked`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: removeGroupMember
+      summary: Отклонить заявку, отозвать приглашение или убрать участника
+      description: |
+        Без строки — не ошибка (specs/029-groups.md, требование 23).
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Готово
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Смотрящий не хозяин группы (`not_group_owner`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Группы нет или смотрящему она не видна (`group_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Хозяин убирает себя (`owner_cannot_leave`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/group-requests:
+    get:
+      operationId: getGroupRequests
+      summary: Ждущие заявки в мои группы и приглашения мне
+      description: |
+        Новые сверху (specs/029-groups.md, требования 25–26). Это не
+        события раздела «Уведомления», а список над ними, как заявки на
+        подписку.
+      tags: [groups]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Заявки и приглашения
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupRequestList"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2180,6 +2566,13 @@ components:
       description: Токен сессии, выданный `POST /auth/session`
 
   parameters:
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      description: Идентификатор группы (UUID)
+      schema:
+        type: string
     UserId:
       name: userId
       in: path
@@ -2978,6 +3371,172 @@ components:
           type: string
           description: Курсор на следующую страницу; нет, когда дальше ничего нет
 
+    GroupDraft:
+      type: object
+      description: Новая группа (specs/029-groups.md, требования 1–6).
+      required: [name, kind, join_policy]
+      properties:
+        name:
+          type: string
+          description: 1–60 знаков после обрезки пробелов
+          example: "СНТ Ромашка"
+        description:
+          type: string
+          description: До 500 знаков после обрезки пробелов
+          example: "Соседи по участкам: вода, дороги, взносы"
+        kind:
+          type: string
+          description: "`interest` — по интересам, `place` — по месту"
+          example: "place"
+        join_policy:
+          type: string
+          description: "`open`, `request` или `invite`"
+          example: "request"
+        place_id:
+          type: string
+          nullable: true
+          description: Пункт из подсказок `GET /places`; только у `place`, там обязателен
+        radius_km:
+          type: integer
+          format: int32
+          nullable: true
+          description: Радиус вокруг пункта, 1–100 км; только у `place`, необязателен
+          example: 5
+
+    Group:
+      type: object
+      description: Группа, как её видит смотрящий (specs/029-groups.md, требования 9–12).
+      required: [id, name, description, kind, join_policy, owner, members, membership, near, created_at]
+      properties:
+        id:
+          type: string
+          description: Идентификатор группы (UUID)
+        name:
+          type: string
+          example: "СНТ Ромашка"
+        description:
+          type: string
+          description: Может быть пустым
+        kind:
+          type: string
+          enum: [interest, place]
+          description: "`interest` — по интересам, `place` — по месту"
+        join_policy:
+          type: string
+          enum: [open, request, invite]
+          description: "`open` — сразу, `request` — по заявке, `invite` — по приглашению"
+        owner:
+          $ref: "#/components/schemas/Author"
+        members:
+          type: integer
+          format: int32
+          description: Сколько участников, с хозяином
+          example: 12
+        membership:
+          type: string
+          enum: [owner, member, requested, invited, none]
+          description: Отношение смотрящего к группе
+        place:
+          $ref: "#/components/schemas/Place"
+        radius_km:
+          type: integer
+          format: int32
+          description: Радиус вокруг места, км; нет — только сам пункт
+          example: 5
+        distance_km:
+          type: integer
+          format: int32
+          description: |
+            Расстояние от пункта смотрящего до места группы, округлённое как
+            у поста; 0 — тот же пункт. Нет, если посчитать нельзя.
+          example: 0
+        near:
+          type: boolean
+          description: Пункт смотрящего — место группы или в её радиусе
+        requests:
+          type: integer
+          format: int32
+          description: Только хозяину — сколько заявок ждут ответа
+          example: 2
+        created_at:
+          type: string
+          format: date-time
+
+    GroupList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Group"
+
+    GroupMember:
+      type: object
+      description: Человек в группе, заявитель или приглашённый (specs/029-groups.md, требование 20).
+      required: [user, role, state, created_at]
+      properties:
+        user:
+          $ref: "#/components/schemas/Author"
+        role:
+          type: string
+          enum: [owner, member]
+        state:
+          type: string
+          enum: [member, requested, invited]
+        created_at:
+          type: string
+          format: date-time
+          description: Когда вступил, попросился или приглашён
+
+    GroupMemberList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupMember"
+
+    GroupBrief:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Идентификатор группы (UUID)
+        name:
+          type: string
+          example: "СНТ Ромашка"
+
+    GroupRequest:
+      type: object
+      description: |
+        `request` — человек просится в группу смотрящего; `invite` —
+        хозяин группы приглашает смотрящего (specs/029-groups.md,
+        требование 25).
+      required: [kind, group, user, created_at]
+      properties:
+        kind:
+          type: string
+          enum: [request, invite]
+        group:
+          $ref: "#/components/schemas/GroupBrief"
+        user:
+          $ref: "#/components/schemas/Author"
+        created_at:
+          type: string
+          format: date-time
+
+    GroupRequestList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupRequest"
+
     UnreadNotifications:
       type: object
       required: [unread, requests]
@@ -2991,6 +3550,14 @@ components:
           type: integer
           format: int32
           description: Сколько заявок на подписку ждут ответа
+          example: 1
+        groups:
+          type: integer
+          format: int32
+          description: |
+            Сколько заявок в группы смотрящего и приглашений ему ждут
+            ответа (specs/029-groups.md, требование 27). Сервер отдаёт
+            всегда; необязательно, чтобы сборка новее сервера не падала.
           example: 1
 
     PushToken:

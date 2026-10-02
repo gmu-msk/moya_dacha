@@ -124,7 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'follow' || 'follow_accepted' when userId != null:
         await _openNotificationProfile(userId);
       default:
-      // Заявка — в самом разделе, сверху.
+      // Заявка на подписку, заявка в группу и приглашение — в самом
+      // разделе, сверху.
     }
   }
 
@@ -168,10 +169,13 @@ class _HomeScreenState extends State<HomeScreen> {
       if (counts == null || !mounted) {
         return;
       }
-      final unread = counts.unread > 0 || counts.requests > 0;
+      // Заявки и приглашения в группы — тоже повод для точки
+      // (specs/029-groups.md, требование 27).
+      final unread =
+          counts.unread > 0 || counts.requests > 0 || (counts.groups ?? 0) > 0;
       debugPrint(
         '$logMarker notifications unread=${counts.unread} '
-        'requests=${counts.requests}',
+        'requests=${counts.requests} groups=${counts.groups}',
       );
       setState(() => _unread = unread);
     } on Exception catch (error) {

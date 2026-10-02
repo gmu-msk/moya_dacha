@@ -1,6 +1,8 @@
 // Раздел «Уведомления»: specs/014-notifications.md.
 //
-// Сверху — заявки на подписку к своему закрытому профилю, ниже — события,
+// Сверху — заявки в свои группы и приглашения в чужие
+// (specs/029-groups.md, требование 34), под ними заявки на подписку к
+// своему закрытому профилю, ниже — события,
 // новые сверху, разделённые на «Новое» и «Раньше». Открытие раздела
 // отмечает всё прочитанным (требование 7): что было новым в этот момент,
 // остаётся под «Новым», пока раздел не откроют снова.
@@ -17,6 +19,7 @@ import '../widgets/error_view.dart';
 import '../widgets/follow_button.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/user_avatar.dart';
+import 'group_screen.dart';
 
 /// Сколько строк приходит за раз.
 const _pageSize = 20;
@@ -62,6 +65,7 @@ class NotificationsScreen extends StatefulWidget {
 class NotificationsScreenState extends State<NotificationsScreen> {
   final ScrollController _scroll = ScrollController();
   final List<Author> _requests = [];
+  final List<GroupRequest> _groupRequests = [];
   final List<Notification> _items = [];
   final Set<String> _busy = {};
 
@@ -72,6 +76,10 @@ class NotificationsScreenState extends State<NotificationsScreen> {
 
   NotificationsApi get _api => NotificationsApi(apiClient(token: widget.token));
   FollowsApi get _follows => FollowsApi(apiClient(token: widget.token));
+  GroupsApi get _groups => GroupsApi(apiClient(token: widget.token));
+
+  bool get _nothing =>
+      _items.isEmpty && _requests.isEmpty && _groupRequests.isEmpty;
 
   @override
   void initState() {
@@ -105,15 +113,17 @@ class NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> refresh() async {
     setState(() {
       _error = null;
-      _loading = _items.isEmpty && _requests.isEmpty;
+      _loading = _nothing;
     });
     try {
       // Одно за другим: два коротких запроса, а ошибка любого из них —
       // одна ошибка раздела.
+      final groupRequests = await _loadGroupRequests();
       final requests = await _follows.getFollowRequests(limit: 50);
       final page = await _api.getNotifications(limit: _pageSize);
       debugPrint(
         '$logMarker screen=notifications requests=${requests?.items.length} '
+        'group_requests=${groupRequests.length} '
         'items=${page?.items.length} '
         'unread=${page?.items.where((item) => item.unread).length}',
       );
@@ -124,6 +134,9 @@ class NotificationsScreenState extends State<NotificationsScreen> {
         _requests
           ..clear()
           ..addAll(requests?.items ?? const []);
+        _groupRequests
+          ..clear()
+          ..addAll(groupRequests);
         _items
           ..clear()
           ..addAll(page?.items ?? const []);
@@ -134,6 +147,19 @@ class NotificationsScreenState extends State<NotificationsScreen> {
       widget.onSeen?.call();
     } on Exception catch (error) {
       _failed(error);
+    }
+  }
+
+  /// Заявки и приглашения в группы. Сервер без групп (сборка из PR на
+  /// сервере с main) отвечает 404 — тогда раздела просто нет.
+  Future<List<GroupRequest>> _loadGroupRequests() async {
+    try {
+      return (await _groups.getGroupRequests())?.items ?? const [];
+    } on ApiException catch (error) {
+      if (error.code == 404) {
+        return const [];
+      }
+      rethrow;
     }
   }
 
@@ -210,6 +236,68 @@ class NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  /// Ответ на заявку в свою группу или на приглашение в чужую
+  /// (specs/029-groups.md, требование 34). Строка уходит, когда сервис
+  /// ответил; группы, которой уже нет, — тоже.
+  Future<void> _answerGroup(GroupRequest item, {required bool accept}) async {
+    final key = _groupKey(item);
+    setState(() => _busy.add(key));
+    final groupId = item.group.id;
+    try {
+      switch ((item.kind, accept)) {
+        case (GroupRequestKindEnum.request, true):
+          await _groups.addGroupMember(groupId, item.user.id);
+        case (GroupRequestKindEnum.request, false):
+          await _groups.removeGroupMember(groupId, item.user.id);
+        case (_, true):
+          await _groups.joinGroup(groupId);
+        case (_, false):
+          await _groups.leaveGroup(groupId);
+      }
+      debugPrint(
+        '$logMarker group_request=${accept ? 'accepted' : 'declined'} '
+        'kind=${item.kind} group=$groupId',
+      );
+      _groupGone(item);
+    } on Exception catch (error) {
+      if (serviceErrorCode(error) == 'group_not_found') {
+        _groupGone(item);
+      } else {
+        _say(errorMessage(error));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy.remove(key));
+      }
+    }
+  }
+
+  static String _groupKey(GroupRequest item) =>
+      'group-${item.group.id}-${item.user.id}';
+
+  void _groupGone(GroupRequest item) {
+    if (mounted) {
+      setState(
+        () => _groupRequests.removeWhere(
+          (other) => _groupKey(other) == _groupKey(item),
+        ),
+      );
+      widget.onSeen?.call();
+    }
+  }
+
+  Future<void> _openGroup(String groupId) async {
+    await openGroup(
+      context,
+      token: widget.token,
+      viewerId: widget.viewerId,
+      groupId: groupId,
+    );
+    if (mounted) {
+      await refresh();
+    }
+  }
+
   /// Подписались в ответ из строки «подписался на вас»: у всех его строк
   /// теперь другая кнопка.
   void _relationChanged(FollowUser actor, Relation relation) {
@@ -236,12 +324,12 @@ class NotificationsScreenState extends State<NotificationsScreen> {
     final Widget body;
     if (_loading) {
       body = const LoadingView(label: 'Открываю уведомления…');
-    } else if (error != null && _items.isEmpty && _requests.isEmpty) {
+    } else if (error != null && _nothing) {
       body = Padding(
         padding: const EdgeInsets.all(AppGap.large),
         child: ErrorView(message: error, onRetry: refresh),
       );
-    } else if (_items.isEmpty && _requests.isEmpty) {
+    } else if (_nothing) {
       body = RefreshIndicator(
         onRefresh: refresh,
         child: LayoutBuilder(
@@ -268,6 +356,11 @@ class NotificationsScreenState extends State<NotificationsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.only(bottom: AppGap.medium),
           children: [
+            if (_groupRequests.isNotEmpty) ...[
+              const _SectionTitle('Группы'),
+              for (final item in _groupRequests) _groupRequestRow(item),
+              if (_requests.isNotEmpty || _items.isNotEmpty) const _Divider(),
+            ],
             if (_requests.isNotEmpty) ...[
               const _SectionTitle('Заявки на подписку'),
               for (final person in _requests) _requestRow(person),
@@ -292,6 +385,51 @@ class NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     return AppScreen(title: 'Уведомления', padded: false, child: body);
+  }
+
+  Widget _groupRequestRow(GroupRequest item) {
+    final busy = _busy.contains(_groupKey(item));
+    final request = item.kind == GroupRequestKindEnum.request;
+
+    return Column(
+      key: ValueKey(_groupKey(item)),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Row(
+          nickname: item.user.nickname,
+          avatarUrl: item.user.avatarUrl,
+          text: request
+              ? 'просится в группу «${item.group.name}»'
+              : 'приглашает вас в группу «${item.group.name}»',
+          when: item.createdAt,
+          onTap: () => _openGroup(item.group.id),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            _requestButtonsIndent,
+            0,
+            AppGap.medium,
+            AppGap.small,
+          ),
+          child: Wrap(
+            spacing: AppGap.small,
+            runSpacing: AppGap.small,
+            children: [
+              FilledButton(
+                onPressed: busy ? null : () => _answerGroup(item, accept: true),
+                child: Text(request ? 'Принять' : 'Вступить'),
+              ),
+              OutlinedButton(
+                onPressed: busy
+                    ? null
+                    : () => _answerGroup(item, accept: false),
+                child: const Text('Отклонить'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _requestRow(Author person) {

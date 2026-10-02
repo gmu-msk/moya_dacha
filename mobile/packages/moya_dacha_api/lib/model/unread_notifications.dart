@@ -15,6 +15,7 @@ class UnreadNotifications {
   UnreadNotifications({
     required this.unread,
     required this.requests,
+    this.groups,
   });
 
   /// Сколько строк раздела новее последнего открытия
@@ -23,24 +24,40 @@ class UnreadNotifications {
   /// Сколько заявок на подписку ждут ответа
   int requests;
 
+  /// Сколько заявок в группы смотрящего и приглашений ему ждут ответа (specs/029-groups.md, требование 27). Сервер отдаёт всегда; необязательно, чтобы сборка новее сервера не падала. 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  int? groups;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is UnreadNotifications &&
     other.unread == unread &&
-    other.requests == requests;
+    other.requests == requests &&
+    other.groups == groups;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (unread.hashCode) +
-    (requests.hashCode);
+    (requests.hashCode) +
+    (groups == null ? 0 : groups!.hashCode);
 
   @override
-  String toString() => 'UnreadNotifications[unread=$unread, requests=$requests]';
+  String toString() => 'UnreadNotifications[unread=$unread, requests=$requests, groups=$groups]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
       json[r'unread'] = this.unread;
       json[r'requests'] = this.requests;
+    if (this.groups != null) {
+      json[r'groups'] = this.groups;
+    } else {
+      json[r'groups'] = null;
+    }
     return json;
   }
 
@@ -65,6 +82,7 @@ class UnreadNotifications {
       return UnreadNotifications(
         unread: mapValueOfType<int>(json, r'unread')!,
         requests: mapValueOfType<int>(json, r'requests')!,
+        groups: mapValueOfType<int>(json, r'groups'),
       );
     }
     return null;
