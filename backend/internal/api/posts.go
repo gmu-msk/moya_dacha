@@ -128,10 +128,24 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 	}
 
 	// Группы — после тэгов, до места (specs/030-group-posts.md,
-	// требование 2).
-	var groupIDs []string
+	// требование 2). Группа видимости проверяется вместе с ними и сама
+	// попадает в группы поста; visibility тогда не учитывается
+	// (specs/031-group-visibility.md, требования 2–4).
+	var (
+		rawGroupIDs       []string
+		visibilityGroupID *string
+	)
 	if request.Body.GroupIds != nil {
-		ids, err := uniqueGroupIDs(*request.Body.GroupIds)
+		rawGroupIDs = *request.Body.GroupIds
+	}
+	if id := request.Body.VisibilityGroupId; id != nil && *id != "" {
+		visibility = "group"
+		visibilityGroupID = id
+		rawGroupIDs = append(rawGroupIDs, *id)
+	}
+	var groupIDs []string
+	if len(rawGroupIDs) > 0 {
+		ids, err := uniqueGroupIDs(rawGroupIDs)
 		if err == nil {
 			err = s.checkPostGroups(ctx, current.user.Id, ids)
 		}
@@ -152,7 +166,7 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		placeID = &trimmed
 	}
 
-	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, placeID, tags, groupIDs, request.Body.MediaIds)
+	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, visibilityGroupID, placeID, tags, groupIDs, request.Body.MediaIds)
 	if errors.Is(err, errMediaUnusable) {
 		return gen.CreatePost400JSONResponse(errInvalidMedia), nil
 	}
@@ -205,7 +219,7 @@ var errPlaceUnknown = errors.New("место поста не из подсказ
 // фотографии — это перевод строки из «загружено» в «опубликовано», и
 // если хоть один перевод не удался, транзакция откатывается целиком
 // (specs/003-posts.md).
-func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, placeID *string, tags, groupIDs, mediaIDs []string) (string, error) {
+func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, visibilityGroupID, placeID *string, tags, groupIDs, mediaIDs []string) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -214,10 +228,10 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, visib
 
 	var id string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO posts (author_id, caption, visibility, place_id)
-		SELECT $1, $2, $3, $4
+		INSERT INTO posts (author_id, caption, visibility, place_id, visibility_group_id)
+		SELECT $1, $2, $3, $4, $5
 		WHERE $4::text IS NULL OR EXISTS (SELECT 1 FROM places WHERE id = $4)
-		RETURNING id`, authorID, caption, string(visibility), placeID,
+		RETURNING id`, authorID, caption, string(visibility), placeID, visibilityGroupID,
 	).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", errPlaceUnknown
@@ -297,24 +311,28 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		post      gen.Post
 		avatarKey *string
 		place     postPlaceScan
+		group     visibilityGroupScan
 	)
 	if err := s.db.QueryRow(ctx, `
-		SELECT p.id, p.created_at, p.edited_at, p.caption, p.visibility,
+		SELECT p.id, p.created_at, p.edited_at, p.caption, `+postVisibilityColumns+`,
 			u.id, u.nickname, u.name, u.avatar_key,
 			`+likeColumns+`,
 			`+commentCount("$2")+`,
 			`+postPlaceColumns("$2")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
 		`+postPlaceJoin+`
+		`+postVisibilityJoin+`
 		WHERE p.id = $1 AND `+postVisibleTo("$2"), id, viewerID,
-	).Scan(append([]any{
-		&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption, &post.Visibility,
-		&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
-		&post.Likes, &post.Liked, &post.Comments,
-	}, place.targets()...)...); err != nil {
+	).Scan(append(append([]any{&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption},
+		group.targets(&post)...),
+		append([]any{
+			&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
+			&post.Likes, &post.Liked, &post.Comments,
+		}, place.targets()...)...)...); err != nil {
 		return gen.Post{}, err
 	}
 	place.apply(&post)
+	group.apply(&post)
 	if avatarKey != nil {
 		url := s.cfg.Media.URL(*avatarKey)
 		post.Author.AvatarUrl = &url

@@ -35,7 +35,49 @@ func postVisibleTo(viewer string) string {
 				OR ` + follows(v, "p.author_id") + `))
 			OR (p.visibility = 'friends'
 				AND ` + follows(v, "p.author_id") + `
-				AND ` + follows("p.author_id", v) + `))))`
+				AND ` + follows("p.author_id", v) + `)
+			OR (p.visibility = 'group' AND ` + visibilityGroupMember(v) + `))))`
+}
+
+// visibilityGroupMember — смотрящий участник группы видимости поста p и
+// группа ему видна (specs/031-group-visibility.md, требования 5 и 7).
+// Хозяин — тоже строка member, приглашённый — нет. Группу удалили —
+// ссылки нет, и пост видит только автор (требование 9).
+func visibilityGroupMember(viewer string) string {
+	return `EXISTS (
+		SELECT 1 FROM group_members vm JOIN groups g ON g.id = vm.group_id
+		WHERE vm.group_id = p.visibility_group_id AND vm.user_id = ` + viewer + `
+		  AND vm.state = 'member' AND ` + groupVisible(viewer) + `)`
+}
+
+// postVisibilityColumns — видимость поста p для ответа и его группа
+// видимости; к запросу добавляется postVisibilityJoin. Старое поле —
+// по-прежнему одно из трёх, чтобы старые сборки разбирали ответ
+// (specs/031-group-visibility.md, требования 10 и 11): у поста группы —
+// friends, а у поста удалённой группы — me, как он и виден.
+const postVisibilityColumns = `
+	CASE p.visibility
+		WHEN 'group' THEN CASE WHEN vg.id IS NULL THEN 'me' ELSE 'friends' END
+		ELSE p.visibility
+	END,
+	vg.id, vg.name`
+
+const postVisibilityJoin = `LEFT JOIN groups vg ON vg.id = p.visibility_group_id`
+
+// visibilityGroupScan — куда читать группу видимости из postVisibilityColumns.
+type visibilityGroupScan struct {
+	id, name *string
+}
+
+func (v *visibilityGroupScan) targets(post *gen.Post) []any {
+	return []any{&post.Visibility, &v.id, &v.name}
+}
+
+func (v *visibilityGroupScan) apply(post *gen.Post) {
+	if v.id == nil || v.name == nil {
+		return
+	}
+	post.VisibilityGroup = &gen.GroupBrief{Id: *v.id, Name: *v.name}
 }
 
 // validVisibility — одна из трёх видимостей контракта.
@@ -70,8 +112,10 @@ func (s *Server) SetPostVisibility(ctx context.Context, request gen.SetPostVisib
 		return gen.SetPostVisibility400JSONResponse(errInvalidVisibility), nil
 	}
 
+	// Видимость группы снимается; группа остаётся в группах поста
+	// (specs/031-group-visibility.md, требование 12).
 	if _, err := s.db.Exec(ctx,
-		`UPDATE posts SET visibility = $2 WHERE id = $1`,
+		`UPDATE posts SET visibility = $2, visibility_group_id = NULL WHERE id = $1`,
 		request.PostId, string(request.Body.Visibility),
 	); err != nil {
 		return nil, err
