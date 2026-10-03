@@ -67,7 +67,6 @@ lib/model/session_created.dart
 lib/model/session_info.dart
 lib/model/session_request.dart
 lib/model/tag_suggestions.dart
-lib/model/tags_update.dart
 lib/model/unread_notifications.dart
 lib/model/user_profile.dart
 pubspec.yaml

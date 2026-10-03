@@ -3,7 +3,8 @@
 -- Основа — «Живая дача» ([000-dacha]). Сверху — тэги у части постов:
 -- «томаты» у трёх, «поделюсь» у трёх, «вопрос» у трёх, «клубника» у
 -- двух, остальное по одному. Так подсказки на пустом черновике идут не
--- по словарю, а по тому, что в ходу у сообщества.
+-- по словарю, а по тому, что в ходу у сообщества. Тэги — хэштеги
+-- в подписи (ADR-0029), поэтому они же дописываются в конец подписей.
 \i /stories/000-dacha/seed.sql
 
 INSERT INTO post_tags (post_id, tag, position)
@@ -22,3 +23,11 @@ FROM (VALUES
 	(34, 'томаты',    1),
 	(54, 'клубника',  1)
 ) AS v(post, tag, position);
+
+UPDATE posts p
+SET caption = btrim(p.caption || ' ' || t.hashtags)
+FROM (
+	SELECT post_id, string_agg('#' || tag, ' ' ORDER BY position) AS hashtags
+	FROM post_tags GROUP BY post_id
+) t
+WHERE p.id = t.post_id;

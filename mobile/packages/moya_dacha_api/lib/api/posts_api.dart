@@ -82,7 +82,7 @@ class PostsApi {
 
   /// Опубликовать пост
   ///
-  /// От одной до десяти уже загруженных фотографий и необязательная подпись. Поста без медиа не существует (docs/adr/0006-post-is-media.md).  Порядок фотографий в посте — порядок идентификаторов в `media_ids`. 
+  /// От одной до десяти уже загруженных фотографий и необязательная подпись. Поста без медиа не существует (docs/adr/0006-post-is-media.md).  Порядок фотографий в посте — порядок идентификаторов в `media_ids`.  Тэги поста сервер берёт из хэштегов подписи (specs/028-post-tags.md, требования 3–6). 
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -117,7 +117,7 @@ class PostsApi {
 
   /// Опубликовать пост
   ///
-  /// От одной до десяти уже загруженных фотографий и необязательная подпись. Поста без медиа не существует (docs/adr/0006-post-is-media.md).  Порядок фотографий в посте — порядок идентификаторов в `media_ids`. 
+  /// От одной до десяти уже загруженных фотографий и необязательная подпись. Поста без медиа не существует (docs/adr/0006-post-is-media.md).  Порядок фотографий в посте — порядок идентификаторов в `media_ids`.  Тэги поста сервер берёт из хэштегов подписи (specs/028-post-tags.md, требования 3–6). 
   ///
   /// Parameters:
   ///
@@ -250,7 +250,7 @@ class PostsApi {
 
   /// Изменить подпись своего поста
   ///
-  /// Меняется только подпись: фотографии, видимость, лайки и комментарии остаются. Проверки как у удаления, потом подпись — как при создании поста (specs/022-edit-block-delete.md). 
+  /// Меняется только подпись: фотографии, видимость, лайки и комментарии остаются. Проверки как у удаления, потом подпись — как при создании поста (specs/022-edit-block-delete.md). Тэги поста заменяются хэштегами новой подписи (specs/028-post-tags.md, требование 6). 
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -289,7 +289,7 @@ class PostsApi {
 
   /// Изменить подпись своего поста
   ///
-  /// Меняется только подпись: фотографии, видимость, лайки и комментарии остаются. Проверки как у удаления, потом подпись — как при создании поста (specs/022-edit-block-delete.md). 
+  /// Меняется только подпись: фотографии, видимость, лайки и комментарии остаются. Проверки как у удаления, потом подпись — как при создании поста (specs/022-edit-block-delete.md). Тэги поста заменяются хэштегами новой подписи (specs/028-post-tags.md, требование 6). 
   ///
   /// Parameters:
   ///
@@ -595,7 +595,7 @@ class PostsApi {
 
   /// Подсказки тэгов для черновика поста
   ///
-  /// До пяти тэгов: сначала найденные в подписи, потом популярные у сообщества, потом из стартового словаря (specs/028-post-tags.md, требования 15–19). 
+  /// До пяти тэгов: сначала найденные в подписи, потом популярные у сообщества, потом из стартового словаря. Хэштеги подписи не подсказываются (specs/028-post-tags.md, требования 15–19). 
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -605,8 +605,11 @@ class PostsApi {
   ///   Подпись черновика; учитываются первые 1000 знаков
   ///
   /// * [List<String>] exclude:
-  ///   Тэги, уже выбранные в черновике; их в ответе нет
-  Future<Response> getTagSuggestionsWithHttpInfo({ String? text, List<String>? exclude, Future<void>? abortTrigger, }) async {
+  ///   Тэги, которые не подсказывать; их в ответе нет
+  ///
+  /// * [String] prefix:
+  ///   Начало тэга, который набирается после `#`; непустой — только тэги, начинающиеся с него 
+  Future<Response> getTagSuggestionsWithHttpInfo({ String? text, List<String>? exclude, String? prefix, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/tags/suggestions';
 
@@ -622,6 +625,9 @@ class PostsApi {
     }
     if (exclude != null) {
       queryParams.addAll(_queryParams('multi', 'exclude', exclude));
+    }
+    if (prefix != null) {
+      queryParams.addAll(_queryParams('', 'prefix', prefix));
     }
 
     const contentTypes = <String>[];
@@ -641,7 +647,7 @@ class PostsApi {
 
   /// Подсказки тэгов для черновика поста
   ///
-  /// До пяти тэгов: сначала найденные в подписи, потом популярные у сообщества, потом из стартового словаря (specs/028-post-tags.md, требования 15–19). 
+  /// До пяти тэгов: сначала найденные в подписи, потом популярные у сообщества, потом из стартового словаря. Хэштеги подписи не подсказываются (specs/028-post-tags.md, требования 15–19). 
   ///
   /// Parameters:
   ///
@@ -649,9 +655,12 @@ class PostsApi {
   ///   Подпись черновика; учитываются первые 1000 знаков
   ///
   /// * [List<String>] exclude:
-  ///   Тэги, уже выбранные в черновике; их в ответе нет
-  Future<TagSuggestions?> getTagSuggestions({ String? text, List<String>? exclude, Future<void>? abortTrigger, }) async {
-    final response = await getTagSuggestionsWithHttpInfo(text: text, exclude: exclude, abortTrigger: abortTrigger,);
+  ///   Тэги, которые не подсказывать; их в ответе нет
+  ///
+  /// * [String] prefix:
+  ///   Начало тэга, который набирается после `#`; непустой — только тэги, начинающиеся с него 
+  Future<TagSuggestions?> getTagSuggestions({ String? text, List<String>? exclude, String? prefix, Future<void>? abortTrigger, }) async {
+    final response = await getTagSuggestionsWithHttpInfo(text: text, exclude: exclude, prefix: prefix, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -842,70 +851,6 @@ class PostsApi {
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
-  }
-
-  /// Заменить тэги своего поста
-  ///
-  /// Тэги заменяются целиком; пустой массив снимает все. Подпись, фотографии и `edited_at` не меняются. Проверки как у правки подписи, потом тэги — как при создании поста (specs/028-post-tags.md, требования 9–10). 
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [String] postId (required):
-  ///   Идентификатор поста (UUID)
-  ///
-  /// * [TagsUpdate] tagsUpdate (required):
-  Future<Response> setPostTagsWithHttpInfo(String postId, TagsUpdate tagsUpdate, { Future<void>? abortTrigger, }) async {
-    // ignore: prefer_const_declarations
-    final path = r'/posts/{postId}/tags'
-      .replaceAll('{postId}', postId);
-
-    // ignore: prefer_final_locals
-    Object? postBody = tagsUpdate;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-
-    return apiClient.invokeAPI(
-      path,
-      'PUT',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
-    );
-  }
-
-  /// Заменить тэги своего поста
-  ///
-  /// Тэги заменяются целиком; пустой массив снимает все. Подпись, фотографии и `edited_at` не меняются. Проверки как у правки подписи, потом тэги — как при создании поста (specs/028-post-tags.md, требования 9–10). 
-  ///
-  /// Parameters:
-  ///
-  /// * [String] postId (required):
-  ///   Идентификатор поста (UUID)
-  ///
-  /// * [TagsUpdate] tagsUpdate (required):
-  Future<Post?> setPostTags(String postId, TagsUpdate tagsUpdate, { Future<void>? abortTrigger, }) async {
-    final response = await setPostTagsWithHttpInfo(postId, tagsUpdate, abortTrigger: abortTrigger,);
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
-    
-    }
-    return null;
   }
 
   /// Сменить видимость своего поста

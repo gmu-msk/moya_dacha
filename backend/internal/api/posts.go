@@ -116,18 +116,7 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		return gen.CreatePost400JSONResponse(errInvalidVisibility), nil
 	}
 
-	// Тэги — после подписи и видимости, до места
-	// (specs/028-post-tags.md, требование 6).
-	var tags []string
-	if request.Body.Tags != nil {
-		normalized, err := normalizeTags(*request.Body.Tags)
-		if err != nil {
-			return gen.CreatePost400JSONResponse(tagsError(err)), nil
-		}
-		tags = normalized
-	}
-
-	// Группы — после тэгов, до места (specs/030-group-posts.md,
+	// Группы — после видимости, до места (specs/030-group-posts.md,
 	// требование 2). Группа видимости проверяется вместе с ними и сама
 	// попадает в группы поста; visibility тогда не учитывается
 	// (specs/031-group-visibility.md, требования 2–4).
@@ -166,7 +155,7 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		placeID = &trimmed
 	}
 
-	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, visibilityGroupID, placeID, tags, groupIDs, request.Body.MediaIds)
+	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, visibilityGroupID, placeID, groupIDs, request.Body.MediaIds)
 	if errors.Is(err, errMediaUnusable) {
 		return gen.CreatePost400JSONResponse(errInvalidMedia), nil
 	}
@@ -219,7 +208,7 @@ var errPlaceUnknown = errors.New("место поста не из подсказ
 // фотографии — это перевод строки из «загружено» в «опубликовано», и
 // если хоть один перевод не удался, транзакция откатывается целиком
 // (specs/003-posts.md).
-func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, visibilityGroupID, placeID *string, tags, groupIDs, mediaIDs []string) (string, error) {
+func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, visibilityGroupID, placeID *string, groupIDs, mediaIDs []string) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -240,7 +229,8 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, visib
 		return "", err
 	}
 
-	if err := writeTags(ctx, tx, id, tags); err != nil {
+	// Тэги — хэштеги подписи (specs/028-post-tags.md, требование 6).
+	if err := writeTags(ctx, tx, id, captionTags(caption)); err != nil {
 		return "", err
 	}
 	if err := writePostGroups(ctx, tx, id, groupIDs); err != nil {

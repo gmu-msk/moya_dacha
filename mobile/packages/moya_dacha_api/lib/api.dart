@@ -88,7 +88,6 @@ part 'model/session_created.dart';
 part 'model/session_info.dart';
 part 'model/session_request.dart';
 part 'model/tag_suggestions.dart';
-part 'model/tags_update.dart';
 part 'model/unread_notifications.dart';
 part 'model/user_profile.dart';
 

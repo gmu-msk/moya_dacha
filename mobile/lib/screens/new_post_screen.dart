@@ -22,10 +22,11 @@ import '../api.dart';
 import '../theme.dart';
 import '../usage.dart';
 import '../widgets/app_screen.dart';
+import '../widgets/edit_text_dialog.dart';
 import '../widgets/error_view.dart';
 import '../widgets/group_picker.dart';
+import '../widgets/hashtags.dart';
 import '../widgets/place_field.dart';
-import '../widgets/tag_field.dart';
 import '../widgets/visibility_picker.dart';
 
 /// Превью выбранной фотографии: 104×130, как на макете.
@@ -94,10 +95,6 @@ class _NewPostScreenState extends State<NewPostScreen> {
   /// Свои группы: для «Кто увидит» и «Выложить в группе»
   /// (specs/031-group-visibility.md, требование 14).
   List<Group> _groups = const [];
-
-  /// Тэги поста (specs/028-post-tags.md, требования 20–22).
-  List<String> _tags = const [];
-  final _tagField = GlobalKey<TagFieldState>();
 
   /// Группы поста (specs/030-group-posts.md, требование 16).
   List<String> _groupIds = const [];
@@ -304,13 +301,6 @@ class _NewPostScreenState extends State<NewPostScreen> {
     if (!_ready) {
       return;
     }
-    // Набранный, но не ставший чипом тэг тоже уходит (требование 20).
-    // Не годится — ошибка уже под полем тэгов.
-    final field = _tagField.currentState;
-    final tags = field == null ? _tags : field.collect();
-    if (tags == null) {
-      return;
-    }
     setState(() {
       _publishing = true;
       _error = null;
@@ -324,7 +314,6 @@ class _NewPostScreenState extends State<NewPostScreen> {
           visibility: _audience.visibility,
           visibilityGroupId: _audience.group?.id,
           placeId: _place?.id,
-          tags: tags,
           groupIds: _groupIds,
         ),
       );
@@ -381,21 +370,22 @@ class _NewPostScreenState extends State<NewPostScreen> {
                   enabled: !_publishing,
                   maxLines: 4,
                   minLines: 2,
-                  maxLength: 1000,
+                  maxLength: maxCaptionLength,
                   decoration: const InputDecoration(
                     labelText: 'Подпись (необязательно)',
                     hintText: 'Что выросло?',
+                    helperText: hashtagHelper,
+                    helperMaxLines: 2,
                     alignLabelWithHint: true,
                   ),
                 ),
-                const SizedBox(height: AppGap.small),
-                TagField(
-                  key: _tagField,
+                // Тэги — хэштеги в подписи (specs/028-post-tags.md,
+                // требования 20–22).
+                HashtagSuggestions(
                   token: widget.token,
-                  tags: _tags,
                   caption: _caption,
+                  maxLength: maxCaptionLength,
                   enabled: !_publishing,
-                  onChanged: (tags) => setState(() => _tags = tags),
                 ),
                 const SizedBox(height: AppGap.medium),
                 VisibilityPicker(

@@ -467,8 +467,8 @@ func TestGroupPostsGroupsInEditResponsesAndUnchanged(t *testing.T) {
 
 	gpRequireGroups(t, gpPostOK(t, editCaptionText(t, baseURL, author.token, post.ID, "На пруду клюёт"),
 		http.StatusOK, "правка подписи"), want, "ответ на правку подписи")
-	gpRequireGroups(t, gpPostOK(t, ptSetTagsReq(t, baseURL, author.token, post.ID, map[string]any{"tags": []string{"рыбалка"}}),
-		http.StatusOK, "правка тэгов"), want, "ответ на правку тэгов")
+	gpRequireGroups(t, gpPostOK(t, editCaptionText(t, baseURL, author.token, post.ID, "На пруду клюёт #рыбалка"),
+		http.StatusOK, "правка хэштегов подписи"), want, "ответ на правку хэштегов подписи")
 	gpRequireGroups(t, gpPostOK(t, setVisibility(t, baseURL, author.token, post.ID, map[string]any{"visibility": visibilityFriends}),
 		http.StatusOK, "правка видимости"), want, "ответ на правку видимости")
 
@@ -560,8 +560,10 @@ func TestGroupPostsNotGroupMemberMessage(t *testing.T) {
 	}
 }
 
-// Группы проверяются после тэгов и до места (требование 2): плохой тэг
-// и чужая группа — invalid_tag; чужая группа и неизвестное место —
+// Группы проверяются после подписи и до места (требование 2): длинная
+// подпись и чужая группа — invalid_caption; чужая группа и неизвестное
+// место — not_group_member. Тэги — хэштеги подписи и отказом не бывают
+// (028, требования 4, 5, 9): хэштеги и поле tags при чужой группе —
 // not_group_member.
 func TestGroupPostsCheckOrderOnCreate(t *testing.T) {
 	baseURL, _ := startPlaces(t)
@@ -581,14 +583,13 @@ func TestGroupPostsCheckOrderOnCreate(t *testing.T) {
 			http.StatusBadRequest, "invalid_caption",
 		},
 		{
-			"плохой тэг и чужая группа",
-			map[string]any{"tags": []string{"зелёный лук"}, "group_ids": []string{foreign.ID}},
-			http.StatusBadRequest, "invalid_tag",
-		},
-		{
-			"одиннадцать тэгов и чужая группа",
-			map[string]any{"tags": ptManyTags(11), "group_ids": []string{foreign.ID}},
-			http.StatusBadRequest, "too_many_tags",
+			"одиннадцать хэштегов, поле tags и чужая группа",
+			map[string]any{
+				"caption":   ptCaption(ptManyTags(11)...) + " #" + strings.Repeat("я", 31),
+				"tags":      []string{"зелёный лук"},
+				"group_ids": []string{foreign.ID},
+			},
+			http.StatusForbidden, "not_group_member",
 		},
 		{
 			"чужая группа и неизвестное место",

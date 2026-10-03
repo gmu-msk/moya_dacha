@@ -15,11 +15,11 @@ import '../widgets/comments_view.dart';
 import '../widgets/confirm.dart';
 import '../widgets/edit_text_dialog.dart';
 import '../widgets/feed_view.dart';
+import '../widgets/hashtags.dart';
 import '../widgets/like_button.dart';
 import '../widgets/place_field.dart';
 import '../widgets/post_groups_line.dart';
 import '../widgets/report_dialog.dart';
-import '../widgets/tag_field.dart';
 import '../widgets/visibility_picker.dart';
 import 'group_screen.dart';
 import 'tag_posts_screen.dart';
@@ -112,6 +112,15 @@ class _PostScreenState extends State<PostScreen> {
       label: 'Подпись',
       maxLength: maxCaptionLength,
       allowEmpty: true,
+      // Тэги — хэштеги подписи: подсказки те же, что в «Новом посте»
+      // (specs/028-post-tags.md, требование 25).
+      helper: hashtagHelper,
+      below: (text, enabled) => HashtagSuggestions(
+        token: widget.token,
+        caption: text,
+        maxLength: maxCaptionLength,
+        enabled: enabled,
+      ),
       save: (text) =>
           PostsApi(apiClient(token: widget.token))
               .editCaption(post.id, CaptionUpdate(caption: text)),
@@ -120,24 +129,6 @@ class _PostScreenState extends State<PostScreen> {
       return;
     }
     debugPrint('$logMarker post=caption_edited id=${post.id}');
-    _changed(updated);
-  }
-
-  /// Заменить тэги (specs/028-post-tags.md, требование 25).
-  Future<void> _editTags() async {
-    final updated = await editTags(
-      context,
-      token: widget.token,
-      initial: post.tags,
-      caption: post.caption,
-      save: (tags) =>
-          PostsApi(apiClient(token: widget.token))
-              .setPostTags(post.id, TagsUpdate(tags: tags)),
-    );
-    if (!mounted || updated == null) {
-      return;
-    }
-    debugPrint('$logMarker post=tags_edited id=${post.id}');
     _changed(updated);
   }
 
@@ -258,12 +249,6 @@ class _PostScreenState extends State<PostScreen> {
           ),
         if (_mine)
           IconButton(
-            tooltip: 'Изменить тэги',
-            onPressed: _deleting ? null : _editTags,
-            icon: const Icon(Icons.tag),
-          ),
-        if (_mine)
-          IconButton(
             tooltip: 'Удалить пост',
             onPressed: _deleting ? null : _delete,
             icon: const Icon(Icons.delete_outline),
@@ -326,11 +311,12 @@ class _PostScreenState extends State<PostScreen> {
                 ],
                 if (post.caption.isNotEmpty) ...[
                   const SizedBox(height: AppGap.small),
-                  Text(post.caption, style: theme.textTheme.bodyLarge),
-                ],
-                if (post.tags.isNotEmpty) ...[
-                  const SizedBox(height: AppGap.small),
-                  PostTagsLine(tags: post.tags, onOpen: _openTag),
+                  CaptionText(
+                    caption: post.caption,
+                    tags: post.tags,
+                    onOpenTag: _openTag,
+                    style: theme.textTheme.bodyLarge,
+                  ),
                 ],
                 Align(
                   alignment: Alignment.centerLeft,
