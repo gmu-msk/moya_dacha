@@ -38,9 +38,9 @@ var starterTags = []string{
 // errTagInvalid — тэг не одно слово до 30 знаков.
 var errTagInvalid = errors.New("тэг не подходит")
 
-// normalizeTag приводит тэг к виду, в котором он хранится (требование 2):
+// normalizeTag приводит тэг к виду, в котором он хранится (требования 2, 13):
 // без пробелов по краям и `#` в начале, в нижнем регистре. Пустой —
-// пустая строка без ошибки (требование 3).
+// пустая строка без ошибки.
 func normalizeTag(raw string) (string, error) {
 	tag := strings.ToLower(strings.TrimLeft(strings.TrimSpace(raw), "#"))
 	if tag == "" {
@@ -65,38 +65,40 @@ func normalizeTag(raw string) (string, error) {
 	return tag, nil
 }
 
-// errTooManyTagsOnPost — после схлопывания повторов тэгов больше десяти.
-var errTooManyTagsOnPost = errors.New("тэгов больше десяти")
+// isTagSymbol — знак слова тэга: буква, цифра, `-` или `_` (требование 1).
+func isTagSymbol(symbol rune) bool {
+	return unicode.IsLetter(symbol) || unicode.IsDigit(symbol) || symbol == '-' || symbol == '_'
+}
 
-// normalizeTags нормализует тэги поста: пустые пропускает, повторы
-// схлопывает по первому появлению (требования 2–5).
-func normalizeTags(raw []string) ([]string, error) {
-	tags := make([]string, 0, len(raw))
-	for _, item := range raw {
-		tag, err := normalizeTag(item)
-		if err != nil {
-			return nil, err
+// captionTags — тэги поста из хэштегов подписи (требования 3–5): `#`
+// в начале или после не-знака слова, дальше знаки слова подряд. Слово,
+// которое не годится в тэг, — просто текст; повторы схлопываются, берутся
+// первые десять.
+func captionTags(caption string) []string {
+	tags := []string{}
+	symbols := []rune(caption)
+	for i := 0; i < len(symbols) && len(tags) < MaxPostTags; i++ {
+		if symbols[i] != '#' || (i > 0 && isTagSymbol(symbols[i-1])) {
+			continue
 		}
-		if tag != "" && !slices.Contains(tags, tag) {
+		end := i + 1
+		for end < len(symbols) && isTagSymbol(symbols[end]) {
+			end++
+		}
+		if end == i+1 {
+			continue
+		}
+		tag, err := normalizeTag(string(symbols[i+1 : end]))
+		if err == nil && !slices.Contains(tags, tag) {
 			tags = append(tags, tag)
 		}
+		i = end - 1
 	}
-	if len(tags) > MaxPostTags {
-		return nil, errTooManyTagsOnPost
-	}
-	return tags, nil
+	return tags
 }
 
-// tagsError — ответ на ошибку normalizeTags.
-func tagsError(err error) gen.Error {
-	if errors.Is(err, errTooManyTagsOnPost) {
-		return errTooManyTags
-	}
-	return errInvalidTag
-}
-
-// execer — пул или транзакция: тэги пишутся и при создании поста, внутри
-// его транзакции, и правкой.
+// execer — пул или транзакция: тэги пишутся при создании поста и при
+// правке подписи, внутри их транзакций.
 type execer interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 }
@@ -158,54 +160,6 @@ func (s *Server) attachTags(ctx context.Context, posts []gen.Post) error {
 	return nil
 }
 
-// SetPostTags заменяет тэги своего поста (требования 9–10). Порядок
-// проверок как у правки подписи: пост, «своё ли», потом тэги.
-func (s *Server) SetPostTags(ctx context.Context, request gen.SetPostTagsRequestObject) (gen.SetPostTagsResponseObject, error) {
-	current, ok := sessionFrom(ctx)
-	if !ok {
-		return gen.SetPostTags401JSONResponse(errUnauthorized), nil
-	}
-
-	author, err := s.postAuthor(ctx, request.PostId, current.user.Id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return gen.SetPostTags404JSONResponse(errPostNotFound), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if author != current.user.Id {
-		return gen.SetPostTags403JSONResponse(errNotYourPostEdit), nil
-	}
-	// Пустой список снимает тэги, а тело без списка — ошибка: иначе
-	// промах клиента молча стёр бы их.
-	if request.Body == nil || request.Body.Tags == nil {
-		return gen.SetPostTags400JSONResponse(errInvalidTagsEdit), nil
-	}
-
-	tags, err := normalizeTags(*request.Body.Tags)
-	if err != nil {
-		return gen.SetPostTags400JSONResponse(tagsError(err)), nil
-	}
-
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := writeTags(ctx, tx, request.PostId, tags); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	post, err := s.post(ctx, request.PostId, current.user.Id)
-	if err != nil {
-		return nil, err
-	}
-	return gen.SetPostTags200JSONResponse(post), nil
-}
-
 // tagCandidate — тэг, который можно подсказать.
 type tagCandidate struct {
 	tag string
@@ -225,7 +179,27 @@ func (s *Server) GetTagSuggestions(ctx context.Context, request gen.GetTagSugges
 		return gen.GetTagSuggestions401JSONResponse(errUnauthorized), nil
 	}
 
+	var text string
+	if request.Params.Text != nil {
+		text = firstRunes(*request.Params.Text, MaxCaptionLength)
+	}
+
+	// Набираемое начало тэга: не годится — как без него.
+	var prefix string
+	if request.Params.Prefix != nil {
+		if normalized, err := normalizeTag(*request.Params.Prefix); err == nil {
+			prefix = normalized
+		}
+	}
+
+	// Хэштеги черновика уже стали бы тэгами — их не подсказываем, кроме
+	// набираемого прямо сейчас.
 	excluded := map[string]bool{}
+	for _, tag := range captionTags(text) {
+		if tag != prefix {
+			excluded[tag] = true
+		}
+	}
 	if request.Params.Exclude != nil {
 		for _, raw := range *request.Params.Exclude {
 			if tag, err := normalizeTag(raw); err == nil && tag != "" {
@@ -252,22 +226,17 @@ func (s *Server) GetTagSuggestions(ctx context.Context, request gen.GetTagSugges
 		return nil, err
 	}
 
-	var text string
-	if request.Params.Text != nil {
-		text = *request.Params.Text
-	}
-
-	items := suggestTags(popular, firstRunes(text, MaxCaptionLength), excluded)
+	items := suggestTags(popular, text, prefix, excluded)
 	return gen.GetTagSuggestions200JSONResponse(gen.TagSuggestions{Items: items}), nil
 }
 
 // suggestTags выбирает подсказки из тэгов сообщества и словаря
-// (требования 16–18).
-func suggestTags(popular []tagCandidate, text string, excluded map[string]bool) []string {
+// (требования 15–18); непустой prefix оставляет тэги на это начало.
+func suggestTags(popular []tagCandidate, text, prefix string, excluded map[string]bool) []string {
 	byTag := make(map[string]*tagCandidate, len(popular)+len(starterTags))
 	candidates := make([]*tagCandidate, 0, len(popular)+len(starterTags))
 	add := func(c tagCandidate) {
-		if excluded[c.tag] {
+		if excluded[c.tag] || !strings.HasPrefix(c.tag, prefix) {
 			return
 		}
 		if known, ok := byTag[c.tag]; ok {
@@ -330,7 +299,7 @@ func suggestTags(popular []tagCandidate, text string, excluded map[string]bool) 
 // цифры, `-` и `_` (требование 18).
 func textWords(text string) []string {
 	return strings.FieldsFunc(strings.ToLower(text), func(symbol rune) bool {
-		return !unicode.IsLetter(symbol) && !unicode.IsDigit(symbol) && symbol != '-' && symbol != '_'
+		return !isTagSymbol(symbol)
 	})
 }
 
@@ -369,18 +338,8 @@ func firstRunes(text string, limit int) string {
 	return text
 }
 
-// Ошибки тэгов (specs/028-post-tags.md, «API»).
-var (
-	errInvalidTag = gen.Error{
-		Code:    "invalid_tag",
-		Message: "Тэг — одно слово из букв и цифр, до 30 знаков",
-	}
-	errTooManyTags = gen.Error{
-		Code:    "too_many_tags",
-		Message: "Не больше 10 тэгов у поста",
-	}
-	errInvalidTagsEdit = gen.Error{
-		Code:    "invalid_request",
-		Message: "Пришёл пустой запрос. Выберите тэги и сохраните ещё раз",
-	}
-)
+// errInvalidTag — `tag` ленты не годится (specs/028-post-tags.md, «API»).
+var errInvalidTag = gen.Error{
+	Code:    "invalid_tag",
+	Message: "Тэг — одно слово из букв и цифр, до 30 знаков",
+}

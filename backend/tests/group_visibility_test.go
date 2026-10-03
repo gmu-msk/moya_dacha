@@ -486,8 +486,9 @@ func TestGroupVisibilityRejectsGroupsWhereAuthorIsNotMember(t *testing.T) {
 	}
 }
 
-// Группа видимости проверяется вместе с group_ids: после подписи и тэгов,
-// до места (требование 2).
+// Группа видимости проверяется вместе с group_ids: после подписи, до места
+// (требование 2). Тэги — хэштеги подписи и отказом не бывают (028,
+// требования 4, 5, 9).
 func TestGroupVisibilityCheckOrderOnCreate(t *testing.T) {
 	baseURL, _ := startPlaces(t)
 	author := newGvUser(t, baseURL, 1)
@@ -507,9 +508,13 @@ func TestGroupVisibilityCheckOrderOnCreate(t *testing.T) {
 			http.StatusBadRequest, "invalid_caption",
 		},
 		{
-			"плохой тэг и чужая группа",
-			map[string]any{"tags": []string{"зелёный лук"}, "visibility_group_id": foreign.ID},
-			http.StatusBadRequest, "invalid_tag",
+			"одиннадцать хэштегов, поле tags и чужая группа",
+			map[string]any{
+				"caption":             ptCaption(ptManyTags(11)...) + " #---",
+				"tags":                []string{"зелёный лук"},
+				"visibility_group_id": foreign.ID,
+			},
+			http.StatusForbidden, "not_group_member",
 		},
 		{
 			"чужая группа и неизвестное место",

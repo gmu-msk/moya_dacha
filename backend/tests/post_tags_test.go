@@ -1,8 +1,9 @@
 package tests
 
-// Тесты по specs/028-post-tags.md, требования 1–19: тэги у поста, правка
-// тэгов, лента по тэгу и подсказки тэгов. Написаны по спецификации и
-// контракту, без взгляда на реализацию (ADR-0002).
+// Тесты по specs/028-post-tags.md, требования 1–19: тэги поста — хэштеги
+// в подписи, их пересчёт при правке подписи, лента по тэгу и подсказки
+// тэгов. Написаны по спецификации и контракту, без взгляда на реализацию
+// (ADR-0002).
 //
 // База перед каждым тестом чистая (startAPI), поэтому популярность тэгов
 // в подсказках считается только по постам, которые завёл сам тест.
@@ -65,7 +66,7 @@ func newPTUser(t *testing.T, baseURL string, n int) dachnik {
 }
 
 // ptPublishRaw публикует пост с одной новой фотографией; extra — поля
-// тела сверх media_ids (tags, caption, visibility, place_id).
+// тела сверх media_ids (caption, visibility, place_id, tags старой сборки).
 func ptPublishRaw(t *testing.T, baseURL, token string, extra map[string]any) (*http.Response, mediaPayload) {
 	t.Helper()
 
@@ -96,14 +97,14 @@ func ptPostOK(t *testing.T, resp *http.Response, status int, where string) ptPos
 	return post
 }
 
-// ptPublish публикует пост с этими тэгами (nil — поля tags нет) и
-// видимостью (пустая — поля нет), требует 201.
-func ptPublish(t *testing.T, baseURL, token string, tags []string, visibility string) ptPost {
+// ptPublish публикует пост с этой подписью (пустая — поля caption нет)
+// и видимостью (пустая — поля нет), требует 201.
+func ptPublish(t *testing.T, baseURL, token, caption, visibility string) ptPost {
 	t.Helper()
 
-	extra := map[string]any{"caption": "Грядка"}
-	if tags != nil {
-		extra["tags"] = tags
+	extra := map[string]any{}
+	if caption != "" {
+		extra["caption"] = caption
 	}
 	if visibility != "" {
 		extra["visibility"] = visibility
@@ -111,7 +112,19 @@ func ptPublish(t *testing.T, baseURL, token string, tags []string, visibility st
 
 	resp, _ := ptPublishRaw(t, baseURL, token, extra)
 
-	return ptPostOK(t, resp, http.StatusCreated, fmt.Sprintf("публикация поста с тэгами %q", tags))
+	return ptPostOK(t, resp, http.StatusCreated, fmt.Sprintf("публикация поста с подписью %q", caption))
+}
+
+// ptCaption — подпись «Грядка» с хэштегами этих тэгов через пробел.
+func ptCaption(tags ...string) string {
+	var b strings.Builder
+	b.WriteString("Грядка")
+	for _, tag := range tags {
+		b.WriteString(" #")
+		b.WriteString(tag)
+	}
+
+	return b.String()
 }
 
 // ptRequireTags требует у поста ровно эти тэги в этом порядке; пустой
@@ -128,26 +141,29 @@ func ptRequireTags(t *testing.T, post ptPost, want []string, where string) {
 	}
 }
 
+// ptRequireCaption требует подпись как написана: хэштеги остаются в тексте.
+func ptRequireCaption(t *testing.T, post ptPost, want, where string) {
+	t.Helper()
+
+	if post.Caption != want {
+		t.Errorf("%s: подпись %q, ожидалась %q", where, post.Caption, want)
+	}
+}
+
 // ptGet открывает пост по адресу и требует 200.
 func ptGet(t *testing.T, baseURL, token, postID string) ptPost {
 	t.Helper()
 	return ptPostOK(t, fetchPost(t, baseURL, token, postID), http.StatusOK, "GET /posts/"+postID)
 }
 
-// ptSetTagsReq — PUT /posts/{id}/tags с телом как есть.
-func ptSetTagsReq(t *testing.T, baseURL, token, postID string, body any) *http.Response {
-	t.Helper()
-	return do(t, http.MethodPut, baseURL+"/posts/"+postID+"/tags", token, body)
-}
-
-// ptSetTags меняет тэги своего поста и требует 200 с тем же постом.
-func ptSetTags(t *testing.T, baseURL, token, postID string, tags []string) ptPost {
+// ptEdit меняет подпись своего поста и требует 200 с тем же постом.
+func ptEdit(t *testing.T, baseURL, token, postID, caption string) ptPost {
 	t.Helper()
 
-	resp := ptSetTagsReq(t, baseURL, token, postID, map[string]any{"tags": tags})
-	post := ptPostOK(t, resp, http.StatusOK, fmt.Sprintf("PUT tags %q", tags))
+	post := ptPostOK(t, editCaptionText(t, baseURL, token, postID, caption), http.StatusOK,
+		fmt.Sprintf("правка подписи на %q", caption))
 	if post.ID != postID {
-		t.Fatalf("правка тэгов поста %s вернула пост %s", postID, post.ID)
+		t.Fatalf("правка подписи поста %s вернула пост %s", postID, post.ID)
 	}
 
 	return post
@@ -238,18 +254,10 @@ func ptSuggestReq(t *testing.T, baseURL, token string, params url.Values) *http.
 	return do(t, http.MethodGet, address, token, nil)
 }
 
-// ptSuggest — подсказки для текста text (пустой — параметра нет) без
-// exclude перечисленных тэгов; требует 200 и массив items.
-func ptSuggest(t *testing.T, baseURL, token, text string, exclude ...string) []string {
+// ptSuggestParams — подсказки с готовыми параметрами; требует 200
+// и массив items не длиннее пяти.
+func ptSuggestParams(t *testing.T, baseURL, token string, params url.Values) []string {
 	t.Helper()
-
-	params := url.Values{}
-	if text != "" {
-		params.Set("text", text)
-	}
-	if len(exclude) > 0 {
-		params["exclude"] = exclude
-	}
 
 	resp := ptSuggestReq(t, baseURL, token, params)
 	if resp.StatusCode != http.StatusOK {
@@ -271,6 +279,31 @@ func ptSuggest(t *testing.T, baseURL, token, text string, exclude ...string) []s
 	return *body.Items
 }
 
+// ptSuggest — подсказки для текста text (пустой — параметра нет) без
+// exclude перечисленных тэгов.
+func ptSuggest(t *testing.T, baseURL, token, text string, exclude ...string) []string {
+	t.Helper()
+	return ptSuggestPrefix(t, baseURL, token, text, "", exclude...)
+}
+
+// ptSuggestPrefix — то же с параметром prefix (пустой — параметра нет).
+func ptSuggestPrefix(t *testing.T, baseURL, token, text, prefix string, exclude ...string) []string {
+	t.Helper()
+
+	params := url.Values{}
+	if text != "" {
+		params.Set("text", text)
+	}
+	if prefix != "" {
+		params.Set("prefix", prefix)
+	}
+	if len(exclude) > 0 {
+		params["exclude"] = exclude
+	}
+
+	return ptSuggestParams(t, baseURL, token, params)
+}
+
 // ptRequireSuggestions требует ровно эти подсказки в этом порядке.
 func ptRequireSuggestions(t *testing.T, got, want []string, where string) {
 	t.Helper()
@@ -280,12 +313,12 @@ func ptRequireSuggestions(t *testing.T, got, want []string, where string) {
 	}
 }
 
-// ptTagged публикует count постов с этими тэгами.
+// ptTagged публикует count постов с хэштегами этих тэгов в подписи.
 func ptTagged(t *testing.T, baseURL, token string, count int, visibility string, tags ...string) {
 	t.Helper()
 
 	for i := 0; i < count; i++ {
-		ptPublish(t, baseURL, token, tags, visibility)
+		ptPublish(t, baseURL, token, ptCaption(tags...), visibility)
 	}
 }
 
@@ -299,80 +332,166 @@ func ptManyTags(count int) []string {
 	return tags
 }
 
-// --- Тэг: нормализация при публикации (требования 1–4, 6, 7) ---------------
+// --- Разбор хэштегов при публикации (требования 1–5, 7) --------------------
 
-// Регистр, `#` в начале (сколько угодно), пробелы по краям; «ё» остаётся
-// «ё» (требование 2).
-func TestPostTagsNormalizedOnCreate(t *testing.T) {
+// Где начинается и где кончается хэштег (требование 3, «Ограничения
+// и edge cases»), что за слово становится тэгом (требования 1, 2, 4).
+// Подпись остаётся как написана (требование 6).
+func TestPostTagsParsedFromCaption(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
 
 	cases := []struct {
-		name string
-		tags []string
-		want []string
+		name    string
+		caption string
+		want    []string
 	}{
-		{"регистр", []string{"Груша", "ПОДЕЛЮСЬ", "СоРт"}, []string{"груша", "поделюсь", "сорт"}},
-		{"решётки в начале", []string{"#груша", "##Сорт", "###урожай"}, []string{"груша", "сорт", "урожай"}},
-		{"пробелы по краям", []string{" груша ", "  сорт", "  #Урожай  "}, []string{"груша", "сорт", "урожай"}},
-		{"ё не заменяется", []string{"Свёкла", "ЁЛКА"}, []string{"свёкла", "ёлка"}},
+		{"в начале подписи", "#груша поспела", []string{"груша"}},
+		{"после пробела", "Поспела #груша", []string{"груша"}},
+		{"после перевода строки", "Поспела\n#груша", []string{"груша"}},
+		{"после запятой", "урожай,#груша", []string{"груша"}},
+		{"после скобки", "Поспела (#груша)", []string{"груша"}},
+		{"двойная решётка", "##груша", []string{"груша"}},
+		{"внутри слова — не хэштег", "яблоки#груша", []string{}},
+		{"после подчёркивания — не хэштег", "яблоки_#груша", []string{}},
+		{"после латинской буквы — не хэштег", "e-mail#1", []string{}},
+		{"цифра в начале", "#1 место", []string{"1"}},
+		{"кончается на точке", "Поспела #груша.", []string{"груша"}},
+		{"кончается на восклицательном знаке", "Поспела #груша!", []string{"груша"}},
+		{"кончается на эмодзи", "Поспела #груша🍐", []string{"груша"}},
+		{"кончается на пробеле", "#зелёный лук", []string{"зелёный"}},
+		{"вторая решётка вплотную — не хэштег", "#груша#сорт", []string{"груша"}},
+		{"решётка без слова", "# груша", []string{}},
+		{"одна решётка", "#", []string{}},
+		{"регистр", "#Груша #ПОДЕЛЮСЬ #СоРт", []string{"груша", "поделюсь", "сорт"}},
+		{"ё не заменяется", "#Свёкла #ЁЛКА", []string{"свёкла", "ёлка"}},
 		{"цифры, дефис, подчёркивание, латиница, другие алфавиты",
-			[]string{"Сорт-2", "f1_гибрид", "2026", "Pear", "მსხალი"},
+			"#Сорт-2 #f1_гибрид #2026 #Pear #მსხალი",
 			[]string{"сорт-2", "f1_гибрид", "2026", "pear", "მსხალი"}},
-		{"ровно 30 знаков", []string{strings.Repeat("Я", 30)}, []string{strings.Repeat("я", 30)}},
-		{"буква внутри дефисов", []string{"-а-", "_1_"}, []string{"-а-", "_1_"}},
+		{"ровно 30 знаков", "#" + strings.Repeat("Я", 30), []string{strings.Repeat("я", 30)}},
+		{"буква внутри дефисов", "#-а- #_1_", []string{"-а-", "_1_"}},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			created := ptPublish(t, baseURL, author.token, c.tags, "")
+			created := ptPublish(t, baseURL, author.token, c.caption, "")
 			ptRequireTags(t, created, c.want, "ответ на публикацию")
-			ptRequireTags(t, ptGet(t, baseURL, author.token, created.ID), c.want, "GET /posts/{id}")
+			ptRequireCaption(t, created, c.caption, "ответ на публикацию")
+
+			got := ptGet(t, baseURL, author.token, created.ID)
+			ptRequireTags(t, got, c.want, "GET /posts/{id}")
+			ptRequireCaption(t, got, c.caption, "GET /posts/{id}")
 		})
 	}
 }
 
-// Пустой после нормализации тэг пропускается молча; повторы схлопываются,
-// порядок — по первому появлению (требования 3, 4).
-func TestPostTagsEmptySkippedAndDuplicatesCollapsed(t *testing.T) {
+// Хэштег, слово которого не тэг (длиннее 30 знаков, из одних `-` и `_`), —
+// просто текст: пост публикуется, ошибки нет (требование 4).
+func TestPostTagsInvalidHashtagIsJustText(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
 
 	cases := []struct {
-		name string
-		tags []string
-		want []string
+		name    string
+		caption string
+		want    []string
 	}{
-		{"пустые", []string{"", "груша", "   ", "#", "##", " # "}, []string{"груша"}},
-		{"только пустые", []string{"", " ", "#"}, []string{}},
-		{"повторы", []string{"груша", "сорт", "#Груша", "СОРТ", " груша ", "урожай"}, []string{"груша", "сорт", "урожай"}},
-		{"порядок первого появления", []string{"урожай", "груша", "Урожай"}, []string{"урожай", "груша"}},
+		{"31 знак", "#" + strings.Repeat("я", 31), []string{}},
+		{"только дефисы", "Грядка #---", []string{}},
+		{"только дефисы и подчёркивания", "Грядка #_-_", []string{}},
+		{"длинный рядом с правильным", "#" + strings.Repeat("Я", 31) + " #груша", []string{"груша"}},
+		{"дефисы рядом с правильным", "#груша #--- #сорт", []string{"груша", "сорт"}},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			created := ptPublish(t, baseURL, author.token, c.tags, "")
+			created := ptPublish(t, baseURL, author.token, c.caption, "")
+			ptRequireTags(t, created, c.want, "ответ на публикацию")
+			ptRequireCaption(t, created, c.caption, "ответ на публикацию")
+			ptRequireTags(t, ptGet(t, baseURL, author.token, created.ID), c.want, "GET /posts/{id}")
+		})
+	}
+}
+
+// Повторы схлопываются без учёта регистра, порядок — по первому появлению
+// в подписи (требование 5).
+func TestPostTagsDuplicatesCollapsedInCaptionOrder(t *testing.T) {
+	baseURL := startAPI(t)
+	author := newPTUser(t, baseURL, 1)
+
+	cases := []struct {
+		name    string
+		caption string
+		want    []string
+	}{
+		{"повторы", "#груша #сорт #Груша #СОРТ ##груша #урожай", []string{"груша", "сорт", "урожай"}},
+		{"порядок первого появления", "#урожай и #груша, снова #Урожай", []string{"урожай", "груша"}},
+		{"порядок подписи, а не алфавит", "#сорт #груша #урожай", []string{"сорт", "груша", "урожай"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			created := ptPublish(t, baseURL, author.token, c.caption, "")
 			ptRequireTags(t, created, c.want, "ответ на публикацию")
 			ptRequireTags(t, ptGet(t, baseURL, author.token, created.ID), c.want, "GET /posts/{id}")
 		})
 	}
 }
 
-// Пост без поля tags и с tags: null — без тэгов, и в ответах у него
-// пустой массив, а не null и не отсутствие поля (требования 6, 7).
+// Тэгами становятся первые 10 разных хэштегов; дальше — текст, ошибки нет
+// (требование 5).
+func TestPostTagsFirstTenOnly(t *testing.T) {
+	baseURL := startAPI(t)
+	author := newPTUser(t, baseURL, 1)
+
+	ten := ptManyTags(10)
+
+	t.Run("ровно 10", func(t *testing.T) {
+		ptRequireTags(t, ptPublish(t, baseURL, author.token, ptCaption(ten...), ""), ten, "10 хэштегов")
+	})
+
+	t.Run("11 — первые 10", func(t *testing.T) {
+		caption := ptCaption(ptManyTags(11)...)
+		post := ptPublish(t, baseURL, author.token, caption, "")
+		ptRequireTags(t, post, ten, "11 хэштегов")
+		ptRequireCaption(t, post, caption, "11 хэштегов")
+		ptRequireTags(t, ptGet(t, baseURL, author.token, post.ID), ten, "GET /posts/{id}")
+	})
+
+	t.Run("15 — первые 10", func(t *testing.T) {
+		ptRequireTags(t, ptPublish(t, baseURL, author.token, ptCaption(ptManyTags(15)...), ""), ten, "15 хэштегов")
+	})
+
+	t.Run("повторы места не занимают", func(t *testing.T) {
+		tags := append(append([]string{}, ten[:5]...), "ТЭГ1", "тэг2", "тэг3")
+		tags = append(tags, ten[5:]...)
+		ptRequireTags(t, ptPublish(t, baseURL, author.token, ptCaption(tags...), ""), ten, "10 разных с повторами")
+	})
+
+	t.Run("хэштеги-не-тэги места не занимают", func(t *testing.T) {
+		tags := append(append([]string{}, ten[:5]...), "---", strings.Repeat("я", 31))
+		tags = append(tags, ten[5:]...)
+		ptRequireTags(t, ptPublish(t, baseURL, author.token, ptCaption(tags...), ""), ten, "10 тэгов и два не-тэга")
+	})
+}
+
+// Пост без подписи, с подписью без хэштегов и с одними хэштегами-не-тэгами —
+// без тэгов, и в ответах у него пустой массив, а не null и не отсутствие
+// поля (требование 7).
 func TestPostTagsAbsentMeansEmptyArrayEverywhere(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
 
-	withoutField := ptPublish(t, baseURL, author.token, nil, "")
-	resp, _ := ptPublishRaw(t, baseURL, author.token, map[string]any{"tags": nil})
-	withNull := ptPostOK(t, resp, http.StatusCreated, "публикация с tags: null")
-	withEmpty := ptPublish(t, baseURL, author.token, []string{}, "")
+	posts := map[string]ptPost{
+		"без подписи":          ptPublish(t, baseURL, author.token, "", ""),
+		"подпись без хэштегов": ptPublish(t, baseURL, author.token, "Грядка", ""),
+		"одни не-тэги":         ptPublish(t, baseURL, author.token, "яблоки#груша #---", ""),
+	}
 
 	feed := ptFeedOK(t, fetchFeed(t, baseURL, author.token, feedParams(50, "")), "лента")
 	profile := ptUserPosts(t, baseURL, author.token, author.id)
 
-	for name, post := range map[string]ptPost{"без поля": withoutField, "null": withNull, "пустой массив": withEmpty} {
+	for name, post := range posts {
 		ptRequireTags(t, post, []string{}, name+": ответ на публикацию")
 		ptRequireTags(t, ptGet(t, baseURL, author.token, post.ID), []string{}, name+": GET /posts/{id}")
 
@@ -390,7 +509,7 @@ func TestPostTagsAbsentMeansEmptyArrayEverywhere(t *testing.T) {
 }
 
 // Тэги поста — в ответе на публикацию, по адресу, в ленте, в постах
-// автора, в ответах на правку подписи и видимости; в порядке автора
+// автора, в ответах на правку подписи и видимости; в порядке подписи
 // (требование 7).
 func TestPostTagsInEveryPostResponse(t *testing.T) {
 	baseURL := startAPI(t)
@@ -398,7 +517,7 @@ func TestPostTagsInEveryPostResponse(t *testing.T) {
 	reader := newPTUser(t, baseURL, 2)
 
 	want := []string{"сорт", "груша", "урожай"}
-	created := ptPublish(t, baseURL, author.token, []string{"Сорт", "#груша", "урожай"}, "")
+	created := ptPublish(t, baseURL, author.token, "#Сорт и #груша на #урожай", "")
 	ptRequireTags(t, created, want, "ответ на публикацию")
 
 	ptRequireTags(t, ptGet(t, baseURL, reader.token, created.ID), want, "GET /posts/{id} чужими глазами")
@@ -417,7 +536,7 @@ func TestPostTagsInEveryPostResponse(t *testing.T) {
 		ptRequireTags(t, *item, want, "посты автора")
 	}
 
-	edited := ptPostOK(t, editCaptionText(t, baseURL, author.token, created.ID, "Новая подпись"), http.StatusOK, "правка подписи")
+	edited := ptEdit(t, baseURL, author.token, created.ID, "Новая подпись: #сорт #груша #урожай")
 	ptRequireTags(t, edited, want, "ответ на правку подписи")
 
 	changed := ptPostOK(t, setVisibility(t, baseURL, author.token, created.ID, map[string]any{"visibility": visibilityFriends}),
@@ -432,7 +551,7 @@ func TestPostTagsVisibleToWhoeverSeesThePost(t *testing.T) {
 	friend := newPTUser(t, baseURL, 2)
 	makeFriends(t, baseURL, author, friend)
 
-	post := ptPublish(t, baseURL, author.token, []string{"груша"}, visibilityFriends)
+	post := ptPublish(t, baseURL, author.token, ptCaption("груша"), visibilityFriends)
 
 	ptRequireTags(t, ptGet(t, baseURL, friend.token, post.ID), []string{"груша"}, "друг: GET /posts/{id}")
 
@@ -444,282 +563,203 @@ func TestPostTagsVisibleToWhoeverSeesThePost(t *testing.T) {
 	}
 }
 
-// --- Тэг: отказы при публикации (требования 1, 3, 5, 6) --------------------
+// --- Поле tags старой сборки (требование 9) --------------------------------
 
-// Тэг, не подходящий под требование 1, — 400 invalid_tag, пост не создан,
-// фотография свободна (требование 3, «Ограничения и edge cases»).
-func TestPostTagsInvalidTagRejectsPost(t *testing.T) {
+// Поле tags в теле публикации сервер пропускает мимо: тэги — только из
+// подписи, и ни плохой тэг, ни одиннадцать тэгов в поле не дают отказа
+// (требование 9).
+func TestPostTagsFieldInBodyIgnored(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
 
 	cases := []struct {
-		name string
-		tag  string
+		name    string
+		caption string
+		tags    any
+		want    []string
 	}{
-		{"пробел внутри", "зелёный лук"},
-		{"31 знак", strings.Repeat("я", 31)},
-		{"31 знак после нормализации", " #" + strings.Repeat("Я", 31) + " "},
-		{"только дефисы", "---"},
-		{"только дефисы и подчёркивания", "_-_"},
-		{"решётка после нормализации", "#-#"},
-		{"восклицательный знак", "груша!"},
-		{"точка", "a.b"},
-		{"запятая", "груша,сорт"},
-		{"решётка внутри", "груша#сорт"},
-		{"эмодзи", "груша🍐"},
+		{"поле и хэштеги разные", "Грядка #сорт", []string{"груша"}, []string{"сорт"}},
+		{"поле без подписи", "", []string{"груша", "урожай"}, []string{}},
+		{"плохой тэг в поле", "Грядка #груша", []string{"зелёный лук", "груша!"}, []string{"груша"}},
+		{"одиннадцать тэгов в поле", "Грядка", ptManyTags(11), []string{}},
+		{"null в поле", "#груша", nil, []string{"груша"}},
+		{"пустой массив в поле", "#груша", []string{}, []string{"груша"}},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			resp, photo := ptPublishRaw(t, baseURL, author.token, map[string]any{"tags": []string{"груша", c.tag}})
-			requireCodeE(t, resp, http.StatusBadRequest, "invalid_tag", fmt.Sprintf("публикация с тэгом %q", c.tag))
-
-			if n := len(ptUserPosts(t, baseURL, author.token, author.id).Items); n != 0 {
-				t.Fatalf("после отказа invalid_tag у автора %d постов, ожидалось 0", n)
+			extra := map[string]any{"tags": c.tags}
+			if c.caption != "" {
+				extra["caption"] = c.caption
 			}
 
-			// Пост не создан — та же фотография публикуется.
-			again := createPost(t, baseURL, author.token, map[string]any{"media_ids": []string{photo.ID}})
-			post := ptPostOK(t, again, http.StatusCreated, "публикация той же фотографии без тэгов")
-			requireDeleted(t, deletePost(t, baseURL, author.token, post.ID))
+			resp, _ := ptPublishRaw(t, baseURL, author.token, extra)
+			created := ptPostOK(t, resp, http.StatusCreated, c.name)
+			ptRequireTags(t, created, c.want, "ответ на публикацию")
+			ptRequireTags(t, ptGet(t, baseURL, author.token, created.ID), c.want, "GET /posts/{id}")
 		})
 	}
 }
 
-// Ровно 10 тэгов после схлопывания — можно; 11 — 400 too_many_tags, пост
-// не создан (требование 5).
-func TestPostTagsAtMostTen(t *testing.T) {
-	baseURL := startAPI(t)
-	author := newPTUser(t, baseURL, 1)
-
-	t.Run("ровно 10", func(t *testing.T) {
-		ten := ptManyTags(10)
-		post := ptPublish(t, baseURL, author.token, ten, "")
-		ptRequireTags(t, post, ten, "10 тэгов")
-	})
-
-	t.Run("12 с повторами и пустыми — 10 после схлопывания", func(t *testing.T) {
-		ten := ptManyTags(10)
-		sent := append(append([]string{}, ten...), "#ТЭГ1", "")
-		post := ptPublish(t, baseURL, author.token, sent, "")
-		ptRequireTags(t, post, ten, "10 тэгов после схлопывания")
-	})
-
-	t.Run("11", func(t *testing.T) {
-		before := len(ptUserPosts(t, baseURL, author.token, author.id).Items)
-
-		resp, _ := ptPublishRaw(t, baseURL, author.token, map[string]any{"tags": ptManyTags(11)})
-		requireCodeE(t, resp, http.StatusBadRequest, "too_many_tags", "публикация с 11 тэгами")
-
-		if after := len(ptUserPosts(t, baseURL, author.token, author.id).Items); after != before {
-			t.Errorf("после отказа too_many_tags постов у автора %d, было %d", after, before)
-		}
-	})
-}
-
-// Проверки тэгов — после подписи и видимости, до места (требование 6).
-func TestPostTagsCheckOrderOnCreate(t *testing.T) {
+// Хэштеги отказом не бывают: остальные проверки публикации идут как без
+// них — длинная подпись с хэштегами — invalid_caption, хэштеги и поле
+// tags при неизвестном месте — unknown_place (требования 4, 5, 9).
+func TestPostTagsNeverRejectPost(t *testing.T) {
 	baseURL, _ := startPlaces(t)
 	author := newPTUser(t, baseURL, 1)
 
-	resp, _ := ptPublishRaw(t, baseURL, author.token, map[string]any{
-		"caption": strings.Repeat("я", 1001),
-		"tags":    []string{"зелёный лук"},
-	})
-	requireCodeE(t, resp, http.StatusBadRequest, "invalid_caption", "длинная подпись и плохой тэг")
-
-	resp, _ = ptPublishRaw(t, baseURL, author.token, map[string]any{
-		"visibility": "соседям",
-		"tags":       []string{"зелёный лук"},
-	})
-	requireCodeE(t, resp, http.StatusBadRequest, "invalid_request", "неизвестная видимость и плохой тэг")
+	long := strings.Repeat("я", 990) + " #груша #сорт"
+	resp, _ := ptPublishRaw(t, baseURL, author.token, map[string]any{"caption": long})
+	requireCodeE(t, resp, http.StatusBadRequest, "invalid_caption", "подпись длиннее 1000 знаков с хэштегами")
 
 	resp, _ = ptPublishRaw(t, baseURL, author.token, map[string]any{
 		"place_id": unknownID,
+		"caption":  ptCaption(ptManyTags(11)...) + " #" + strings.Repeat("я", 31),
 		"tags":     []string{"зелёный лук"},
 	})
-	requireCodeE(t, resp, http.StatusBadRequest, "invalid_tag", "плохой тэг и неизвестное место")
+	requireCodeE(t, resp, http.StatusBadRequest, "unknown_place", "хэштеги, поле tags и неизвестное место")
 
-	resp, _ = ptPublishRaw(t, baseURL, author.token, map[string]any{
-		"place_id": unknownID,
-		"tags":     ptManyTags(11),
-	})
-	requireCodeE(t, resp, http.StatusBadRequest, "too_many_tags", "11 тэгов и неизвестное место")
+	if n := len(ptUserPosts(t, baseURL, author.token, author.id).Items); n != 0 {
+		t.Errorf("после отказов у автора %d постов, ожидалось 0", n)
+	}
 }
 
-// --- PUT /api/posts/{postId}/tags (требования 9, 10) -----------------------
+// --- Правка подписи (требования 6, 7, 10) ----------------------------------
 
-// Тэги заменяются целиком, с нормализацией; новые видны по адресу, в ленте
-// и в постах автора (требования 7, 9).
-func TestPostTagsReplacedWhole(t *testing.T) {
+// Правка подписи заменяет тэги целиком тэгами новой подписи: убранный
+// хэштег снимает тэг, новый — ставит; подпись остаётся как написана;
+// новые тэги видны по адресу, в ленте и в ленте по тэгу (сценарий, шаг 7;
+// требования 6, 7, 12).
+func TestPostTagsCaptionEditReplacesTags(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
+	reader := newPTUser(t, baseURL, 2)
 
-	post := ptPublish(t, baseURL, author.token, []string{"груша", "сорт"}, "")
+	post := ptPublish(t, baseURL, author.token, "Груши мелкие, но сладкие #груша #сорт", "")
+	ptRequireTags(t, post, []string{"груша", "сорт"}, "до правки")
 
-	updated := ptSetTags(t, baseURL, author.token, post.ID, []string{"Урожай", "#груша", "урожай", ""})
+	caption := "Груши мелкие, но сладкие #Урожай #груша #урожай"
+	updated := ptEdit(t, baseURL, author.token, post.ID, caption)
 	want := []string{"урожай", "груша"}
-	ptRequireTags(t, updated, want, "ответ на правку тэгов")
-	if updated.Caption != post.Caption {
-		t.Errorf("правка тэгов изменила подпись: %q, было %q", updated.Caption, post.Caption)
-	}
+	ptRequireTags(t, updated, want, "ответ на правку подписи")
+	ptRequireCaption(t, updated, caption, "ответ на правку подписи")
 
-	ptRequireTags(t, ptGet(t, baseURL, author.token, post.ID), want, "GET /posts/{id}")
+	got := ptGet(t, baseURL, reader.token, post.ID)
+	ptRequireTags(t, got, want, "GET /posts/{id}")
+	ptRequireCaption(t, got, caption, "GET /posts/{id}")
 
-	feed := ptFeedOK(t, fetchFeed(t, baseURL, author.token, feedParams(50, "")), "лента")
+	feed := ptFeedOK(t, fetchFeed(t, baseURL, reader.token, feedParams(50, "")), "лента")
 	if item := ptFind(feed, post.ID); item == nil {
 		t.Fatal("поста нет в ленте")
 	} else {
 		ptRequireTags(t, *item, want, "лента")
 	}
 
-	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, author.token, "сорт", "").Items), nil, "лента по снятому тэгу «сорт»")
-	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, author.token, "урожай", "").Items), []string{post.ID}, "лента по новому тэгу «урожай»")
+	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, reader.token, "сорт", "").Items), nil, "лента по снятому тэгу «сорт»")
+	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, reader.token, "урожай", "").Items), []string{post.ID}, "лента по новому тэгу «урожай»")
+	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, reader.token, "груша", "").Items), []string{post.ID}, "лента по оставшемуся тэгу «груша»")
 
-	// Тэги можно и добавить посту, у которого их не было.
-	bare := ptPublish(t, baseURL, author.token, nil, "")
-	ptRequireTags(t, ptSetTags(t, baseURL, author.token, bare.ID, []string{"дневник"}), []string{"дневник"}, "тэг посту без тэгов")
+	// Подпись без хэштегов снимает все тэги.
+	ptRequireTags(t, ptEdit(t, baseURL, author.token, post.ID, "Груши мелкие"), []string{}, "подпись без хэштегов")
+	ptRequireTags(t, ptGet(t, baseURL, author.token, post.ID), []string{}, "GET после снятия всех")
+	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, reader.token, "груша", "").Items), nil, "лента по снятому тэгу «груша»")
+
+	// Посту без тэгов правка подписи их ставит — по тем же правилам разбора.
+	bare := ptPublish(t, baseURL, author.token, "Грядка", "")
+	ptRequireTags(t, ptEdit(t, baseURL, author.token, bare.ID, "Грядка #Дневник яблоки#груша #---"),
+		[]string{"дневник"}, "хэштег посту без тэгов")
+	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, reader.token, "дневник", "").Items), []string{bare.ID}, "лента по «дневник»")
+
+	// Первые 10 разных — и при правке.
+	ptRequireTags(t, ptEdit(t, baseURL, author.token, bare.ID, ptCaption(ptManyTags(12)...)),
+		ptManyTags(10), "12 хэштегов при правке")
 }
 
-// Пустой массив снимает все тэги (требование 9).
-func TestPostTagsEmptyArrayRemovesAll(t *testing.T) {
+// edited_at — по правилам 022: правка, поменявшая только хэштеги, —
+// правка; правка текста без смены тэгов — тоже; та же подпись — не правка,
+// и тэги остаются (требование 10).
+func TestPostTagsCaptionEditEditedAt(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
 
-	post := ptPublish(t, baseURL, author.token, []string{"груша", "сорт"}, "")
+	t.Run("та же подпись — не правка", func(t *testing.T) {
+		post := ptPublish(t, baseURL, author.token, "Грядка #груша", "")
+		requireNotEdited(t, post.EditedAt, "только что опубликованный")
 
-	ptRequireTags(t, ptSetTags(t, baseURL, author.token, post.ID, []string{}), []string{}, "ответ на снятие тэгов")
-	ptRequireTags(t, ptGet(t, baseURL, author.token, post.ID), []string{}, "GET /posts/{id}")
-	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, author.token, "груша", "").Items), nil, "лента по снятому тэгу")
+		same := ptEdit(t, baseURL, author.token, post.ID, "Грядка #груша")
+		requireNotEdited(t, same.EditedAt, "ответ на правку той же подписью")
+		ptRequireTags(t, same, []string{"груша"}, "ответ на правку той же подписью")
+		requireNotEdited(t, ptGet(t, baseURL, author.token, post.ID).EditedAt, "GET после правки той же подписью")
+	})
 
-	// Массив из одних пустых тэгов — то же самое.
-	ptSetTags(t, baseURL, author.token, post.ID, []string{"груша"})
-	ptRequireTags(t, ptSetTags(t, baseURL, author.token, post.ID, []string{"", " # "}), []string{}, "массив пустых тэгов")
+	t.Run("поменялись только хэштеги", func(t *testing.T) {
+		post := ptPublish(t, baseURL, author.token, "Грядка #груша", "")
+
+		edited := ptEdit(t, baseURL, author.token, post.ID, "Грядка #сорт")
+		requireEditedAt(t, edited.EditedAt, edited.CreatedAt, "ответ на смену хэштега")
+		ptRequireTags(t, edited, []string{"сорт"}, "ответ на смену хэштега")
+	})
+
+	t.Run("текст поменялся, тэги те же", func(t *testing.T) {
+		post := ptPublish(t, baseURL, author.token, "Грядка #груша", "")
+
+		edited := ptEdit(t, baseURL, author.token, post.ID, "Большая грядка #груша")
+		editedAt := requireEditedAt(t, edited.EditedAt, edited.CreatedAt, "ответ на правку текста")
+		ptRequireTags(t, edited, []string{"груша"}, "ответ на правку текста")
+
+		got := ptGet(t, baseURL, author.token, post.ID)
+		if got.EditedAt == nil || *got.EditedAt != editedAt {
+			t.Errorf("GET: edited_at %v, ожидался %q", got.EditedAt, editedAt)
+		}
+	})
+
+	t.Run("регистр хэштега — тэги те же, подпись другая", func(t *testing.T) {
+		post := ptPublish(t, baseURL, author.token, "Грядка #груша", "")
+
+		edited := ptEdit(t, baseURL, author.token, post.ID, "Грядка #Груша")
+		requireEditedAt(t, edited.EditedAt, edited.CreatedAt, "ответ на смену регистра")
+		ptRequireTags(t, edited, []string{"груша"}, "ответ на смену регистра")
+		ptRequireCaption(t, edited, "Грядка #Груша", "ответ на смену регистра")
+	})
 }
 
-// Правка тэгов не меняет edited_at: ни у неизменённого поста, ни у поста
-// с правленой подписью (требование 10).
-func TestPostTagsEditDoesNotTouchEditedAt(t *testing.T) {
-	baseURL := startAPI(t)
-	author := newPTUser(t, baseURL, 1)
-
-	post := ptPublish(t, baseURL, author.token, []string{"груша"}, "")
-	requireNotEdited(t, post.EditedAt, "только что опубликованный")
-
-	updated := ptSetTags(t, baseURL, author.token, post.ID, []string{"сорт"})
-	requireNotEdited(t, updated.EditedAt, "ответ на правку тэгов неизменённого поста")
-	requireNotEdited(t, ptGet(t, baseURL, author.token, post.ID).EditedAt, "GET после правки тэгов")
-
-	edited := ptPostOK(t, editCaptionText(t, baseURL, author.token, post.ID, "Новая подпись"), http.StatusOK, "правка подписи")
-	editedAt := requireEditedAt(t, edited.EditedAt, edited.CreatedAt, "после правки подписи")
-
-	again := ptSetTags(t, baseURL, author.token, post.ID, []string{"урожай"})
-	if again.EditedAt == nil || *again.EditedAt != editedAt {
-		t.Errorf("правка тэгов сдвинула edited_at: %v, было %q", again.EditedAt, editedAt)
-	}
-	if again.Caption != "Новая подпись" {
-		t.Errorf("правка тэгов изменила подпись: %q", again.Caption)
-	}
-	if got := ptGet(t, baseURL, author.token, post.ID).EditedAt; got == nil || *got != editedAt {
-		t.Errorf("GET: правка тэгов сдвинула edited_at: %v, было %q", got, editedAt)
-	}
-}
-
-// Отказы правки тэгов: тэги поста остаются прежними (требование 9).
-func TestPostTagsEditRejections(t *testing.T) {
+// Отказ в правке подписи оставляет и подпись, и тэги прежними; ручки
+// PUT /posts/{id}/tags больше нет (требования 6, 9).
+func TestPostTagsCaptionEditRejectionKeepsTags(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
 	stranger := newPTUser(t, baseURL, 2)
 
 	original := []string{"груша", "сорт"}
-	post := ptPublish(t, baseURL, author.token, original, "")
-	hidden := ptPublish(t, baseURL, author.token, original, visibilityMe)
-	forFriends := ptPublish(t, baseURL, author.token, original, visibilityFriends)
+	post := ptPublish(t, baseURL, author.token, ptCaption(original...), "")
 
-	requireStays := func(t *testing.T, postID, where string) {
+	requireStays := func(t *testing.T, where string) {
 		t.Helper()
-		ptRequireTags(t, ptGet(t, baseURL, author.token, postID), original, where+": тэги после отказа")
+		got := ptGet(t, baseURL, author.token, post.ID)
+		ptRequireTags(t, got, original, where+": тэги после отказа")
+		ptRequireCaption(t, got, post.Caption, where+": подпись после отказа")
 	}
-
-	t.Run("без токена", func(t *testing.T) {
-		resp := ptSetTagsReq(t, baseURL, "", post.ID, map[string]any{"tags": []string{"урожай"}})
-		if resp.StatusCode != http.StatusUnauthorized {
-			t.Errorf("без токена: ожидался статус 401, получен %d", resp.StatusCode)
-		}
-		requireStays(t, post.ID, "без токена")
-	})
 
 	t.Run("чужой пост", func(t *testing.T) {
-		resp := ptSetTagsReq(t, baseURL, stranger.token, post.ID, map[string]any{"tags": []string{"урожай"}})
+		resp := editCaptionText(t, baseURL, stranger.token, post.ID, "Моя теперь #урожай")
 		requireCodeE(t, resp, http.StatusForbidden, "not_your_post", "чужой пост")
-		requireStays(t, post.ID, "чужой пост")
+		requireStays(t, "чужой пост")
 	})
 
-	t.Run("чужой пост и плохие тэги — сначала «своё ли»", func(t *testing.T) {
-		resp := ptSetTagsReq(t, baseURL, stranger.token, post.ID, map[string]any{"tags": []string{"зелёный лук"}})
-		requireCodeE(t, resp, http.StatusForbidden, "not_your_post", "чужой пост с плохим тэгом")
-		resp = ptSetTagsReq(t, baseURL, stranger.token, post.ID, map[string]any{})
-		requireCodeE(t, resp, http.StatusForbidden, "not_your_post", "чужой пост без tags")
-		requireStays(t, post.ID, "чужой пост с плохим телом")
+	t.Run("подпись длиннее 1000 знаков", func(t *testing.T) {
+		resp := editCaptionText(t, baseURL, author.token, post.ID, strings.Repeat("я", 995)+" #урожай")
+		requireCodeE(t, resp, http.StatusBadRequest, "invalid_caption", "длинная подпись")
+		requireStays(t, "длинная подпись")
 	})
 
-	notFound := []struct {
-		name   string
-		postID string
-	}{
-		{"несуществующий", unknownID},
-		{"не UUID", notAnID},
-		{"чужой «только мне»", hidden.ID},
-		{"чужой «друзьям», не друг", forFriends.ID},
-	}
-	for _, c := range notFound {
-		t.Run("404 "+c.name, func(t *testing.T) {
-			resp := ptSetTagsReq(t, baseURL, stranger.token, c.postID, map[string]any{"tags": []string{"урожай"}})
-			requireCodeE(t, resp, http.StatusNotFound, "post_not_found", c.name)
-		})
-	}
-	requireStays(t, hidden.ID, "«только мне»")
-	requireStays(t, forFriends.ID, "«друзьям»")
-
-	invalidRequest := []struct {
-		name string
-		body string
-	}{
-		{"пустой объект", `{}`},
-		{"без tags", `{"caption": "груша"}`},
-		{"не JSON", `{"tags": [`},
-		{"пустое тело", ``},
-	}
-	for _, c := range invalidRequest {
-		t.Run("invalid_request "+c.name, func(t *testing.T) {
-			resp := ebdRaw(t, http.MethodPut, baseURL+"/posts/"+post.ID+"/tags", author.token, c.body)
-			requireCodeE(t, resp, http.StatusBadRequest, "invalid_request", c.name)
-			requireStays(t, post.ID, c.name)
-		})
-	}
-
-	invalidTags := []struct {
-		name string
-		tags []string
-		code string
-	}{
-		{"пробел внутри", []string{"урожай", "зелёный лук"}, "invalid_tag"},
-		{"31 знак", []string{strings.Repeat("я", 31)}, "invalid_tag"},
-		{"только дефисы", []string{"---"}, "invalid_tag"},
-		{"недопустимый знак", []string{"груша!"}, "invalid_tag"},
-		{"11 тэгов", ptManyTags(11), "too_many_tags"},
-	}
-	for _, c := range invalidTags {
-		t.Run(c.code+" "+c.name, func(t *testing.T) {
-			resp := ptSetTagsReq(t, baseURL, author.token, post.ID, map[string]any{"tags": c.tags})
-			requireCodeE(t, resp, http.StatusBadRequest, c.code, c.name)
-			requireStays(t, post.ID, c.name)
-		})
-	}
-
-	t.Run("ровно 10 — можно", func(t *testing.T) {
-		ten := ptManyTags(10)
-		ptRequireTags(t, ptSetTags(t, baseURL, author.token, post.ID, append(append([]string{}, ten...), "ТЭГ10")), ten, "10 тэгов")
+	t.Run("ручки PUT /tags нет", func(t *testing.T) {
+		resp := do(t, http.MethodPut, baseURL+"/posts/"+post.ID+"/tags", author.token,
+			map[string]any{"tags": []string{"урожай"}})
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("PUT /posts/{id}/tags: ожидался статус 404, получен %d", resp.StatusCode)
+		}
+		requireStays(t, "PUT /tags")
 	})
 }
 
@@ -731,7 +771,7 @@ func TestPostTagsGoAwayWithPost(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
 
-	post := ptPublish(t, baseURL, author.token, []string{"альфа", "бета"}, "")
+	post := ptPublish(t, baseURL, author.token, ptCaption("альфа", "бета"), "")
 	ptRequireSuggestions(t, ptSuggest(t, baseURL, author.token, ""),
 		[]string{"альфа", "бета", "поделюсь", "советы", "вопрос"}, "подсказки до удаления")
 
@@ -751,12 +791,12 @@ func TestPostTagsFeedFiltersByExactTag(t *testing.T) {
 	author := newPTUser(t, baseURL, 1)
 	reader := newPTUser(t, baseURL, 2)
 
-	pear := ptPublish(t, baseURL, author.token, []string{"груша"}, "")
-	ptPublish(t, baseURL, author.token, nil, "")
-	ptPublish(t, baseURL, author.token, []string{"груши"}, "")
-	ptPublish(t, baseURL, author.token, []string{"грушевый"}, "")
-	pearAndSort := ptPublish(t, baseURL, reader.token, []string{"сорт", "груша"}, "")
-	ptPublish(t, baseURL, author.token, []string{"свёкла"}, "")
+	pear := ptPublish(t, baseURL, author.token, ptCaption("груша"), "")
+	ptPublish(t, baseURL, author.token, ptCaption(), "")
+	ptPublish(t, baseURL, author.token, ptCaption("груши"), "")
+	ptPublish(t, baseURL, author.token, ptCaption("грушевый"), "")
+	pearAndSort := ptPublish(t, baseURL, reader.token, ptCaption("сорт", "груша"), "")
+	ptPublish(t, baseURL, author.token, ptCaption("свёкла"), "")
 
 	page := ptTagFeed(t, baseURL, reader.token, "груша", "")
 	ptRequireIDs(t, ptIDs(page.Items), []string{pearAndSort.ID, pear.ID}, "лента по «груша»")
@@ -779,9 +819,9 @@ func TestPostTagsFeedTagParameterNormalized(t *testing.T) {
 	baseURL := startAPI(t)
 	author := newPTUser(t, baseURL, 1)
 
-	pear := ptPublish(t, baseURL, author.token, []string{"груша"}, "")
-	bare := ptPublish(t, baseURL, author.token, nil, "")
-	other := ptPublish(t, baseURL, author.token, []string{"сорт"}, "")
+	pear := ptPublish(t, baseURL, author.token, ptCaption("груша"), "")
+	bare := ptPublish(t, baseURL, author.token, ptCaption(), "")
+	other := ptPublish(t, baseURL, author.token, ptCaption("сорт"), "")
 
 	for _, tag := range []string{"Груша", "#груша", "##ГРУША", " груша "} {
 		ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, author.token, tag, "").Items), []string{pear.ID},
@@ -811,10 +851,10 @@ func TestPostTagsFeedRespectsVisibility(t *testing.T) {
 	closed := newPTUser(t, baseURL, 4)
 	makeFriends(t, baseURL, author, friend)
 
-	public := ptPublish(t, baseURL, author.token, []string{"груша"}, "")
-	forFriends := ptPublish(t, baseURL, author.token, []string{"груша"}, visibilityFriends)
-	onlyMe := ptPublish(t, baseURL, author.token, []string{"груша"}, visibilityMe)
-	closedPost := ptPublish(t, baseURL, closed.token, []string{"груша"}, "")
+	public := ptPublish(t, baseURL, author.token, ptCaption("груша"), "")
+	forFriends := ptPublish(t, baseURL, author.token, ptCaption("груша"), visibilityFriends)
+	onlyMe := ptPublish(t, baseURL, author.token, ptCaption("груша"), visibilityMe)
+	closedPost := ptPublish(t, baseURL, closed.token, ptCaption("груша"), "")
 	setClosed(t, baseURL, closed.token, true)
 
 	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, author.token, "груша", "").Items),
@@ -835,10 +875,10 @@ func TestPostTagsFeedWithFollowingScope(t *testing.T) {
 	other := newPTUser(t, baseURL, 3)
 	followOK(t, baseURL, viewer, followed.id)
 
-	fromFollowed := ptPublish(t, baseURL, followed.token, []string{"груша"}, "")
-	ptPublish(t, baseURL, followed.token, []string{"сорт"}, "")
-	fromOther := ptPublish(t, baseURL, other.token, []string{"груша"}, "")
-	own := ptPublish(t, baseURL, viewer.token, []string{"груша"}, "")
+	fromFollowed := ptPublish(t, baseURL, followed.token, ptCaption("груша"), "")
+	ptPublish(t, baseURL, followed.token, ptCaption("сорт"), "")
+	fromOther := ptPublish(t, baseURL, other.token, ptCaption("груша"), "")
+	own := ptPublish(t, baseURL, viewer.token, ptCaption("груша"), "")
 
 	ptRequireIDs(t, ptIDs(ptTagFeed(t, baseURL, viewer.token, "груша", "following").Items),
 		[]string{own.ID, fromFollowed.ID}, "«Подписки» по тэгу")
@@ -854,8 +894,8 @@ func TestPostTagsFeedPagesWithCursor(t *testing.T) {
 
 	var tagged []string
 	for i := 0; i < 5; i++ {
-		tagged = append(tagged, ptPublish(t, baseURL, author.token, []string{"груша"}, "").ID)
-		ptPublish(t, baseURL, author.token, []string{"сорт"}, "")
+		tagged = append(tagged, ptPublish(t, baseURL, author.token, ptCaption("груша"), "").ID)
+		ptPublish(t, baseURL, author.token, ptCaption("сорт"), "")
 	}
 	slices.Reverse(tagged)
 
@@ -1087,4 +1127,102 @@ func TestPostTagsSuggestionsAlways200(t *testing.T) {
 	// Остались последние слова словаря — они и приходят, по порядку.
 	got = ptSuggest(t, baseURL, viewer.token, "", ptDictionary[:30]...)
 	ptRequireSuggestions(t, got, ptDictionary[30:], "в словаре осталось три слова")
+}
+
+// Тэги хэштегов из text не подсказываются и без exclude: они уже в посте.
+// Хэштегом считается то же, что в подписи поста (требования 3–5, 15).
+func TestPostTagsSuggestionsSkipTextHashtags(t *testing.T) {
+	baseURL := startAPI(t)
+	author := newPTUser(t, baseURL, 1)
+	viewer := newPTUser(t, baseURL, 2)
+
+	ptRequireSuggestions(t, ptSuggest(t, baseURL, viewer.token, "Груши поспели #груша"),
+		ptEmptyCommunity, "хэштег найденного в тексте тэга")
+	ptRequireSuggestions(t, ptSuggest(t, baseURL, viewer.token, "#поделюсь #советы"),
+		[]string{"вопрос", "дневник", "урожай", "рассада", "теплица"}, "хэштеги двух слов словаря")
+	ptRequireSuggestions(t, ptSuggest(t, baseURL, viewer.token, "Грядка ##ПОДЕЛЮСЬ, #Советы!"),
+		[]string{"вопрос", "дневник", "урожай", "рассада", "теплица"}, "хэштеги разбираются как в подписи")
+
+	// «яблоки#советы» — не хэштег: «советы» — просто слово текста, оно
+	// находится в тексте и идёт первым.
+	ptRequireSuggestions(t, ptSuggest(t, baseURL, viewer.token, "яблоки#советы"),
+		[]string{"советы", "поделюсь", "вопрос", "дневник", "урожай"}, "решётка внутри слова — не хэштег")
+
+	// Хэштег после десятого — не тэг поста, поэтому подсказывается: слово
+	// «дневник» найдено в тексте.
+	tenth := ptCaption(ptManyTags(10)...) + " #дневник"
+	ptRequireSuggestions(t, ptSuggest(t, baseURL, viewer.token, tenth),
+		[]string{"дневник", "поделюсь", "советы", "вопрос", "урожай"}, "одиннадцатый хэштег")
+
+	ptTagged(t, baseURL, author.token, 2, "", "альфа")
+	ptTagged(t, baseURL, author.token, 1, "", "бета")
+	ptRequireSuggestions(t, ptSuggest(t, baseURL, viewer.token, "Грядка #Альфа"),
+		[]string{"бета", "поделюсь", "советы", "вопрос", "дневник"}, "хэштег тэга сообщества")
+}
+
+// prefix сужает ответ до тэгов, начинающихся с него, порядок прежний;
+// нормализуется как tag ленты; тэг, равный ему, тоже подходит
+// (сценарий, шаг 4; требование 15).
+func TestPostTagsSuggestionsPrefix(t *testing.T) {
+	baseURL := startAPI(t)
+	author := newPTUser(t, baseURL, 1)
+	viewer := newPTUser(t, baseURL, 2)
+
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "", "по"),
+		[]string{"поделюсь", "полив"}, "словарь на «по»")
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "", " ##ПО "),
+		[]string{"поделюсь", "полив"}, "prefix нормализуется")
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "", "с"),
+		[]string{"советы", "свёкла", "смородина", "слива"}, "словарь на «с» — в порядке словаря")
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "", "щщ"),
+		[]string{}, "ничего на «щщ»")
+
+	ptTagged(t, baseURL, author.token, 2, "", "сорт")
+	ptTagged(t, baseURL, author.token, 1, "", "сортовые")
+	ptTagged(t, baseURL, author.token, 3, "", "грунт")
+
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "", "со"),
+		[]string{"сорт", "сортовые", "советы"}, "сообщество по популярности, потом словарь")
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "", "сорт"),
+		[]string{"сорт", "сортовые"}, "равный prefix тэг подходит")
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "Груши мелкие", "гр"),
+		[]string{"груша", "грунт"}, "найденный в тексте — первым и с prefix")
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "", "сорт", "сорт"),
+		[]string{"сортовые"}, "exclude действует и с prefix")
+}
+
+// Тэг, равный непустому prefix, не исключается по хэштегам text:
+// набираемое «#сорт» — хэштег подписи, но подсказку «сорт» человек
+// получает. Другие хэштеги text исключаются как обычно (требование 15).
+func TestPostTagsSuggestionsPrefixNotExcludedByTextHashtag(t *testing.T) {
+	baseURL := startAPI(t)
+	author := newPTUser(t, baseURL, 1)
+	viewer := newPTUser(t, baseURL, 2)
+
+	ptTagged(t, baseURL, author.token, 2, "", "сорт")
+	ptTagged(t, baseURL, author.token, 1, "", "сортовые")
+
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "Груши #груша #сорт", "сорт"),
+		[]string{"сорт", "сортовые"}, "набирается «#сорт»")
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "Груши #сорт #со", "со"),
+		[]string{"сортовые", "советы"}, "набирается «#со», а «#сорт» уже в подписи")
+	ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "#поделюсь #по", "по"),
+		[]string{"полив"}, "хэштег словарного тэга исключается и с prefix")
+}
+
+// Неподходящий prefix и пустой после нормализации — как без параметра
+// (требование 15).
+func TestPostTagsSuggestionsBadPrefixIgnored(t *testing.T) {
+	baseURL := startAPI(t)
+	viewer := newPTUser(t, baseURL, 1)
+
+	for _, prefix := range []string{"#", " ## ", "зелёный лук", "---", strings.Repeat("я", 31), "груш!"} {
+		ptRequireSuggestions(t, ptSuggestParams(t, baseURL, viewer.token, url.Values{"prefix": {prefix}}),
+			ptEmptyCommunity, fmt.Sprintf("prefix=%q без текста", prefix))
+		ptRequireSuggestions(t, ptSuggestPrefix(t, baseURL, viewer.token, "Груши поспели #сорт", prefix),
+			[]string{"груша", "поделюсь", "советы", "вопрос", "дневник"}, fmt.Sprintf("prefix=%q с текстом", prefix))
+	}
+
+	ptRequireSuggestions(t, ptSuggestParams(t, baseURL, viewer.token, url.Values{"prefix": {""}}),
+		ptEmptyCommunity, "пустой prefix")
 }

@@ -281,8 +281,6 @@ class ApiClient {
           return SessionRequest.fromJson(value);
         case 'TagSuggestions':
           return TagSuggestions.fromJson(value);
-        case 'TagsUpdate':
-          return TagsUpdate.fromJson(value);
         case 'UnreadNotifications':
           return UnreadNotifications.fromJson(value);
         case 'UserProfile':

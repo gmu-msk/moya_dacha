@@ -17,7 +17,6 @@ class PostDraft {
     this.caption,
     this.visibility,
     this.placeId,
-    this.tags = const [],
     this.groupIds = const [],
     this.visibilityGroupId,
   });
@@ -45,9 +44,6 @@ class PostDraft {
   /// Место поста — пункт из подсказок `GET /places`; нет, `null` или пустая строка — без места (specs/027-post-place.md) 
   String? placeId;
 
-  /// Тэги поста, до десяти; сервер нормализует их: без `#` в начале, в нижнем регистре, без повторов (specs/028-post-tags.md) 
-  List<String>? tags;
-
   /// Группы, в которых выложить пост: только те, где автор — участник; нет, `null` или пусто — ни в какой (specs/030-group-posts.md) 
   List<String>? groupIds;
 
@@ -60,7 +56,6 @@ class PostDraft {
     other.caption == caption &&
     other.visibility == visibility &&
     other.placeId == placeId &&
-    _deepEquality.equals(other.tags, tags) &&
     _deepEquality.equals(other.groupIds, groupIds) &&
     other.visibilityGroupId == visibilityGroupId;
 
@@ -71,12 +66,11 @@ class PostDraft {
     (caption == null ? 0 : caption!.hashCode) +
     (visibility == null ? 0 : visibility!.hashCode) +
     (placeId == null ? 0 : placeId!.hashCode) +
-    (tags == null ? 0 : tags!.hashCode) +
     (groupIds == null ? 0 : groupIds!.hashCode) +
     (visibilityGroupId == null ? 0 : visibilityGroupId!.hashCode);
 
   @override
-  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, tags=$tags, groupIds=$groupIds, visibilityGroupId=$visibilityGroupId]';
+  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, groupIds=$groupIds, visibilityGroupId=$visibilityGroupId]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -95,11 +89,6 @@ class PostDraft {
       json[r'place_id'] = this.placeId;
     } else {
       json[r'place_id'] = null;
-    }
-    if (this.tags != null) {
-      json[r'tags'] = this.tags;
-    } else {
-      json[r'tags'] = null;
     }
     if (this.groupIds != null) {
       json[r'group_ids'] = this.groupIds;
@@ -137,9 +126,6 @@ class PostDraft {
         caption: mapValueOfType<String>(json, r'caption'),
         visibility: PostVisibility.fromJson(json[r'visibility']),
         placeId: mapValueOfType<String>(json, r'place_id'),
-        tags: json[r'tags'] is Iterable
-            ? (json[r'tags'] as Iterable).cast<String>().toList(growable: false)
-            : const [],
         groupIds: json[r'group_ids'] is Iterable
             ? (json[r'group_ids'] as Iterable).cast<String>().toList(growable: false)
             : const [],

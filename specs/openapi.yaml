@@ -586,6 +586,9 @@ paths:
         (docs/adr/0006-post-is-media.md).
 
         Порядок фотографий в посте — порядок идентификаторов в `media_ids`.
+
+        Тэги поста сервер берёт из хэштегов подписи
+        (specs/028-post-tags.md, требования 3–6).
       tags: [posts]
       security:
         - bearerAuth: []
@@ -607,10 +610,8 @@ paths:
             Нет ни одной фотографии (`no_media`), фотографий больше десяти
             (`too_many_media`), фотография чужая, уже опубликована или не
             существует (`invalid_media`), подпись слишком длинная
-            (`invalid_caption`), тэг не одно слово до 30 знаков
-            (`invalid_tag`), тэгов больше десяти (`too_many_tags`), место
-            не из подсказок (`unknown_place`), тело запроса не разбирается
-            (`invalid_request`)
+            (`invalid_caption`), место не из подсказок (`unknown_place`),
+            тело запроса не разбирается (`invalid_request`)
           content:
             application/json:
               schema:
@@ -714,7 +715,9 @@ paths:
       description: |
         Меняется только подпись: фотографии, видимость, лайки и
         комментарии остаются. Проверки как у удаления, потом подпись —
-        как при создании поста (specs/022-edit-block-delete.md).
+        как при создании поста (specs/022-edit-block-delete.md). Тэги
+        поста заменяются хэштегами новой подписи
+        (specs/028-post-tags.md, требование 6).
       tags: [posts]
       security:
         - bearerAuth: []
@@ -765,74 +768,14 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /posts/{postId}/tags:
-    put:
-      operationId: setPostTags
-      summary: Заменить тэги своего поста
-      description: |
-        Тэги заменяются целиком; пустой массив снимает все. Подпись,
-        фотографии и `edited_at` не меняются. Проверки как у правки
-        подписи, потом тэги — как при создании поста
-        (specs/028-post-tags.md, требования 9–10).
-      tags: [posts]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: postId
-          in: path
-          required: true
-          description: Идентификатор поста (UUID)
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/TagsUpdate"
-      responses:
-        "200":
-          description: Пост после правки
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Post"
-        "400":
-          description: |
-            Тэг не одно слово до 30 знаков (`invalid_tag`), тэгов больше
-            десяти (`too_many_tags`), тело без `tags` или не разбирается
-            (`invalid_request`)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          description: Токена нет или он недействителен
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Пост есть, но он чужой (`not_your_post`)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "404":
-          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
   /tags/suggestions:
     get:
       operationId: getTagSuggestions
       summary: Подсказки тэгов для черновика поста
       description: |
         До пяти тэгов: сначала найденные в подписи, потом популярные у
-        сообщества, потом из стартового словаря
-        (specs/028-post-tags.md, требования 15–19).
+        сообщества, потом из стартового словаря. Хэштеги подписи не
+        подсказываются (specs/028-post-tags.md, требования 15–19).
       tags: [posts]
       security:
         - bearerAuth: []
@@ -846,13 +789,21 @@ paths:
         - name: exclude
           in: query
           required: false
-          description: Тэги, уже выбранные в черновике; их в ответе нет
+          description: Тэги, которые не подсказывать; их в ответе нет
           style: form
           explode: true
           schema:
             type: array
             items:
               type: string
+        - name: prefix
+          in: query
+          required: false
+          description: |
+            Начало тэга, который набирается после `#`; непустой — только
+            тэги, начинающиеся с него
+          schema:
+            type: string
       responses:
         "200":
           description: Подсказки
@@ -2959,8 +2910,8 @@ components:
           type: array
           maxItems: 10
           description: |
-            Нормализованные тэги в порядке автора; нет тэгов — пустой
-            массив (specs/028-post-tags.md)
+            Тэги из хэштегов подписи в порядке подписи, в нижнем регистре;
+            нет тэгов — пустой массив (specs/028-post-tags.md)
           items:
             type: string
           example: ["груша", "сорт"]
@@ -2983,20 +2934,6 @@ components:
             (specs/031-group-visibility.md). Тогда `visibility` — `friends`,
             чтобы старые сборки разбирали ответ; приложение смотрит сюда.
             Нет или `null` — видимость по `visibility`.
-
-    TagsUpdate:
-      type: object
-      # Поле нужно всегда, но в required его нет нарочно: тело без тэгов —
-      # 400 invalid_request, как у CaptionUpdate.
-      properties:
-        tags:
-          type: array
-          description: |
-            Новые тэги поста целиком; пустой массив снимает все. Обязательно:
-            тело без него — `invalid_request`.
-          items:
-            type: string
-          example: ["груша", "урожай"]
 
     TagSuggestions:
       type: object
@@ -3686,15 +3623,6 @@ components:
             Место поста — пункт из подсказок `GET /places`; нет, `null` или
             пустая строка — без места (specs/027-post-place.md)
           example: "5f4a3b2c-1d0e-4f9a-8b7c-6d5e4f3a2b1c"
-        tags:
-          type: array
-          nullable: true
-          description: |
-            Тэги поста, до десяти; сервер нормализует их: без `#` в начале,
-            в нижнем регистре, без повторов (specs/028-post-tags.md)
-          items:
-            type: string
-          example: ["Груша", "#сорт"]
         group_ids:
           type: array
           nullable: true

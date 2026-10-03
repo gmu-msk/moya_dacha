@@ -15,6 +15,7 @@ import 'bottom_bar.dart';
 import 'comment_icon.dart';
 import 'empty_view.dart';
 import 'error_view.dart';
+import 'hashtags.dart';
 import 'like_button.dart';
 import 'post_action.dart';
 import 'post_groups_line.dart';
@@ -22,7 +23,6 @@ import 'visibility_picker.dart' show audienceOf;
 import 'loading_view.dart';
 import 'place_field.dart';
 import 'segment_tabs.dart';
-import 'tag_field.dart';
 
 const feedPageSize = 20;
 const _loadAheadPixels = 600.0;
@@ -710,18 +710,15 @@ class _FeedPostCardState extends State<FeedPostCard> {
             onTap: widget.onTap,
             child: Padding(
               padding: const EdgeInsets.only(top: AppGap.snug),
-              child: Text(
-                post.caption,
+              child: CaptionText(
+                caption: post.caption,
+                tags: post.tags,
+                onOpenTag: widget.onOpenTag,
                 style: theme.textTheme.bodyLarge,
                 maxLines: FeedPostCard.captionLines,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-          ),
-        if (post.tags.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: AppGap.tiny),
-            child: PostTagsLine(tags: post.tags, onOpen: widget.onOpenTag),
           ),
         Padding(
           padding: const EdgeInsets.only(top: AppGap.tiny),

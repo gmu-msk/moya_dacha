@@ -62,12 +62,25 @@ func (s *Server) EditCaption(ctx context.Context, request gen.EditCaptionRequest
 		return gen.EditCaption400JSONResponse(errInvalidCaption), nil
 	}
 
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	// Та же подпись — не правка: edited_at не появляется и не сдвигается
 	// (требование 4).
-	if _, err := s.db.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		UPDATE posts SET caption = $2, edited_at = now()
 		WHERE id = $1 AND caption <> $2`, request.PostId, caption,
 	); err != nil {
+		return nil, err
+	}
+	// Тэги — хэштеги новой подписи, целиком (specs/028-post-tags.md,
+	// требование 6).
+	if err := writeTags(ctx, tx, request.PostId, captionTags(caption)); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
