@@ -112,15 +112,6 @@ class _PostScreenState extends State<PostScreen> {
       label: 'Подпись',
       maxLength: maxCaptionLength,
       allowEmpty: true,
-      // Тэги — хэштеги подписи: подсказки те же, что в «Новом посте»
-      // (specs/028-post-tags.md, требование 25).
-      helper: hashtagHelper,
-      below: (text, enabled) => HashtagSuggestions(
-        token: widget.token,
-        caption: text,
-        maxLength: maxCaptionLength,
-        enabled: enabled,
-      ),
       save: (text) =>
           PostsApi(apiClient(token: widget.token))
               .editCaption(post.id, CaptionUpdate(caption: text)),

@@ -15,8 +15,7 @@ const maxCaptionLength = 1000;
 /// Показать окно правки. [save] отправляет текст на сервис; окно
 /// закрывается с его результатом, когда он удался, и с `null` по
 /// «Отмене». [allowEmpty] — можно ли сохранить пустой текст: подпись
-/// можно, комментарий нет. [below] — что показать под полем: у подписи
-/// это подсказки хэштегов (specs/028-post-tags.md, требование 25).
+/// можно, комментарий нет.
 Future<T?> editText<T>(
   BuildContext context, {
   required String title,
@@ -25,8 +24,6 @@ Future<T?> editText<T>(
   required int maxLength,
   required bool allowEmpty,
   required Future<T?> Function(String text) save,
-  String? helper,
-  Widget Function(TextEditingController text, bool enabled)? below,
 }) => showDialog<T>(
   context: context,
   builder: (context) => _EditTextDialog<T>(
@@ -36,8 +33,6 @@ Future<T?> editText<T>(
     maxLength: maxLength,
     allowEmpty: allowEmpty,
     save: save,
-    helper: helper,
-    below: below,
   ),
 );
 
@@ -49,8 +44,6 @@ class _EditTextDialog<T> extends StatefulWidget {
     required this.maxLength,
     required this.allowEmpty,
     required this.save,
-    this.helper,
-    this.below,
   });
 
   final String title;
@@ -59,8 +52,6 @@ class _EditTextDialog<T> extends StatefulWidget {
   final int maxLength;
   final bool allowEmpty;
   final Future<T?> Function(String text) save;
-  final String? helper;
-  final Widget Function(TextEditingController text, bool enabled)? below;
 
   @override
   State<_EditTextDialog<T>> createState() => _EditTextDialogState<T>();
@@ -108,34 +99,19 @@ class _EditTextDialogState<T> extends State<_EditTextDialog<T>> {
 
   @override
   Widget build(BuildContext context) {
-    final field = TextField(
-      controller: _text,
-      enabled: !_saving,
-      autofocus: true,
-      maxLength: widget.maxLength,
-      maxLines: null,
-      minLines: 3,
-      textCapitalization: TextCapitalization.sentences,
-      onChanged: (_) => setState(() {}),
-      decoration: InputDecoration(
-        labelText: widget.label,
-        errorText: _error,
-        helperText: widget.helper,
-        helperMaxLines: 2,
-      ),
-    );
-    final below = widget.below;
     return AlertDialog(
       title: Text(widget.title),
-      content: below == null
-          ? field
-          : SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [field, below(_text, !_saving)],
-              ),
-            ),
+      content: TextField(
+        controller: _text,
+        enabled: !_saving,
+        autofocus: true,
+        maxLength: widget.maxLength,
+        maxLines: null,
+        minLines: 3,
+        textCapitalization: TextCapitalization.sentences,
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(labelText: widget.label, errorText: _error),
+      ),
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),

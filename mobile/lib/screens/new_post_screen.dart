@@ -25,7 +25,6 @@ import '../widgets/app_screen.dart';
 import '../widgets/edit_text_dialog.dart';
 import '../widgets/error_view.dart';
 import '../widgets/group_picker.dart';
-import '../widgets/hashtags.dart';
 import '../widgets/place_field.dart';
 import '../widgets/visibility_picker.dart';
 
@@ -371,21 +370,12 @@ class _NewPostScreenState extends State<NewPostScreen> {
                   maxLines: 4,
                   minLines: 2,
                   maxLength: maxCaptionLength,
+                  // Ни подсказки внутри, ни строки про хэштеги
+                  // (specs/028-post-tags.md, требования 20–21).
                   decoration: const InputDecoration(
                     labelText: 'Подпись (необязательно)',
-                    hintText: 'Что выросло?',
-                    helperText: hashtagHelper,
-                    helperMaxLines: 2,
                     alignLabelWithHint: true,
                   ),
-                ),
-                // Тэги — хэштеги в подписи (specs/028-post-tags.md,
-                // требования 20–22).
-                HashtagSuggestions(
-                  token: widget.token,
-                  caption: _caption,
-                  maxLength: maxCaptionLength,
-                  enabled: !_publishing,
                 ),
                 const SizedBox(height: AppGap.medium),
                 VisibilityPicker(
