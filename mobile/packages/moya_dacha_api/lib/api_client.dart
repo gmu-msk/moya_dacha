@@ -183,6 +183,8 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AnswerMark':
+          return AnswerMark.fromJson(value);
         case 'AppErrorReport':
           return AppErrorReport.fromJson(value);
         case 'AppSessionEnd':
@@ -269,6 +271,8 @@ class ApiClient {
           return ProfileUpdate.fromJson(value);
         case 'PushToken':
           return PushToken.fromJson(value);
+        case 'QuestionSolved':
+          return QuestionSolved.fromJson(value);
         case 'Relation':
           return Relation.fromJson(value);
         case 'ReportDraft':

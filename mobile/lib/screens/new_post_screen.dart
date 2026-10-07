@@ -101,6 +101,10 @@ class _NewPostScreenState extends State<NewPostScreen> {
   /// Место поста; в профиль не попадает.
   late Place? _place = widget.place;
 
+  /// Пост-вопрос; потом не меняется (specs/033-question-posts.md,
+  /// требования 1 и 13).
+  bool _question = false;
+
   PostsApi get _api => PostsApi(apiClient(token: widget.token));
 
   bool get _ready =>
@@ -314,6 +318,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
           visibilityGroupId: _audience.group?.id,
           placeId: _place?.id,
           groupIds: _groupIds,
+          question: _question,
         ),
       );
       debugPrint('$logMarker post=published id=${post?.id}');
@@ -375,6 +380,20 @@ class _NewPostScreenState extends State<NewPostScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Подпись (необязательно)',
                     alignLabelWithHint: true,
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _question,
+                  onChanged: _publishing
+                      ? null
+                      : (value) => setState(() => _question = value),
+                  secondary: const Icon(Icons.help_outline),
+                  title: const Text('Вопрос'),
+                  subtitle: const Text(
+                    'Отметьте, если это вопрос — например «что это за '
+                    'растение» или «что с ним», — чтобы другие могли '
+                    'ответить, а вы — отметить решение',
                   ),
                 ),
                 const SizedBox(height: AppGap.medium),

@@ -20,6 +20,7 @@ import 'hashtags.dart';
 import 'like_button.dart';
 import 'post_action.dart';
 import 'post_groups_line.dart';
+import 'question_line.dart';
 import 'visibility_picker.dart' show audienceOf;
 import 'loading_view.dart';
 import 'place_field.dart';
@@ -709,6 +710,13 @@ class _FeedPostCardState extends State<FeedPostCard> {
           Padding(
             padding: const EdgeInsets.only(bottom: AppGap.snug),
             child: PostPlaceLine(place: place, distanceKm: post.distanceKm),
+          ),
+        // Вопрос виден до фото: кто ждёт помощи, а кому уже ответили
+        // (specs/033-question-posts.md, требование 14).
+        if (isQuestion(post))
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppGap.snug),
+            child: QuestionLine(post: post),
           ),
         if (post.media.isNotEmpty)
           GestureDetector(

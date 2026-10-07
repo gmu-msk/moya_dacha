@@ -18,6 +18,7 @@ class PostDraft {
     this.visibility,
     this.placeId,
     this.groupIds = const [],
+    this.question,
     this.visibilityGroupId,
   });
 
@@ -47,6 +48,15 @@ class PostDraft {
   /// Группы, в которых выложить пост: только те, где автор — участник; нет, `null` или пусто — ни в какой (specs/030-group-posts.md) 
   List<String>? groupIds;
 
+  /// Пост-вопрос; нет или `false` — обычный пост. Потом не меняется (specs/033-question-posts.md, требование 1) 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  bool? question;
+
   /// Пост увидят только участники этой группы; автор должен быть её участником. Тогда `visibility` не учитывается — приложение шлёт `me`, чтобы сервер без этой фичи не выложил пост всем. Группа сама добавляется к `group_ids`. Нет, `null` или пусто — видимость по `visibility` (specs/031-group-visibility.md) 
   String? visibilityGroupId;
 
@@ -57,6 +67,7 @@ class PostDraft {
     other.visibility == visibility &&
     other.placeId == placeId &&
     _deepEquality.equals(other.groupIds, groupIds) &&
+    other.question == question &&
     other.visibilityGroupId == visibilityGroupId;
 
   @override
@@ -67,10 +78,11 @@ class PostDraft {
     (visibility == null ? 0 : visibility!.hashCode) +
     (placeId == null ? 0 : placeId!.hashCode) +
     (groupIds == null ? 0 : groupIds!.hashCode) +
+    (question == null ? 0 : question!.hashCode) +
     (visibilityGroupId == null ? 0 : visibilityGroupId!.hashCode);
 
   @override
-  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, groupIds=$groupIds, visibilityGroupId=$visibilityGroupId]';
+  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, groupIds=$groupIds, question=$question, visibilityGroupId=$visibilityGroupId]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -94,6 +106,11 @@ class PostDraft {
       json[r'group_ids'] = this.groupIds;
     } else {
       json[r'group_ids'] = null;
+    }
+    if (this.question != null) {
+      json[r'question'] = this.question;
+    } else {
+      json[r'question'] = null;
     }
     if (this.visibilityGroupId != null) {
       json[r'visibility_group_id'] = this.visibilityGroupId;
@@ -129,6 +146,7 @@ class PostDraft {
         groupIds: json[r'group_ids'] is Iterable
             ? (json[r'group_ids'] as Iterable).cast<String>().toList(growable: false)
             : const [],
+        question: mapValueOfType<bool>(json, r'question'),
         visibilityGroupId: mapValueOfType<String>(json, r'visibility_group_id'),
       );
     }

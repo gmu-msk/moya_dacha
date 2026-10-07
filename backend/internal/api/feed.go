@@ -136,6 +136,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 			),
 			`+bookmarkColumns("$4")+`,
 			`+commentCount("$4")+`,
+			`+questionColumns+`,
 			`+postPlaceColumns("$4")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
 		`+bookmarkJoin+`
@@ -178,6 +179,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 			post      gen.Post
 			avatarKey *string
 			place     postPlaceScan
+			question  questionScan
 			group     visibilityGroupScan
 		)
 		if err := rows.Scan(append(append([]any{&at, &post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption},
@@ -185,10 +187,11 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 			append([]any{
 				&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 				&post.Likes, &post.Liked, &post.Bookmarks, &post.Bookmarked, &post.Comments,
-			}, place.targets()...)...)...); err != nil {
+			}, append(question.targets(), place.targets()...)...)...)...); err != nil {
 			return gen.Feed{}, err
 		}
 		place.apply(&post)
+		question.apply(&post)
 		group.apply(&post)
 		if avatarKey != nil {
 			url := s.cfg.Media.URL(*avatarKey)

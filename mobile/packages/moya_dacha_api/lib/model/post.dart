@@ -22,6 +22,9 @@ class Post {
     required this.liked,
     this.bookmarks,
     this.bookmarked,
+    this.question,
+    this.solved,
+    this.answerCommentId,
     required this.comments,
     required this.visibility,
     this.editedAt,
@@ -70,6 +73,27 @@ class Post {
   ///
   bool? bookmarked;
 
+  /// Пост-вопрос: ждёт ответа, у него есть статус «Решён» / «Не решён» (specs/033-question-posts.md) 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  bool? question;
+
+  /// Вопрос решён; у обычного поста всегда `false`
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  bool? solved;
+
+  /// Комментарий, который автор вопроса отметил решением; `null` — не отмечен, нет поля — сервер без вопросов 
+  String? answerCommentId;
+
   /// Сколько комментариев под постом
   int comments;
 
@@ -109,6 +133,9 @@ class Post {
     other.liked == liked &&
     other.bookmarks == bookmarks &&
     other.bookmarked == bookmarked &&
+    other.question == question &&
+    other.solved == solved &&
+    other.answerCommentId == answerCommentId &&
     other.comments == comments &&
     other.visibility == visibility &&
     other.editedAt == editedAt &&
@@ -130,6 +157,9 @@ class Post {
     (liked.hashCode) +
     (bookmarks == null ? 0 : bookmarks!.hashCode) +
     (bookmarked == null ? 0 : bookmarked!.hashCode) +
+    (question == null ? 0 : question!.hashCode) +
+    (solved == null ? 0 : solved!.hashCode) +
+    (answerCommentId == null ? 0 : answerCommentId!.hashCode) +
     (comments.hashCode) +
     (visibility.hashCode) +
     (editedAt == null ? 0 : editedAt!.hashCode) +
@@ -140,7 +170,7 @@ class Post {
     (visibilityGroup == null ? 0 : visibilityGroup!.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, bookmarks=$bookmarks, bookmarked=$bookmarked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags, groups=$groups, visibilityGroup=$visibilityGroup]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, bookmarks=$bookmarks, bookmarked=$bookmarked, question=$question, solved=$solved, answerCommentId=$answerCommentId, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags, groups=$groups, visibilityGroup=$visibilityGroup]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -160,6 +190,21 @@ class Post {
       json[r'bookmarked'] = this.bookmarked;
     } else {
       json[r'bookmarked'] = null;
+    }
+    if (this.question != null) {
+      json[r'question'] = this.question;
+    } else {
+      json[r'question'] = null;
+    }
+    if (this.solved != null) {
+      json[r'solved'] = this.solved;
+    } else {
+      json[r'solved'] = null;
+    }
+    if (this.answerCommentId != null) {
+      json[r'answer_comment_id'] = this.answerCommentId;
+    } else {
+      json[r'answer_comment_id'] = null;
     }
       json[r'comments'] = this.comments;
       json[r'visibility'] = this.visibility;
@@ -230,6 +275,9 @@ class Post {
         liked: mapValueOfType<bool>(json, r'liked')!,
         bookmarks: mapValueOfType<int>(json, r'bookmarks'),
         bookmarked: mapValueOfType<bool>(json, r'bookmarked'),
+        question: mapValueOfType<bool>(json, r'question'),
+        solved: mapValueOfType<bool>(json, r'solved'),
+        answerCommentId: mapValueOfType<String>(json, r'answer_comment_id'),
         comments: mapValueOfType<int>(json, r'comments')!,
         visibility: PostVisibility.fromJson(json[r'visibility'])!,
         editedAt: mapDateTime(json, r'edited_at', r''),
