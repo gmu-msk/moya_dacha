@@ -11,6 +11,7 @@ import '../theme.dart';
 import '../usage.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/author_line.dart';
+import '../widgets/bookmark_button.dart';
 import '../widgets/comments_view.dart';
 import '../widgets/confirm.dart';
 import '../widgets/edit_text_dialog.dart';
@@ -309,14 +310,21 @@ class _PostScreenState extends State<PostScreen> {
                     style: theme.textTheme.bodyLarge,
                   ),
                 ],
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: LikeButton(
-                    key: _like,
-                    post: post,
-                    token: widget.token,
-                    onChanged: _changed,
-                  ),
+                Row(
+                  children: [
+                    LikeButton(
+                      key: _like,
+                      post: post,
+                      token: widget.token,
+                      onChanged: _changed,
+                    ),
+                    const Spacer(),
+                    BookmarkButton(
+                      post: post,
+                      token: widget.token,
+                      onChanged: _changed,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppGap.small),
                 CommentsView(

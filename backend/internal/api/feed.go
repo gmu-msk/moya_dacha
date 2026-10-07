@@ -82,6 +82,10 @@ type feedFilter struct {
 	// groupID — посты группы, её лента (specs/030-group-posts.md,
 	// требование 9).
 	groupID string
+	// bookmarks — «Сохранённые» смотрящего: только его закладки, и
+	// порядок и курсор — по времени закладки, а не поста
+	// (specs/032-bookmarks.md, требование 7).
+	bookmarks bool
 	// followingOnly — вкладка «Подписки» (specs/012-follows.md,
 	// требование 17): свои посты, посты тех, на кого смотрящий подписан
 	// (заявка — не подписка), и посты групп, где он участник
@@ -112,19 +116,29 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 		return &value
 	}
 
+	// Ключ порядка — время поста, а в «Сохранённых» — время закладки:
+	// закладки смотрящего присоединяются, и всё остальное в запросе то же.
+	sortAt, bookmarkJoin := "p.created_at", ""
+	if filter.bookmarks {
+		sortAt = "sb.created_at"
+		bookmarkJoin = "JOIN post_bookmarks sb ON sb.post_id = p.id AND sb.user_id = $4::uuid"
+	}
+
 	// Берём на пост больше, чем просили: лишний пост не отдаётся, он
 	// только отвечает на вопрос «есть ли что-то дальше».
 	rows, err := s.db.Query(ctx, `
-		SELECT p.id, p.created_at, p.edited_at, p.caption, `+postVisibilityColumns+`,
+		SELECT `+sortAt+`, p.id, p.created_at, p.edited_at, p.caption, `+postVisibilityColumns+`,
 			u.id, u.nickname, u.name, u.avatar_key,
 			(SELECT count(*) FROM post_likes l WHERE l.post_id = p.id),
 			EXISTS (
 				SELECT 1 FROM post_likes l
 				WHERE l.post_id = p.id AND l.user_id = $4::uuid
 			),
+			`+bookmarkColumns("$4")+`,
 			`+commentCount("$4")+`,
 			`+postPlaceColumns("$4")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
+		`+bookmarkJoin+`
 		`+postPlaceJoin+`
 		`+postVisibilityJoin+`
 		WHERE ($5::uuid IS NULL OR p.author_id = $5::uuid)
@@ -147,8 +161,8 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 		  AND ($8::uuid IS NULL OR EXISTS (
 		       SELECT 1 FROM post_groups pg WHERE pg.post_id = p.id AND pg.group_id = $8::uuid))
 		  AND ($1::timestamptz IS NULL
-		       OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid))
-		ORDER BY p.created_at DESC, p.id DESC
+		       OR (`+sortAt+`, p.id) < ($1::timestamptz, $2::uuid))
+		ORDER BY `+sortAt+` DESC, p.id DESC
 		LIMIT $3`, afterTime, afterID, limit+1, viewerID,
 		optional(filter.authorID), filter.followingOnly, optional(filter.tag), optional(filter.groupID))
 	if err != nil {
@@ -157,18 +171,20 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 	defer rows.Close()
 
 	feed := gen.Feed{Items: []gen.Post{}}
+	var sorted []time.Time
 	for rows.Next() {
 		var (
+			at        time.Time
 			post      gen.Post
 			avatarKey *string
 			place     postPlaceScan
 			group     visibilityGroupScan
 		)
-		if err := rows.Scan(append(append([]any{&post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption},
+		if err := rows.Scan(append(append([]any{&at, &post.Id, &post.CreatedAt, &post.EditedAt, &post.Caption},
 			group.targets(&post)...),
 			append([]any{
 				&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
-				&post.Likes, &post.Liked, &post.Comments,
+				&post.Likes, &post.Liked, &post.Bookmarks, &post.Bookmarked, &post.Comments,
 			}, place.targets()...)...)...); err != nil {
 			return gen.Feed{}, err
 		}
@@ -179,6 +195,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 			post.Author.AvatarUrl = &url
 		}
 		feed.Items = append(feed.Items, post)
+		sorted = append(sorted, at)
 	}
 	if err := rows.Err(); err != nil {
 		return gen.Feed{}, err
@@ -187,7 +204,7 @@ func (s *Server) feedPage(ctx context.Context, viewerID string, filter feedFilte
 	if len(feed.Items) > limit {
 		feed.Items = feed.Items[:limit]
 		last := feed.Items[limit-1]
-		cursor := feedCursor{createdAt: last.CreatedAt, id: last.Id}.String()
+		cursor := feedCursor{createdAt: sorted[limit-1], id: last.Id}.String()
 		feed.NextCursor = &cursor
 	}
 

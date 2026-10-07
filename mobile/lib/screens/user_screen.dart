@@ -24,6 +24,7 @@ import '../widgets/follow_button.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/place_field.dart';
 import '../widgets/user_avatar.dart';
+import 'bookmarks_screen.dart';
 import 'follow_list_screen.dart';
 import 'groups_screen.dart';
 import 'profile_screen.dart';
@@ -284,6 +285,17 @@ class UserScreenState extends State<UserScreen> {
     ),
   );
 
+  /// «Сохранённые» (specs/032-bookmarks.md, требование 14).
+  Future<void> _openBookmarks() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => BookmarksScreen(
+        token: widget.token,
+        viewerId: widget.viewerId,
+        onPostChanged: widget.onPostChanged,
+      ),
+    ),
+  );
+
   /// Посты подряд, сразу на том, которого коснулись
   /// (specs/009-user-profile.md, требование 11).
   Future<void> _openPosts(int index, UserProfile profile) =>
@@ -327,6 +339,14 @@ class UserScreenState extends State<UserScreen> {
       showServerStatus: false,
       padded: false,
       actions: [
+        // «Сохранённые» — только в своём профиле (specs/032-bookmarks.md,
+        // требование 14).
+        if (_mine)
+          IconButton(
+            tooltip: 'Сохранённые',
+            icon: const Icon(Icons.bookmark_border),
+            onPressed: _openBookmarks,
+          ),
         if (profile != null && !_mine)
           PopupMenuButton<bool>(
             tooltip: 'Ещё',

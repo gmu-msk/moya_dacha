@@ -80,6 +80,66 @@ class PostsApi {
     return null;
   }
 
+  /// Добавить пост в закладки
+  ///
+  /// Один пользователь — не больше одной закладки на пост. Идемпотентно: повтор ничего не меняет, время закладки остаётся первым. В ответе — пост целиком (specs/032-bookmarks.md, требования 1–3). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Response> bookmarkPostWithHttpInfo(String postId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/bookmark'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Добавить пост в закладки
+  ///
+  /// Один пользователь — не больше одной закладки на пост. Идемпотентно: повтор ничего не меняет, время закладки остаётся первым. В ответе — пост целиком (specs/032-bookmarks.md, требования 1–3). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Post?> bookmarkPost(String postId, { Future<void>? abortTrigger, }) async {
+    final response = await bookmarkPostWithHttpInfo(postId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
   /// Опубликовать пост
   ///
   /// От одной до десяти уже загруженных фотографий и необязательная подпись. Поста без медиа не существует (docs/adr/0006-post-is-media.md).  Порядок фотографий в посте — порядок идентификаторов в `media_ids`.  Тэги поста сервер берёт из хэштегов подписи (specs/028-post-tags.md, требования 3–6). 
@@ -378,6 +438,78 @@ class PostsApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Comment',) as Comment;
+    
+    }
+    return null;
+  }
+
+  /// «Сохранённые» — мои закладки
+  ///
+  /// Посты из своих закладок страницами, новые сверху по времени закладки. Только посты, видимые смотрящему сейчас (specs/032-bookmarks.md, требования 7 и 8). Курсор непрозрачен. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] limit:
+  ///   Сколько записей вернуть, от 1 до 50
+  ///
+  /// * [String] cursor:
+  ///   Курсор из предыдущего ответа; без него — первая страница
+  Future<Response> getBookmarksWithHttpInfo({ int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/me/bookmarks';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (cursor != null) {
+      queryParams.addAll(_queryParams('', 'cursor', cursor));
+    }
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// «Сохранённые» — мои закладки
+  ///
+  /// Посты из своих закладок страницами, новые сверху по времени закладки. Только посты, видимые смотрящему сейчас (specs/032-bookmarks.md, требования 7 и 8). Курсор непрозрачен. 
+  ///
+  /// Parameters:
+  ///
+  /// * [int] limit:
+  ///   Сколько записей вернуть, от 1 до 50
+  ///
+  /// * [String] cursor:
+  ///   Курсор из предыдущего ответа; без него — первая страница
+  Future<Feed?> getBookmarks({ int? limit, String? cursor, Future<void>? abortTrigger, }) async {
+    final response = await getBookmarksWithHttpInfo(limit: limit, cursor: cursor, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Feed',) as Feed;
     
     }
     return null;
@@ -904,6 +1036,66 @@ class PostsApi {
   /// * [PostVisibilityUpdate] postVisibilityUpdate (required):
   Future<Post?> setPostVisibility(String postId, PostVisibilityUpdate postVisibilityUpdate, { Future<void>? abortTrigger, }) async {
     final response = await setPostVisibilityWithHttpInfo(postId, postVisibilityUpdate, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
+  /// Убрать пост из закладок
+  ///
+  /// Идемпотентно: убрать закладку, которой не было, — не ошибка (specs/032-bookmarks.md, требование 3). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Response> unbookmarkPostWithHttpInfo(String postId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/bookmark'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Убрать пост из закладок
+  ///
+  /// Идемпотентно: убрать закладку, которой не было, — не ошибка (specs/032-bookmarks.md, требование 3). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Post?> unbookmarkPost(String postId, { Future<void>? abortTrigger, }) async {
+    final response = await unbookmarkPostWithHttpInfo(postId, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
