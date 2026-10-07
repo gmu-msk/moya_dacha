@@ -1807,6 +1807,115 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /posts/{postId}/bookmark:
+    put:
+      operationId: bookmarkPost
+      summary: Добавить пост в закладки
+      description: |
+        Один пользователь — не больше одной закладки на пост. Идемпотентно:
+        повтор ничего не меняет, время закладки остаётся первым. В ответе —
+        пост целиком (specs/032-bookmarks.md, требования 1–3).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Пост в закладках
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: unbookmarkPost
+      summary: Убрать пост из закладок
+      description: |
+        Идемпотентно: убрать закладку, которой не было, — не ошибка
+        (specs/032-bookmarks.md, требование 3).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Пост без закладки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /me/bookmarks:
+    get:
+      operationId: getBookmarks
+      summary: «Сохранённые» — мои закладки
+      description: |
+        Посты из своих закладок страницами, новые сверху по времени
+        закладки. Только посты, видимые смотрящему сейчас
+        (specs/032-bookmarks.md, требования 7 и 8). Курсор непрозрачен.
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Страница «Сохранённых»
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feed"
+        "400":
+          description: |
+            `limit` вне диапазона или не число (`invalid_request`), курсор
+            не разбирается (`invalid_cursor`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /posts/{postId}/comments:
     get:
       operationId: getComments
@@ -2879,6 +2988,19 @@ components:
           type: boolean
           description: Отметил ли пост тот, кто спрашивает
           example: true
+        # В required нет нарочно, как у tags: сборка из PR ходит и на
+        # сервер с main. Сервер с закладками отдаёт оба поля всегда.
+        bookmarks:
+          type: integer
+          format: int32
+          description: |
+            Сколько людей сохранили пост в закладки. Кто именно — не
+            показывается (specs/032-bookmarks.md, требование 6).
+          example: 2
+        bookmarked:
+          type: boolean
+          description: Сохранил ли пост в закладки тот, кто спрашивает
+          example: false
         comments:
           type: integer
           format: int32

@@ -11,6 +11,7 @@ import 'package:moya_dacha_api/api.dart';
 import '../api.dart';
 import '../theme.dart';
 import 'author_line.dart';
+import 'bookmark_button.dart';
 import 'bottom_bar.dart';
 import 'comment_icon.dart';
 import 'empty_view.dart';
@@ -191,6 +192,7 @@ class FeedView extends StatefulWidget {
     this.scope = FeedScope.all,
     this.tag,
     this.groupId,
+    this.bookmarks = false,
     this.header,
     this.onShowAll,
     this.onRefreshed,
@@ -198,6 +200,9 @@ class FeedView extends StatefulWidget {
 
   final String token;
   final FeedScope scope;
+
+  /// «Сохранённые» — свои закладки (specs/032-bookmarks.md, требование 15).
+  final bool bookmarks;
 
   /// Только посты с этим тэгом (specs/028-post-tags.md, требование 24).
   final String? tag;
@@ -239,6 +244,9 @@ class FeedViewState extends State<FeedView> {
 
   /// Страница ленты: лента группы — своя ручка, остальное — общая лента.
   Future<Feed?> _page({String? cursor}) {
+    if (widget.bookmarks) {
+      return _api.getBookmarks(limit: feedPageSize, cursor: cursor);
+    }
     final groupId = widget.groupId;
     if (groupId != null) {
       return GroupsApi(apiClient(token: widget.token))
@@ -396,7 +404,15 @@ class FeedViewState extends State<FeedView> {
               height:
                   MediaQuery.sizeOf(context).height *
                   (header == null ? 0.6 : 0.4),
-              child: widget.groupId != null
+              child: widget.bookmarks
+                  ? const EmptyView(
+                      icon: Icons.bookmark_border,
+                      title: 'Сохранённых постов пока нет',
+                      hint:
+                          'Нажмите на закладку под постом, и он появится '
+                          'здесь',
+                    )
+                  : widget.groupId != null
                   ? const EmptyView(
                       icon: Icons.groups_outlined,
                       title: 'В группе пока нет постов',
@@ -736,6 +752,12 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 tooltip: 'Комментарии',
                 onPressed: widget.onTap,
                 color: theme.colorScheme.secondary,
+              ),
+              const Spacer(),
+              BookmarkButton(
+                post: post,
+                token: widget.token,
+                onChanged: widget.onChanged,
               ),
             ],
           ),

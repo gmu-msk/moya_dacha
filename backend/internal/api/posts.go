@@ -307,6 +307,7 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		SELECT p.id, p.created_at, p.edited_at, p.caption, `+postVisibilityColumns+`,
 			u.id, u.nickname, u.name, u.avatar_key,
 			`+likeColumns+`,
+			`+bookmarkColumns("$2")+`,
 			`+commentCount("$2")+`,
 			`+postPlaceColumns("$2")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
@@ -317,7 +318,7 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		group.targets(&post)...),
 		append([]any{
 			&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
-			&post.Likes, &post.Liked, &post.Comments,
+			&post.Likes, &post.Liked, &post.Bookmarks, &post.Bookmarked, &post.Comments,
 		}, place.targets()...)...)...); err != nil {
 		return gen.Post{}, err
 	}

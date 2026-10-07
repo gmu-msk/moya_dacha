@@ -20,6 +20,8 @@ class Post {
     this.media = const [],
     required this.likes,
     required this.liked,
+    this.bookmarks,
+    this.bookmarked,
     required this.comments,
     required this.visibility,
     this.editedAt,
@@ -49,6 +51,24 @@ class Post {
 
   /// Отметил ли пост тот, кто спрашивает
   bool liked;
+
+  /// Сколько людей сохранили пост в закладки. Кто именно — не показывается (specs/032-bookmarks.md, требование 6). 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  int? bookmarks;
+
+  /// Сохранил ли пост в закладки тот, кто спрашивает
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  bool? bookmarked;
 
   /// Сколько комментариев под постом
   int comments;
@@ -87,6 +107,8 @@ class Post {
     _deepEquality.equals(other.media, media) &&
     other.likes == likes &&
     other.liked == liked &&
+    other.bookmarks == bookmarks &&
+    other.bookmarked == bookmarked &&
     other.comments == comments &&
     other.visibility == visibility &&
     other.editedAt == editedAt &&
@@ -106,6 +128,8 @@ class Post {
     (media.hashCode) +
     (likes.hashCode) +
     (liked.hashCode) +
+    (bookmarks == null ? 0 : bookmarks!.hashCode) +
+    (bookmarked == null ? 0 : bookmarked!.hashCode) +
     (comments.hashCode) +
     (visibility.hashCode) +
     (editedAt == null ? 0 : editedAt!.hashCode) +
@@ -116,7 +140,7 @@ class Post {
     (visibilityGroup == null ? 0 : visibilityGroup!.hashCode);
 
   @override
-  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags, groups=$groups, visibilityGroup=$visibilityGroup]';
+  String toString() => 'Post[id=$id, createdAt=$createdAt, caption=$caption, author=$author, media=$media, likes=$likes, liked=$liked, bookmarks=$bookmarks, bookmarked=$bookmarked, comments=$comments, visibility=$visibility, editedAt=$editedAt, place=$place, distanceKm=$distanceKm, tags=$tags, groups=$groups, visibilityGroup=$visibilityGroup]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -127,6 +151,16 @@ class Post {
       json[r'media'] = this.media;
       json[r'likes'] = this.likes;
       json[r'liked'] = this.liked;
+    if (this.bookmarks != null) {
+      json[r'bookmarks'] = this.bookmarks;
+    } else {
+      json[r'bookmarks'] = null;
+    }
+    if (this.bookmarked != null) {
+      json[r'bookmarked'] = this.bookmarked;
+    } else {
+      json[r'bookmarked'] = null;
+    }
       json[r'comments'] = this.comments;
       json[r'visibility'] = this.visibility;
     if (this.editedAt != null) {
@@ -194,6 +228,8 @@ class Post {
         media: Media.listFromJson(json[r'media']),
         likes: mapValueOfType<int>(json, r'likes')!,
         liked: mapValueOfType<bool>(json, r'liked')!,
+        bookmarks: mapValueOfType<int>(json, r'bookmarks'),
+        bookmarked: mapValueOfType<bool>(json, r'bookmarked'),
         comments: mapValueOfType<int>(json, r'comments')!,
         visibility: PostVisibility.fromJson(json[r'visibility'])!,
         editedAt: mapDateTime(json, r'edited_at', r''),
