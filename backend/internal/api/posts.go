@@ -155,7 +155,11 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 		placeID = &trimmed
 	}
 
-	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, visibilityGroupID, placeID, groupIDs, request.Body.MediaIds)
+	// Вопрос — только при публикации (specs/033-question-posts.md,
+	// требование 1).
+	question := request.Body.Question != nil && *request.Body.Question
+
+	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, visibilityGroupID, placeID, groupIDs, request.Body.MediaIds, question)
 	if errors.Is(err, errMediaUnusable) {
 		return gen.CreatePost400JSONResponse(errInvalidMedia), nil
 	}
@@ -208,7 +212,7 @@ var errPlaceUnknown = errors.New("место поста не из подсказ
 // фотографии — это перевод строки из «загружено» в «опубликовано», и
 // если хоть один перевод не удался, транзакция откатывается целиком
 // (specs/003-posts.md).
-func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, visibilityGroupID, placeID *string, groupIDs, mediaIDs []string) (string, error) {
+func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, visibilityGroupID, placeID *string, groupIDs, mediaIDs []string, question bool) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -217,10 +221,10 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, visib
 
 	var id string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO posts (author_id, caption, visibility, place_id, visibility_group_id)
-		SELECT $1, $2, $3, $4, $5
+		INSERT INTO posts (author_id, caption, visibility, place_id, visibility_group_id, question)
+		SELECT $1, $2, $3, $4, $5, $6
 		WHERE $4::text IS NULL OR EXISTS (SELECT 1 FROM places WHERE id = $4)
-		RETURNING id`, authorID, caption, string(visibility), placeID, visibilityGroupID,
+		RETURNING id`, authorID, caption, string(visibility), placeID, visibilityGroupID, question,
 	).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", errPlaceUnknown
@@ -301,6 +305,7 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		post      gen.Post
 		avatarKey *string
 		place     postPlaceScan
+		question  questionScan
 		group     visibilityGroupScan
 	)
 	if err := s.db.QueryRow(ctx, `
@@ -309,6 +314,7 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 			`+likeColumns+`,
 			`+bookmarkColumns("$2")+`,
 			`+commentCount("$2")+`,
+			`+questionColumns+`,
 			`+postPlaceColumns("$2")+`
 		FROM posts p JOIN users u ON u.id = p.author_id
 		`+postPlaceJoin+`
@@ -319,10 +325,11 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 		append([]any{
 			&post.Author.Id, &post.Author.Nickname, &post.Author.Name, &avatarKey,
 			&post.Likes, &post.Liked, &post.Bookmarks, &post.Bookmarked, &post.Comments,
-		}, place.targets()...)...)...); err != nil {
+		}, append(question.targets(), place.targets()...)...)...)...); err != nil {
 		return gen.Post{}, err
 	}
 	place.apply(&post)
+	question.apply(&post)
 	group.apply(&post)
 	if avatarKey != nil {
 		url := s.cfg.Media.URL(*avatarKey)

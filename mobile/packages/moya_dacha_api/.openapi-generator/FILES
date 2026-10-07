@@ -18,6 +18,7 @@ lib/auth/authentication.dart
 lib/auth/http_basic_auth.dart
 lib/auth/http_bearer_auth.dart
 lib/auth/oauth.dart
+lib/model/answer_mark.dart
 lib/model/app_error_report.dart
 lib/model/app_session_end.dart
 lib/model/app_session_started.dart
@@ -61,6 +62,7 @@ lib/model/post_visibility_update.dart
 lib/model/privacy_update.dart
 lib/model/profile_update.dart
 lib/model/push_token.dart
+lib/model/question_solved.dart
 lib/model/relation.dart
 lib/model/report_draft.dart
 lib/model/session_created.dart

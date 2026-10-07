@@ -768,6 +768,173 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /posts/{postId}/solved:
+    put:
+      operationId: setQuestionSolved
+      summary: Отметить свой вопрос решённым или нерешённым
+      description: |
+        Только у поста-вопроса и только его автор. `false` снимает и
+        отметку комментария-решения (specs/033-question-posts.md,
+        требование 5). Повтор того же значения — не ошибка.
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestionSolved"
+      responses:
+        "200":
+          description: Пост после изменения
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          description: |
+            Пост — не вопрос (`not_a_question`), тела нет, в нём нет
+            `solved` или оно не разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Пост есть, но он чужой (`not_your_post`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /posts/{postId}/answer:
+    put:
+      operationId: markAnswer
+      summary: Отметить комментарий решением своего вопроса
+      description: |
+        Комментарий под этим постом, видимый автору, становится решением:
+        `answer_comment_id` — он, `solved` — `true`. Прежняя отметка
+        снимается: решение у вопроса одно (specs/033-question-posts.md,
+        требования 6 и 8).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswerMark"
+      responses:
+        "200":
+          description: Пост после отметки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          description: |
+            Пост — не вопрос (`not_a_question`), тела нет, `comment_id`
+            нет или он пустой, тело не разбирается (`invalid_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Пост есть, но он чужой (`not_your_post`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: |
+            Поста нет или он не виден (`post_not_found`); комментария нет,
+            он под другим постом или скрыт от автора блокировкой
+            (`comment_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: unmarkAnswer
+      summary: Снять отметку решения
+      description: |
+        Отметка снимается, вопрос возвращается в «Не решён». Отметки не
+        было — не ошибка (specs/033-question-posts.md, требование 7).
+      tags: [posts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор поста (UUID)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Пост после снятия отметки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          description: Пост — не вопрос (`not_a_question`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Токена нет или он недействителен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Пост есть, но он чужой (`not_your_post`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Поста с таким идентификатором нет или смотрящему он не виден (`post_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /tags/suggestions:
     get:
       operationId: getTagSuggestions
@@ -3001,6 +3168,27 @@ components:
           type: boolean
           description: Сохранил ли пост в закладки тот, кто спрашивает
           example: false
+        # В required нет нарочно, как у bookmarks: сборка из PR ходит и
+        # на сервер с main. Сервер с вопросами отдаёт все три поля всегда.
+        question:
+          type: boolean
+          description: |
+            Пост-вопрос: ждёт ответа, у него есть статус «Решён» / «Не
+            решён» (specs/033-question-posts.md)
+          example: true
+        solved:
+          type: boolean
+          description: Вопрос решён; у обычного поста всегда `false`
+          example: false
+        answer_comment_id:
+          type: string
+          nullable: true
+          # Сервер с вопросами отдаёт поле всегда, без отметки — null.
+          x-omitempty: false
+          description: |
+            Комментарий, который автор вопроса отметил решением; `null` —
+            не отмечен, нет поля — сервер без вопросов
+          example: "7f4e1a90-5c3d-4f21-9a8b-6c5d4e3f2a10"
         comments:
           type: integer
           format: int32
@@ -3717,6 +3905,27 @@ components:
             а ошибка `invalid_request`.
           example: true
 
+    QuestionSolved:
+      type: object
+      description: Статус вопроса (specs/033-question-posts.md, требование 5).
+      # solved не в required нарочно: без поля сервис отвечает
+      # invalid_request, а не принимает его за false.
+      properties:
+        solved:
+          type: boolean
+          description: "`true` — «Решён», `false` — «Не решён» и без отметки решения"
+          example: true
+
+    AnswerMark:
+      type: object
+      description: Какой комментарий отметить решением.
+      required: [comment_id]
+      properties:
+        comment_id:
+          type: string
+          description: Идентификатор комментария под этим постом (UUID)
+          example: "7f4e1a90-5c3d-4f21-9a8b-6c5d4e3f2a10"
+
     PostDraft:
       type: object
       description: Из чего собирается пост.
@@ -3755,6 +3964,12 @@ components:
           items:
             type: string
           example: ["00000000-0000-4000-8000-000000002901"]
+        question:
+          type: boolean
+          description: |
+            Пост-вопрос; нет или `false` — обычный пост. Потом не меняется
+            (specs/033-question-posts.md, требование 1)
+          example: false
         visibility_group_id:
           type: string
           nullable: true

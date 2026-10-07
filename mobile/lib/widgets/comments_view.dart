@@ -13,6 +13,7 @@ import 'confirm.dart';
 import 'edit_text_dialog.dart';
 import 'error_view.dart';
 import 'loading_view.dart';
+import 'question_line.dart';
 import 'report_dialog.dart';
 
 /// Сколько символов помещается в комментарий. То же число, что и на
@@ -27,6 +28,9 @@ class CommentsView extends StatefulWidget {
     required this.viewerId,
     required this.onChanged,
     this.onOpenAuthor,
+    this.question = false,
+    this.answerCommentId,
+    this.onToggleAnswer,
   });
 
   final String postId;
@@ -45,6 +49,17 @@ class CommentsView extends StatefulWidget {
   /// Открыть профиль того, кто написал комментарий
   /// (specs/009-user-profile.md, требование 9).
   final void Function(Author author)? onOpenAuthor;
+
+  /// Пост — вопрос: поле подсказывает «Напишите свой ответ»
+  /// (specs/033-question-posts.md, требование 18).
+  final bool question;
+
+  /// Комментарий-решение: подсвечен и с меткой (требование 17).
+  final String? answerCommentId;
+
+  /// Отметить комментарий решением или снять отметку. Есть только
+  /// у автора вопроса (требование 16).
+  final void Function(Comment comment)? onToggleAnswer;
 
   @override
   State<CommentsView> createState() => _CommentsViewState();
@@ -232,12 +247,21 @@ class _CommentsViewState extends State<CommentsView> {
               onEdit: () => _edit(comment),
               onDelete: () => _delete(comment),
               onReport: () => _report(comment),
+              answer: comment.id == widget.answerCommentId,
+              onToggleAnswer: widget.onToggleAnswer == null
+                  ? null
+                  : () => widget.onToggleAnswer!(comment),
               onOpenAuthor: widget.onOpenAuthor == null
                   ? null
                   : () => widget.onOpenAuthor!(comment.author),
             ),
         const SizedBox(height: AppGap.medium),
-        _Composer(controller: _text, sending: _sending, onSend: _send),
+        _Composer(
+          controller: _text,
+          sending: _sending,
+          onSend: _send,
+          question: widget.question,
+        ),
       ],
     );
   }
@@ -251,10 +275,18 @@ class _CommentTile extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onReport,
+    this.answer = false,
+    this.onToggleAnswer,
     this.onOpenAuthor,
   });
 
   final Comment comment;
+
+  /// Этот комментарий — решение вопроса.
+  final bool answer;
+
+  /// Галочка «Отметить как решение» — только у автора вопроса.
+  final VoidCallback? onToggleAnswer;
 
   /// Свой ли это комментарий. Своё удаляют, на чужое жалуются — и
   /// никогда наоборот (specs/008-reports.md, требование 3).
@@ -268,44 +300,80 @@ class _CommentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final toggleAnswer = onToggleAnswer;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppGap.small),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: AuthorLine(
-                  author: comment.author,
-                  when: comment.createdAt,
-                  edited: comment.editedAt != null,
-                  onTap: onOpenAuthor,
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (answer)
+          const Padding(
+            padding: EdgeInsets.only(bottom: AppGap.tiny),
+            child: AnswerBadge(),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: AuthorLine(
+                author: comment.author,
+                when: comment.createdAt,
+                edited: comment.editedAt != null,
+                onTap: onOpenAuthor,
+              ),
+            ),
+            if (toggleAnswer != null)
+              IconButton(
+                tooltip: answer
+                    ? 'Снять отметку решения'
+                    : 'Отметить как решение',
+                onPressed: toggleAnswer,
+                color: answer ? theme.colorScheme.primary : null,
+                icon: Icon(
+                  answer ? Icons.check_circle : Icons.check_circle_outline,
                 ),
               ),
-              if (mine)
-                IconButton(
-                  tooltip: 'Изменить комментарий',
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-              if (mine)
-                IconButton(
-                  tooltip: 'Удалить комментарий',
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
-                )
-              else
-                IconButton(
-                  tooltip: 'Пожаловаться на комментарий',
-                  onPressed: onReport,
-                  icon: const Icon(Icons.flag_outlined),
-                ),
-            ],
-          ),
-          Text(comment.text, style: theme.textTheme.bodyLarge),
-        ],
+            if (mine)
+              IconButton(
+                tooltip: 'Изменить комментарий',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+            if (mine)
+              IconButton(
+                tooltip: 'Удалить комментарий',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+              )
+            else
+              IconButton(
+                tooltip: 'Пожаловаться на комментарий',
+                onPressed: onReport,
+                icon: const Icon(Icons.flag_outlined),
+              ),
+          ],
+        ),
+        Text(comment.text, style: theme.textTheme.bodyLarge),
+      ],
+    );
+
+    // Решение подсвечено фоном на своём месте: порядок разговора не
+    // меняется (требование 17).
+    if (!answer) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppGap.small),
+        child: body,
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppGap.small),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(AppShape.small),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppGap.small),
+          child: body,
+        ),
       ),
     );
   }
@@ -317,11 +385,13 @@ class _Composer extends StatelessWidget {
     required this.controller,
     required this.sending,
     required this.onSend,
+    this.question = false,
   });
 
   final TextEditingController controller;
   final bool sending;
   final VoidCallback onSend;
+  final bool question;
 
   @override
   Widget build(BuildContext context) {
@@ -335,9 +405,9 @@ class _Composer extends StatelessWidget {
           maxLines: null,
           minLines: 2,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Ваш комментарий',
-            hintText: 'Что скажете?',
+          decoration: InputDecoration(
+            labelText: question ? 'Ваш ответ' : 'Ваш комментарий',
+            hintText: question ? 'Напишите свой ответ' : 'Что скажете?',
           ),
         ),
         const SizedBox(height: AppGap.small),

@@ -20,6 +20,7 @@ import '../widgets/hashtags.dart';
 import '../widgets/like_button.dart';
 import '../widgets/place_field.dart';
 import '../widgets/post_groups_line.dart';
+import '../widgets/question_line.dart';
 import '../widgets/report_dialog.dart';
 import '../widgets/visibility_picker.dart';
 import 'group_screen.dart';
@@ -55,6 +56,9 @@ class _PostScreenState extends State<PostScreen> {
   final _heart = GlobalKey<BigHeartState>();
 
   bool _deleting = false;
+
+  /// Идёт смена статуса вопроса или отметки решения.
+  bool _questionBusy = false;
 
   bool get _mine => post.author.id == widget.viewerId;
 
@@ -206,6 +210,82 @@ class _PostScreenState extends State<PostScreen> {
     widget.onChanged?.call(updated);
   }
 
+  /// Статус вопроса или отметка решения меняются сразу, не дожидаясь
+  /// сервиса; при ошибке — как было и сообщение
+  /// (specs/033-question-posts.md, требование 19).
+  Future<void> _changeQuestion({
+    required bool solved,
+    required String? answer,
+    required Future<Post?> Function(PostsApi api) send,
+    required String log,
+  }) async {
+    if (_questionBusy) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final before = post;
+    final optimistic = Post.fromJson(before.toJson())!
+      ..solved = solved
+      ..answerCommentId = answer;
+    setState(() => _questionBusy = true);
+    _changed(optimistic);
+    try {
+      final updated = await send(PostsApi(apiClient(token: widget.token)));
+      debugPrint(
+        '$logMarker question=$log solved=${updated?.solved} '
+        'answer=${updated?.answerCommentId}',
+      );
+      if (mounted && updated != null) {
+        _changed(updated);
+      }
+    } on Exception catch (error) {
+      debugPrint('$logMarker question=${log}_failed error=$error');
+      if (!mounted) {
+        return;
+      }
+      _changed(before);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(errorMessage(error))));
+    } finally {
+      if (mounted) {
+        setState(() => _questionBusy = false);
+      }
+    }
+  }
+
+  /// «Отметить решённым» / «Ещё не решён». «Не решён» снимает и отметку
+  /// комментария (требования 5 и 15).
+  Future<void> _toggleSolved() {
+    final solved = !(post.solved ?? false);
+    return _changeQuestion(
+      solved: solved,
+      answer: solved ? post.answerCommentId : null,
+      send: (api) =>
+          api.setQuestionSolved(post.id, QuestionSolved(solved: solved)),
+      log: solved ? 'solved' : 'unsolved',
+    );
+  }
+
+  /// Отметить комментарий решением или снять отметку с отмеченного
+  /// (требования 6, 7 и 16).
+  Future<void> _toggleAnswer(Comment comment) {
+    if (comment.id == post.answerCommentId) {
+      return _changeQuestion(
+        solved: false,
+        answer: null,
+        send: (api) => api.unmarkAnswer(post.id),
+        log: 'unmarked',
+      );
+    }
+    return _changeQuestion(
+      solved: true,
+      answer: comment.id,
+      send: (api) => api.markAnswer(post.id, AnswerMark(commentId: comment.id)),
+      log: 'marked',
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -301,6 +381,29 @@ class _PostScreenState extends State<PostScreen> {
                   const SizedBox(height: AppGap.small),
                   PostPlaceLine(place: place, distanceKm: post.distanceKm),
                 ],
+                if (isQuestion(post)) ...[
+                  const SizedBox(height: AppGap.small),
+                  QuestionLine(post: post),
+                  // Статус меняет только автор, и только здесь, а не
+                  // в ленте (требование 15).
+                  if (_mine)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _questionBusy ? null : _toggleSolved,
+                        icon: Icon(
+                          (post.solved ?? false)
+                              ? Icons.undo
+                              : Icons.check_circle_outline,
+                        ),
+                        label: Text(
+                          (post.solved ?? false)
+                              ? 'Ещё не решён'
+                              : 'Отметить решённым',
+                        ),
+                      ),
+                    ),
+                ],
                 if (post.caption.isNotEmpty) ...[
                   const SizedBox(height: AppGap.small),
                   CaptionText(
@@ -333,6 +436,11 @@ class _PostScreenState extends State<PostScreen> {
                   viewerId: widget.viewerId,
                   onChanged: _reload,
                   onOpenAuthor: _openAuthor,
+                  question: isQuestion(post),
+                  answerCommentId: post.answerCommentId,
+                  onToggleAnswer: isQuestion(post) && _mine
+                      ? _toggleAnswer
+                      : null,
                 ),
               ],
             ),

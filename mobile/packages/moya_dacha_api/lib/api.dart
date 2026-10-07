@@ -39,6 +39,7 @@ part 'api/profile_api.dart';
 part 'api/usage_api.dart';
 part 'api/users_api.dart';
 
+part 'model/answer_mark.dart';
 part 'model/app_error_report.dart';
 part 'model/app_session_end.dart';
 part 'model/app_session_started.dart';
@@ -82,6 +83,7 @@ part 'model/post_visibility_update.dart';
 part 'model/privacy_update.dart';
 part 'model/profile_update.dart';
 part 'model/push_token.dart';
+part 'model/question_solved.dart';
 part 'model/relation.dart';
 part 'model/report_draft.dart';
 part 'model/session_created.dart';

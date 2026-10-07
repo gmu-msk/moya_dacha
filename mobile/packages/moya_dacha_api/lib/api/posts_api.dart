@@ -866,6 +866,70 @@ class PostsApi {
     return null;
   }
 
+  /// Отметить комментарий решением своего вопроса
+  ///
+  /// Комментарий под этим постом, видимый автору, становится решением: `answer_comment_id` — он, `solved` — `true`. Прежняя отметка снимается: решение у вопроса одно (specs/033-question-posts.md, требования 6 и 8). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [AnswerMark] answerMark (required):
+  Future<Response> markAnswerWithHttpInfo(String postId, AnswerMark answerMark, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/answer'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = answerMark;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Отметить комментарий решением своего вопроса
+  ///
+  /// Комментарий под этим постом, видимый автору, становится решением: `answer_comment_id` — он, `solved` — `true`. Прежняя отметка снимается: решение у вопроса одно (specs/033-question-posts.md, требования 6 и 8). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [AnswerMark] answerMark (required):
+  Future<Post?> markAnswer(String postId, AnswerMark answerMark, { Future<void>? abortTrigger, }) async {
+    final response = await markAnswerWithHttpInfo(postId, answerMark, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
   /// Пожаловаться на чужой комментарий
   ///
   /// Жалоба подаётся по адресу поста, под которым лежит комментарий: пара должна сойтись, иначе `comment_not_found` (specs/008-reports.md). На свой комментарий не жалуются — свой удаляют. 
@@ -1049,6 +1113,70 @@ class PostsApi {
     return null;
   }
 
+  /// Отметить свой вопрос решённым или нерешённым
+  ///
+  /// Только у поста-вопроса и только его автор. `false` снимает и отметку комментария-решения (specs/033-question-posts.md, требование 5). Повтор того же значения — не ошибка. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [QuestionSolved] questionSolved (required):
+  Future<Response> setQuestionSolvedWithHttpInfo(String postId, QuestionSolved questionSolved, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/solved'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = questionSolved;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Отметить свой вопрос решённым или нерешённым
+  ///
+  /// Только у поста-вопроса и только его автор. `false` снимает и отметку комментария-решения (specs/033-question-posts.md, требование 5). Повтор того же значения — не ошибка. 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  ///
+  /// * [QuestionSolved] questionSolved (required):
+  Future<Post?> setQuestionSolved(String postId, QuestionSolved questionSolved, { Future<void>? abortTrigger, }) async {
+    final response = await setQuestionSolvedWithHttpInfo(postId, questionSolved, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
   /// Убрать пост из закладок
   ///
   /// Идемпотентно: убрать закладку, которой не было, — не ошибка (specs/032-bookmarks.md, требование 3). 
@@ -1156,6 +1284,66 @@ class PostsApi {
   ///   Идентификатор поста (UUID)
   Future<Post?> unlikePost(String postId, { Future<void>? abortTrigger, }) async {
     final response = await unlikePostWithHttpInfo(postId, abortTrigger: abortTrigger,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Post',) as Post;
+    
+    }
+    return null;
+  }
+
+  /// Снять отметку решения
+  ///
+  /// Отметка снимается, вопрос возвращается в «Не решён». Отметки не было — не ошибка (specs/033-question-posts.md, требование 7). 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Response> unmarkAnswerWithHttpInfo(String postId, { Future<void>? abortTrigger, }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/posts/{postId}/answer'
+      .replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Снять отметку решения
+  ///
+  /// Отметка снимается, вопрос возвращается в «Не решён». Отметки не было — не ошибка (specs/033-question-posts.md, требование 7). 
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///   Идентификатор поста (UUID)
+  Future<Post?> unmarkAnswer(String postId, { Future<void>? abortTrigger, }) async {
+    final response = await unmarkAnswerWithHttpInfo(postId, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

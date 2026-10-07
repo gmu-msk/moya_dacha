@@ -113,3 +113,4 @@ Android, раздача через **внутреннее тестировани
 - [specs/030-group-posts.md](030-group-posts.md) — посты в группах и лента группы
 - [specs/031-group-visibility.md](031-group-visibility.md) — «Кто увидит»: только участники группы
 - [specs/032-bookmarks.md](032-bookmarks.md) — закладки: сохранить пост для себя, «Сохранённые» в профиле
+- [specs/033-question-posts.md](033-question-posts.md) — пост-вопрос: статус «Решён» и отметка комментария-решения
