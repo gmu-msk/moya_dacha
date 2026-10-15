@@ -18,6 +18,7 @@ class Media {
     required this.url,
     required this.width,
     required this.height,
+    this.caption,
   });
 
   /// Идентификатор медиа (UUID)
@@ -35,13 +36,23 @@ class Media {
   /// Высота в пикселях
   int height;
 
+  /// Подпись автора к этому фото поста; нет подписи — поля нет (specs/034-photo-captions.md, требование 3) 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? caption;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is Media &&
     other.id == id &&
     other.kind == kind &&
     other.url == url &&
     other.width == width &&
-    other.height == height;
+    other.height == height &&
+    other.caption == caption;
 
   @override
   int get hashCode =>
@@ -50,10 +61,11 @@ class Media {
     (kind.hashCode) +
     (url.hashCode) +
     (width.hashCode) +
-    (height.hashCode);
+    (height.hashCode) +
+    (caption == null ? 0 : caption!.hashCode);
 
   @override
-  String toString() => 'Media[id=$id, kind=$kind, url=$url, width=$width, height=$height]';
+  String toString() => 'Media[id=$id, kind=$kind, url=$url, width=$width, height=$height, caption=$caption]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -62,6 +74,11 @@ class Media {
       json[r'url'] = this.url;
       json[r'width'] = this.width;
       json[r'height'] = this.height;
+    if (this.caption != null) {
+      json[r'caption'] = this.caption;
+    } else {
+      json[r'caption'] = null;
+    }
     return json;
   }
 
@@ -95,6 +112,7 @@ class Media {
         url: mapValueOfType<String>(json, r'url')!,
         width: mapValueOfType<int>(json, r'width')!,
         height: mapValueOfType<int>(json, r'height')!,
+        caption: mapValueOfType<String>(json, r'caption'),
       );
     }
     return null;

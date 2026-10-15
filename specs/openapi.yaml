@@ -586,9 +586,11 @@ paths:
         (docs/adr/0006-post-is-media.md).
 
         Порядок фотографий в посте — порядок идентификаторов в `media_ids`.
+        Подписи отдельных фото — в `media_captions`
+        (specs/034-photo-captions.md).
 
-        Тэги поста сервер берёт из хэштегов подписи
-        (specs/028-post-tags.md, требования 3–6).
+        Тэги поста сервер берёт из хэштегов подписи и подписей фото
+        (specs/028-post-tags.md, требования 3–6; specs/034, требование 11).
       tags: [posts]
       security:
         - bearerAuth: []
@@ -609,7 +611,8 @@ paths:
           description: |
             Нет ни одной фотографии (`no_media`), фотографий больше десяти
             (`too_many_media`), фотография чужая, уже опубликована или не
-            существует (`invalid_media`), подпись слишком длинная
+            существует, или ключ `media_captions` не из `media_ids`
+            (`invalid_media`), подпись поста или фото слишком длинная
             (`invalid_caption`), место не из подсказок (`unknown_place`),
             тело запроса не разбирается (`invalid_request`)
           content:
@@ -715,9 +718,11 @@ paths:
       description: |
         Меняется только подпись: фотографии, видимость, лайки и
         комментарии остаются. Проверки как у удаления, потом подпись —
-        как при создании поста (specs/022-edit-block-delete.md). Тэги
-        поста заменяются хэштегами новой подписи
-        (specs/028-post-tags.md, требование 6).
+        как при создании поста (specs/022-edit-block-delete.md). С
+        `media_captions` меняются и подписи перечисленных фото
+        (specs/034-photo-captions.md, требования 8–10). Тэги поста
+        заменяются хэштегами новых подписей (specs/028-post-tags.md,
+        требование 6).
       tags: [posts]
       security:
         - bearerAuth: []
@@ -743,8 +748,9 @@ paths:
                 $ref: "#/components/schemas/Post"
         "400":
           description: |
-            Подпись длиннее 1000 символов (`invalid_caption`), тело
-            запроса не разбирается (`invalid_request`)
+            Подпись поста или фото длиннее 1000 символов (`invalid_caption`),
+            ключ `media_captions` — не фото этого поста (`invalid_media`),
+            тело запроса не разбирается (`invalid_request`)
           content:
             application/json:
               schema:
@@ -3270,6 +3276,8 @@ components:
             пустой (specs/003-posts.md). Обязательна: тело без неё —
             `invalid_request`.
           example: "Первая клубника в этом году"
+        media_captions:
+          $ref: "#/components/schemas/MediaCaptions"
 
     PostVisibility:
       type: string
@@ -3970,6 +3978,8 @@ components:
             Пост-вопрос; нет или `false` — обычный пост. Потом не меняется
             (specs/033-question-posts.md, требование 1)
           example: false
+        media_captions:
+          $ref: "#/components/schemas/MediaCaptions"
         visibility_group_id:
           type: string
           nullable: true
@@ -4013,3 +4023,23 @@ components:
           format: int32
           description: Высота в пикселях
           example: 1200
+        caption:
+          type: string
+          description: |
+            Подпись автора к этому фото поста; нет подписи — поля нет
+            (specs/034-photo-captions.md, требование 3)
+          example: "Сорт Чудо, третий год"
+
+    MediaCaptions:
+      type: object
+      nullable: true
+      description: |
+        Подписи фото поста: идентификатор фото → подпись, до 1000 символов
+        после обрезки краёв; пустая — подписи нет. Ключ не из фото поста —
+        `invalid_media`. При создании фото без ключа публикуется без
+        подписи; при правке подписи фото без ключа не меняются, а нет
+        поля — не меняются все (specs/034-photo-captions.md, требования 5–9)
+      additionalProperties:
+        type: string
+      example:
+        "2b7e1a90-5c3d-4f21-9a8b-6c5d4e3f2a10": "Сорт Чудо, третий год"

@@ -14,7 +14,7 @@ import '../widgets/author_line.dart';
 import '../widgets/bookmark_button.dart';
 import '../widgets/comments_view.dart';
 import '../widgets/confirm.dart';
-import '../widgets/edit_text_dialog.dart';
+import '../widgets/edit_captions_dialog.dart';
 import '../widgets/feed_view.dart';
 import '../widgets/hashtags.dart';
 import '../widgets/like_button.dart';
@@ -56,6 +56,9 @@ class _PostScreenState extends State<PostScreen> {
   final _heart = GlobalKey<BigHeartState>();
 
   bool _deleting = false;
+
+  /// Открытое фото карусели — под ним его подпись.
+  int _photo = 0;
 
   /// Идёт смена статуса вопроса или отметки решения.
   bool _questionBusy = false;
@@ -110,16 +113,16 @@ class _PostScreenState extends State<PostScreen> {
   /// Поправить подпись. Фотографии, лайки и комментарии остаются
   /// (specs/022-edit-block-delete.md, требование 1).
   Future<void> _editCaption() async {
-    final updated = await editText<Post>(
+    // Одно окно на подпись поста и подписи фото
+    // (specs/034-photo-captions.md, требование 15).
+    final updated = await editCaptions(
       context,
-      title: 'Изменить подпись',
-      initial: post.caption,
-      label: 'Подпись',
-      maxLength: maxCaptionLength,
-      allowEmpty: true,
-      save: (text) =>
-          PostsApi(apiClient(token: widget.token))
-              .editCaption(post.id, CaptionUpdate(caption: text)),
+      post: post,
+      save: (caption, photos) => PostsApi(apiClient(token: widget.token))
+          .editCaption(
+            post.id,
+            CaptionUpdate(caption: caption, mediaCaptions: photos),
+          ),
     );
     if (!mounted || updated == null) {
       return;
@@ -296,7 +299,11 @@ class _PostScreenState extends State<PostScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    Widget photos = FeedPhotos(media: post.media, radius: 0);
+    Widget photos = FeedPhotos(
+      media: post.media,
+      radius: 0,
+      onPageChanged: (page) => setState(() => _photo = page),
+    );
     final tag = widget.heroTag;
     if (tag != null) {
       photos = Hero(tag: tag, child: photos);
@@ -358,6 +365,13 @@ class _PostScreenState extends State<PostScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Подпись открытого фото — сразу под каруселью
+                // (specs/034-photo-captions.md, требование 14).
+                PhotoCaption(
+                  media: post.media,
+                  page: _photo,
+                  padding: const EdgeInsets.only(bottom: AppGap.snug),
+                ),
                 AuthorLine(
                   author: post.author,
                   when: post.createdAt,

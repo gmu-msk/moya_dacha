@@ -654,6 +654,10 @@ class _FeedPostCardState extends State<FeedPostCard> {
   final _like = GlobalKey<LikeButtonState>();
   final _heart = GlobalKey<BigHeartState>();
 
+  /// Какое фото карусели открыто: под ним его подпись
+  /// (specs/034-photo-captions.md, требование 14).
+  int _photo = 0;
+
   void _doubleTap() {
     _heart.currentState?.play();
     _like.currentState?.likeByDoubleTap();
@@ -664,7 +668,10 @@ class _FeedPostCardState extends State<FeedPostCard> {
     final theme = Theme.of(context);
     final post = widget.post;
 
-    Widget photos = FeedPhotos(media: post.media);
+    Widget photos = FeedPhotos(
+      media: post.media,
+      onPageChanged: (page) => setState(() => _photo = page),
+    );
     final tag = widget.heroTag;
     if (tag != null) {
       photos = Hero(tag: tag, child: photos);
@@ -729,6 +736,11 @@ class _FeedPostCardState extends State<FeedPostCard> {
               ],
             ),
           ),
+        PhotoCaption(
+          media: post.media,
+          page: _photo,
+          padding: const EdgeInsets.only(top: AppGap.small),
+        ),
         if (post.caption.isNotEmpty)
           InkWell(
             onTap: widget.onTap,
@@ -784,9 +796,14 @@ class FeedPhotos extends StatefulWidget {
     required this.media,
     this.radius = AppShape.photo,
     this.aspectRatio = 4 / 5,
+    this.onPageChanged,
   });
 
   final List<Media> media;
+
+  /// Листнули к другому фото — чтобы показать его подпись
+  /// (specs/034-photo-captions.md, требование 14).
+  final ValueChanged<int>? onPageChanged;
 
   /// Скругление: в ленте 6, в посте фото во всю ширину — 0.
   final double radius;
@@ -836,6 +853,7 @@ class _FeedPhotosState extends State<FeedPhotos> {
       _countVisible = true;
     });
     _scheduleHide();
+    widget.onPageChanged?.call(page);
   }
 
   @override
@@ -901,6 +919,52 @@ class _FeedPhotosState extends State<FeedPhotos> {
             child: child,
           ),
   );
+}
+
+/// Подпись открытого фото карусели — сразу под ней; листнули — сменилась.
+/// Нет подписи у открытого фото — места под неё нет
+/// (specs/034-photo-captions.md, требование 14).
+class PhotoCaption extends StatelessWidget {
+  const PhotoCaption({
+    super.key,
+    required this.media,
+    required this.page,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final List<Media> media;
+  final int page;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final caption = page < media.length ? media[page].caption : null;
+
+    return AnimatedSize(
+      duration: AppMotion.quick,
+      curve: AppMotion.ease,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: AppMotion.quick,
+        child: caption == null || caption.isEmpty
+            ? const SizedBox(width: double.infinity)
+            : Padding(
+                key: ValueKey(page),
+                padding: padding,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    caption,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
 }
 
 class _PhotoCount extends StatelessWidget {

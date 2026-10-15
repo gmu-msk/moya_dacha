@@ -63,6 +63,9 @@ class _Photo {
   Media? uploaded;
   String? error;
   bool busy = true;
+
+  /// Подпись к этому фото (specs/034-photo-captions.md); пустая — нет.
+  String caption = '';
 }
 
 class NewPostScreen extends StatefulWidget {
@@ -302,6 +305,23 @@ class _NewPostScreenState extends State<NewPostScreen> {
     }
   }
 
+  /// Касание превью — подпись к этому фото
+  /// (specs/034-photo-captions.md, требование 12).
+  Future<void> _editPhotoCaption(_Photo photo, int index) async {
+    final text = await editText<String>(
+      context,
+      title: 'Подпись к фото ${index + 1}',
+      initial: photo.caption,
+      label: 'Что на этом фото',
+      maxLength: maxCaptionLength,
+      allowEmpty: true,
+      save: (text) async => text,
+    );
+    if (text != null && mounted) {
+      setState(() => photo.caption = text);
+    }
+  }
+
   void _remove(_Photo photo) {
     setState(() => _photos.remove(photo));
   }
@@ -324,6 +344,10 @@ class _NewPostScreenState extends State<NewPostScreen> {
       final post = await _api.createPost(
         PostDraft(
           mediaIds: [for (final photo in _photos) photo.uploaded!.id],
+          mediaCaptions: {
+            for (final photo in _photos)
+              if (photo.caption.isNotEmpty) photo.uploaded!.id: photo.caption,
+          },
           caption: _caption.text,
           visibility: _audience.visibility,
           visibilityGroupId: _audience.group?.id,
@@ -566,7 +590,8 @@ class _NewPostScreenState extends State<NewPostScreen> {
         Text(
           _photos.length == 1
               ? 'Один пост. Добавьте ещё фото — их будут листать пальцем.'
-              : 'Один пост из ${_photos.length} фото, их листают пальцем.',
+              : 'Один пост из ${_photos.length} фото, их листают пальцем. '
+                    'Коснитесь фото, чтобы подписать его.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -627,7 +652,37 @@ class _NewPostScreenState extends State<NewPostScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.memory(photo.bytes, fit: BoxFit.cover),
+              Semantics(
+                button: true,
+                label: photo.caption.isEmpty
+                    ? 'Подписать фото ${index + 1}'
+                    : 'Фото ${index + 1}: ${photo.caption}. Изменить подпись',
+                child: GestureDetector(
+                  onTap: _publishing
+                      ? null
+                      : () => _editPhotoCaption(photo, index),
+                  child: Image.memory(photo.bytes, fit: BoxFit.cover),
+                ),
+              ),
+              if (photo.caption.isNotEmpty)
+                Positioned(
+                  left: AppGap.small,
+                  bottom: AppGap.small,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.all(AppGap.tiny),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.notes,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               if (photo.busy)
                 const ColoredBox(
                   color: Colors.black38,
