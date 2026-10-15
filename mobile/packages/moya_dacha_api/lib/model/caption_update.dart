@@ -14,6 +14,7 @@ class CaptionUpdate {
   /// Returns a new [CaptionUpdate] instance.
   CaptionUpdate({
     this.caption,
+    this.mediaCaptions = const {},
   });
 
   /// Новая подпись, до 1000 символов после обрезки краёв; может быть пустой (specs/003-posts.md). Обязательна: тело без неё — `invalid_request`. 
@@ -25,17 +26,22 @@ class CaptionUpdate {
   ///
   String? caption;
 
+  /// Подписи фото поста: идентификатор фото → подпись, до 1000 символов после обрезки краёв; пустая — подписи нет. Ключ не из фото поста — `invalid_media`. При создании фото без ключа публикуется без подписи; при правке подписи фото без ключа не меняются, а нет поля — не меняются все (specs/034-photo-captions.md, требования 5–9) 
+  Map<String, String>? mediaCaptions;
+
   @override
   bool operator ==(Object other) => identical(this, other) || other is CaptionUpdate &&
-    other.caption == caption;
+    other.caption == caption &&
+    _deepEquality.equals(other.mediaCaptions, mediaCaptions);
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (caption == null ? 0 : caption!.hashCode);
+    (caption == null ? 0 : caption!.hashCode) +
+    (mediaCaptions == null ? 0 : mediaCaptions!.hashCode);
 
   @override
-  String toString() => 'CaptionUpdate[caption=$caption]';
+  String toString() => 'CaptionUpdate[caption=$caption, mediaCaptions=$mediaCaptions]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -43,6 +49,11 @@ class CaptionUpdate {
       json[r'caption'] = this.caption;
     } else {
       json[r'caption'] = null;
+    }
+    if (this.mediaCaptions != null) {
+      json[r'media_captions'] = this.mediaCaptions;
+    } else {
+      json[r'media_captions'] = null;
     }
     return json;
   }
@@ -63,6 +74,7 @@ class CaptionUpdate {
 
       return CaptionUpdate(
         caption: mapValueOfType<String>(json, r'caption'),
+        mediaCaptions: mapCastOfType<String, String>(json, r'media_captions') ?? const {},
       );
     }
     return null;

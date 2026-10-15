@@ -19,6 +19,7 @@ class PostDraft {
     this.placeId,
     this.groupIds = const [],
     this.question,
+    this.mediaCaptions = const {},
     this.visibilityGroupId,
   });
 
@@ -57,6 +58,9 @@ class PostDraft {
   ///
   bool? question;
 
+  /// Подписи фото поста: идентификатор фото → подпись, до 1000 символов после обрезки краёв; пустая — подписи нет. Ключ не из фото поста — `invalid_media`. При создании фото без ключа публикуется без подписи; при правке подписи фото без ключа не меняются, а нет поля — не меняются все (specs/034-photo-captions.md, требования 5–9) 
+  Map<String, String>? mediaCaptions;
+
   /// Пост увидят только участники этой группы; автор должен быть её участником. Тогда `visibility` не учитывается — приложение шлёт `me`, чтобы сервер без этой фичи не выложил пост всем. Группа сама добавляется к `group_ids`. Нет, `null` или пусто — видимость по `visibility` (specs/031-group-visibility.md) 
   String? visibilityGroupId;
 
@@ -68,6 +72,7 @@ class PostDraft {
     other.placeId == placeId &&
     _deepEquality.equals(other.groupIds, groupIds) &&
     other.question == question &&
+    _deepEquality.equals(other.mediaCaptions, mediaCaptions) &&
     other.visibilityGroupId == visibilityGroupId;
 
   @override
@@ -79,10 +84,11 @@ class PostDraft {
     (placeId == null ? 0 : placeId!.hashCode) +
     (groupIds == null ? 0 : groupIds!.hashCode) +
     (question == null ? 0 : question!.hashCode) +
+    (mediaCaptions == null ? 0 : mediaCaptions!.hashCode) +
     (visibilityGroupId == null ? 0 : visibilityGroupId!.hashCode);
 
   @override
-  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, groupIds=$groupIds, question=$question, visibilityGroupId=$visibilityGroupId]';
+  String toString() => 'PostDraft[mediaIds=$mediaIds, caption=$caption, visibility=$visibility, placeId=$placeId, groupIds=$groupIds, question=$question, mediaCaptions=$mediaCaptions, visibilityGroupId=$visibilityGroupId]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -111,6 +117,11 @@ class PostDraft {
       json[r'question'] = this.question;
     } else {
       json[r'question'] = null;
+    }
+    if (this.mediaCaptions != null) {
+      json[r'media_captions'] = this.mediaCaptions;
+    } else {
+      json[r'media_captions'] = null;
     }
     if (this.visibilityGroupId != null) {
       json[r'visibility_group_id'] = this.visibilityGroupId;
@@ -147,6 +158,7 @@ class PostDraft {
             ? (json[r'group_ids'] as Iterable).cast<String>().toList(growable: false)
             : const [],
         question: mapValueOfType<bool>(json, r'question'),
+        mediaCaptions: mapCastOfType<String, String>(json, r'media_captions') ?? const {},
         visibilityGroupId: mapValueOfType<String>(json, r'visibility_group_id'),
       );
     }

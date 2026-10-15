@@ -105,6 +105,12 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 	if utf8.RuneCountInString(caption) > MaxCaptionLength {
 		return gen.CreatePost400JSONResponse(errInvalidCaption), nil
 	}
+	// Подписи фото — сразу после подписи поста, ключи — вместе с самими
+	// фото (specs/034-photo-captions.md, требование 7).
+	photoTexts, err := photoCaptions(request.Body.MediaCaptions)
+	if err != nil {
+		return gen.CreatePost400JSONResponse(errInvalidCaption), nil
+	}
 
 	// Без видимости пост виден всем (specs/013-post-visibility.md,
 	// требование 1).
@@ -159,7 +165,7 @@ func (s *Server) CreatePost(ctx context.Context, request gen.CreatePostRequestOb
 	// требование 1).
 	question := request.Body.Question != nil && *request.Body.Question
 
-	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, visibilityGroupID, placeID, groupIDs, request.Body.MediaIds, question)
+	id, err := s.insertPost(ctx, current.user.Id, caption, visibility, visibilityGroupID, placeID, groupIDs, request.Body.MediaIds, photoTexts, question)
 	if errors.Is(err, errMediaUnusable) {
 		return gen.CreatePost400JSONResponse(errInvalidMedia), nil
 	}
@@ -212,7 +218,7 @@ var errPlaceUnknown = errors.New("место поста не из подсказ
 // фотографии — это перевод строки из «загружено» в «опубликовано», и
 // если хоть один перевод не удался, транзакция откатывается целиком
 // (specs/003-posts.md).
-func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, visibilityGroupID, placeID *string, groupIDs, mediaIDs []string, question bool) (string, error) {
+func (s *Server) insertPost(ctx context.Context, authorID, caption string, visibility gen.PostVisibility, visibilityGroupID, placeID *string, groupIDs, mediaIDs []string, photoTexts map[string]string, question bool) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -233,10 +239,6 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, visib
 		return "", err
 	}
 
-	// Тэги — хэштеги подписи (specs/028-post-tags.md, требование 6).
-	if err := writeTags(ctx, tx, id, captionTags(caption)); err != nil {
-		return "", err
-	}
 	if err := writePostGroups(ctx, tx, id, groupIDs); err != nil {
 		return "", err
 	}
@@ -259,6 +261,17 @@ func (s *Server) insertPost(ctx context.Context, authorID, caption string, visib
 		if tag.RowsAffected() != 1 {
 			return "", errMediaUnusable
 		}
+	}
+
+	// Подписи фото — когда фото уже в посте: ключ не из media_ids тогда
+	// не найдётся (specs/034-photo-captions.md, требование 5).
+	if _, err := writePhotoCaptions(ctx, tx, id, photoTexts); err != nil {
+		return "", err
+	}
+	// Тэги — хэштеги подписи и подписей фото (specs/028-post-tags.md,
+	// требование 6; specs/034, требование 11).
+	if err := refreshPostTags(ctx, tx, id); err != nil {
+		return "", err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -337,7 +350,7 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 	}
 
 	rows, err := s.db.Query(ctx, `
-		SELECT id, kind, storage_key, width, height
+		SELECT id, kind, storage_key, width, height, caption
 		FROM media WHERE post_id = $1 ORDER BY position`, id)
 	if err != nil {
 		return gen.Post{}, err
@@ -350,7 +363,7 @@ func (s *Server) post(ctx context.Context, id, viewerID string) (gen.Post, error
 			kind string
 			key  string
 		)
-		if err := rows.Scan(&item.Id, &kind, &key, &item.Width, &item.Height); err != nil {
+		if err := rows.Scan(&item.Id, &kind, &key, &item.Width, &item.Height, &item.Caption); err != nil {
 			return gen.Post{}, err
 		}
 		item.Kind = gen.MediaKind(kind)

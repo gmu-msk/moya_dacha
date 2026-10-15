@@ -237,7 +237,7 @@ func (s *Server) attachMedia(ctx context.Context, posts []gen.Post) error {
 	}
 
 	rows, err := s.db.Query(ctx, `
-		SELECT post_id, id, kind, storage_key, width, height
+		SELECT post_id, id, kind, storage_key, width, height, caption
 		FROM media WHERE post_id = ANY($1::uuid[]) ORDER BY post_id, position`, ids)
 	if err != nil {
 		return err
@@ -252,7 +252,7 @@ func (s *Server) attachMedia(ctx context.Context, posts []gen.Post) error {
 			kind   string
 			key    string
 		)
-		if err := rows.Scan(&postID, &item.Id, &kind, &key, &item.Width, &item.Height); err != nil {
+		if err := rows.Scan(&postID, &item.Id, &kind, &key, &item.Width, &item.Height, &item.Caption); err != nil {
 			return err
 		}
 		item.Kind = gen.MediaKind(kind)
