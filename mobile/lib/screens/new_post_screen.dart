@@ -6,6 +6,10 @@
 // превью наверху. «Все фото» открывает системный выбор, если нужного
 // снимка нет среди последних или доступ к галерее не дали.
 //
+// Фото — первое на экране, подпись и настройки ниже: тестировщик не
+// понял, что несколько снимков складываются в один пост, и выложил серию
+// отдельными постами (specs/003-posts.md, требование 16).
+//
 // Фотографии уходят на сервис по одной, сразу после выбора: на дачной
 // связи это разница между «одна не долетела, переотправим её» и
 // «начинайте всё заново».
@@ -33,6 +37,10 @@ const _selectedSize = Size(104, 130);
 
 /// Сколько последних фото предлагается сразу.
 const _recentCount = 60;
+
+/// Сколько из них видно, пока сетку не развернули: три ряда, чтобы
+/// подпись и настройки не уехали далеко вниз.
+const _collapsedCount = 9;
 
 /// Сторона превью в сетке, в пикселях снимка (не экрана).
 const _gridThumb = ThumbnailSize.square(300);
@@ -104,6 +112,9 @@ class _NewPostScreenState extends State<NewPostScreen> {
   /// Пост-вопрос; потом не меняется (specs/033-question-posts.md,
   /// требования 1 и 13).
   bool _question = false;
+
+  /// Сетка последних фото развёрнута целиком.
+  bool _gridExpanded = false;
 
   PostsApi get _api => PostsApi(apiClient(token: widget.token));
 
@@ -368,6 +379,26 @@ class _NewPostScreenState extends State<NewPostScreen> {
                   alignment: Alignment.topCenter,
                   child: _photos.isEmpty ? _emptyHint(theme) : _selectedStrip(),
                 ),
+                const SizedBox(height: AppGap.medium),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Фото из галереи',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _photos.length >= maxPostPhotos || _publishing
+                          ? null
+                          : _pickSystem,
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('Все фото'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppGap.small),
+                _grid(scheme),
                 const SizedBox(height: AppGap.large),
                 TextField(
                   controller: _caption,
@@ -422,26 +453,6 @@ class _NewPostScreenState extends State<NewPostScreen> {
                   helper: 'Где это: СНТ, деревня, город',
                   onChanged: (place) => setState(() => _place = place),
                 ),
-                const SizedBox(height: AppGap.large),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Выбрать фотографии',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: _photos.length >= maxPostPhotos || _publishing
-                          ? null
-                          : _pickSystem,
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('Все фото'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppGap.small),
-                _grid(scheme),
                 if (error != null) ...[
                   const SizedBox(height: AppGap.medium),
                   ErrorView(message: error, onRetry: _publish),
@@ -477,7 +488,13 @@ class _NewPostScreenState extends State<NewPostScreen> {
                             foregroundColor: scheme.onSurfaceVariant,
                           )
                         : null,
-                    child: Text(_publishing ? 'Публикую…' : 'Опубликовать'),
+                    child: Text(
+                      _publishing
+                          ? 'Публикую…'
+                          : _photos.isEmpty
+                          ? 'Опубликовать'
+                          : 'Опубликовать · ${_photos.length} фото',
+                    ),
                   ),
                 ),
               ),
@@ -509,12 +526,12 @@ class _NewPostScreenState extends State<NewPostScreen> {
         ),
         child: Row(
           children: [
-            Icon(Icons.add_a_photo_outlined, color: scheme.primary, size: 30),
+            Icon(Icons.burst_mode_outlined, color: scheme.primary, size: 30),
             const SizedBox(width: AppGap.snug),
             Expanded(
               child: Text(
-                'Поста без фотографии не бывает: выберите от одной '
-                'до десяти.',
+                'Выберите одно или несколько фото, до десяти. '
+                'Получится один пост, его листают пальцем.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
@@ -526,14 +543,68 @@ class _NewPostScreenState extends State<NewPostScreen> {
     );
   }
 
+  /// Выбранные фото и плитка «Ещё фото» за ними, а под лентой — что из
+  /// этого выйдет: один пост, а не несколько.
   Widget _selectedStrip() {
-    return SizedBox(
-      height: _selectedSize.height,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _photos.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppGap.small),
-        itemBuilder: (_, index) => _selectedTile(_photos[index], index),
+    final theme = Theme.of(context);
+    final more = _photos.length < maxPostPhotos;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: _selectedSize.height,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _photos.length + (more ? 1 : 0),
+            separatorBuilder: (_, _) => const SizedBox(width: AppGap.small),
+            itemBuilder: (_, index) => index < _photos.length
+                ? _selectedTile(_photos[index], index)
+                : _moreTile(theme.colorScheme),
+          ),
+        ),
+        const SizedBox(height: AppGap.small),
+        Text(
+          _photos.length == 1
+              ? 'Один пост. Добавьте ещё фото — их будут листать пальцем.'
+              : 'Один пост из ${_photos.length} фото, их листают пальцем.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// «Ещё фото» в конце ленты превью: системный выбор, как «Все фото».
+  Widget _moreTile(ColorScheme scheme) {
+    return Semantics(
+      button: true,
+      label: 'Ещё фото в этот пост',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: _publishing ? null : _pickSystem,
+        borderRadius: BorderRadius.circular(AppShape.medium),
+        child: Container(
+          width: _selectedSize.width,
+          height: _selectedSize.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppShape.medium),
+            border: Border.all(color: scheme.primary, width: AppShape.hairline),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_photo_alternate_outlined, color: scheme.primary),
+              const SizedBox(height: AppGap.tiny),
+              Text(
+                'Ещё фото',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelLarge
+                    ?.copyWith(color: scheme.primary),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -609,16 +680,30 @@ class _NewPostScreenState extends State<NewPostScreen> {
             ?.copyWith(color: scheme.onSurfaceVariant),
       );
     }
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _recent.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: AppGap.tiny,
-        crossAxisSpacing: AppGap.tiny,
-      ),
-      itemBuilder: (_, index) => _gridTile(_recent[index], scheme),
+    final collapsible = _recent.length > _collapsedCount;
+    final shown = collapsible && !_gridExpanded
+        ? _recent.take(_collapsedCount).toList()
+        : _recent;
+    return Column(
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: shown.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: AppGap.tiny,
+            crossAxisSpacing: AppGap.tiny,
+          ),
+          itemBuilder: (_, index) => _gridTile(shown[index], scheme),
+        ),
+        if (collapsible)
+          TextButton.icon(
+            onPressed: () => setState(() => _gridExpanded = !_gridExpanded),
+            icon: Icon(_gridExpanded ? Icons.expand_less : Icons.expand_more),
+            label: Text(_gridExpanded ? 'Свернуть' : 'Показать больше фото'),
+          ),
+      ],
     );
   }
 
